@@ -255,7 +255,7 @@ class BaseInstrumentManager:
         max_workers: int | None = None,
     ) -> TextReport:
         """
-        Set multiple instruments' primary output values.
+        Set multiple Yoko/DC source output values.
 
         Examples
         --------
@@ -267,10 +267,19 @@ class BaseInstrumentManager:
         If a target value is a plain number, the shared ``mode`` argument is
         used. Parallel mode uses threads so independent Yoko ramps can happen
         at the same time from one notebook cell.
+
+        This helper is intentionally limited to DC/Yoko sources, because those
+        ramps are slow enough to benefit from parallel execution.
         """
 
         normalized = self._normalize_targets(targets, mode=mode)
         for name, spec in normalized.items():
+            inst_spec = self.spec(name)
+            if not (inst_spec.kind == "yoko" or self._is_dc_source(inst_spec.driver)):
+                raise TypeError(
+                    f"{name!r} is not a Yoko/DC source. Use set_value() or set() "
+                    "for RF sources."
+                )
             self._validate_set_value(name, spec["value"], spec.get("mode"))
 
         if parallel and len(normalized) > 1:

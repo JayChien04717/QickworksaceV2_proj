@@ -111,7 +111,7 @@ inst.set_value("q2_flux", -0.2e-3, mode="current")
 ```
 
 Set multiple independent instruments from one notebook cell. This runs in
-parallel by default, so two Yoko ramps can happen at the same time:
+parallel by default, so two Yoko/DC flux ramps can happen at the same time:
 
 ```python
 inst.set_values({
@@ -120,15 +120,9 @@ inst.set_values({
 })
 ```
 
-For RF sources, the primary value is power:
-
-```python
-inst.set_values({
-    "q1_flux": {"value": 0.5e-3, "mode": "current"},
-    "q2_flux": {"value": -0.2e-3, "mode": "current"},
-    "pump": -40,
-})
-```
+`set_values(...)` is intentionally for Yoko/DC sources only. RF sources usually
+do not need slow ramp synchronization; use `inst.set_value("pump", -40)` or
+`inst.set("pump", "frequency", 6.0e9)` for RF control.
 
 Get one raw driver when you need model-specific methods:
 
