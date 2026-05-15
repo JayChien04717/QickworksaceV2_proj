@@ -9,6 +9,42 @@ The main idea is:
 - `BaseInstrumentManager` knows which physical instruments are connected,
   what names they have in the notebook, and what safety limits to enforce.
 
+## Common Instrument Language
+
+All source instruments should be controlled with the same outer vocabulary:
+
+```python
+inst.on(name)
+inst.off(name)
+inst.value(name)
+inst.set_value(name, value, mode=None)
+inst.status
+```
+
+The meaning of `value` depends on the instrument type:
+
+- Yoko/DC source: `current` or `voltage`
+- RF source: `power`
+
+RF frequency is not treated as the main output value. Set it explicitly:
+
+```python
+inst.set("pump", "frequency", 6.0e9)
+```
+
+Yoko/DC sources also expose ramp settings:
+
+```python
+inst.configure_ramp(
+    "q1_flux",
+    current_step=1e-8,
+    voltage_step=1e-5,
+    interval=0.01,
+)
+
+inst.ramp("q1_flux")
+```
+
 ## Quick Start
 
 ```python
@@ -69,8 +105,8 @@ inst.add_yoko(
 Control a specific Yoko by name:
 
 ```python
-inst.set_yoko("q1_flux", 0.5e-3, mode="current")
-inst.set_yoko("q2_flux", -0.2e-3, mode="current")
+inst.set_value("q1_flux", 0.5e-3, mode="current")
+inst.set_value("q2_flux", -0.2e-3, mode="current")
 ```
 
 Get one raw driver when you need model-specific methods:
@@ -98,9 +134,9 @@ inst.get("pump")
 Set common parameters with limit checks:
 
 ```python
-inst.set_yoko("q1_flux", 0.0, mode="current")
+inst.set_value("q1_flux", 0.0, mode="current")
+inst.set_value("pump", -40)
 inst.set("pump", "frequency", 6.0e9)
-inst.set("pump", "power", -40)
 ```
 
 Output control:
@@ -194,6 +230,8 @@ yoko.mode
 yoko.current
 yoko.voltage
 yoko.output
+yoko.value
+yoko.ramp_rate
 ```
 
 ## Safety Limits
@@ -223,4 +261,3 @@ inst.set("pump", "power", 10)
 
 Use narrow lab limits for flux lines and pump sources. Do not rely only on the
 instrument's full hardware range.
-

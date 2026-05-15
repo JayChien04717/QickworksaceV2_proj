@@ -58,6 +58,28 @@ class YOKOGS200(DCSourceInstrument):
     def get_limits(self) -> dict:
         return dict(self.DEFAULT_LIMITS)
 
+    @property
+    def ramp_rate(self) -> dict:
+        return {
+            "voltage_step": self.voltage_ramp_step,
+            "current_step": self.current_ramp_step,
+            "interval": self.ramp_interval,
+        }
+
+    def configure_ramp(
+        self,
+        *,
+        voltage_step: float | None = None,
+        current_step: float | None = None,
+        interval: float | None = None,
+    ) -> None:
+        if voltage_step is not None:
+            self.voltage_ramp_step = voltage_step
+        if current_step is not None:
+            self.current_ramp_step = current_step
+        if interval is not None:
+            self.ramp_interval = interval
+
     def close(self) -> None:
         print(f"Disconnecting from {self.VISAaddress}")
         self.session.close()
@@ -144,6 +166,10 @@ class YOKOGS200(DCSourceInstrument):
             return dict(unit="V", value=current_level)
         else:
             return dict(unit="A", value=current_level)
+
+    @property
+    def value(self) -> dict:
+        return self.GetValue()
 
     def snapshot(self) -> dict:
         value = self.GetValue()

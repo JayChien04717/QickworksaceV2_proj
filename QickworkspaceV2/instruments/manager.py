@@ -222,6 +222,68 @@ class BaseInstrumentManager:
             driver.mode = mode
         setattr(driver, mode, value)
 
+    def value(self, name: str) -> dict[str, Any]:
+        """Return the primary output value for one instrument."""
+
+        spec = self.spec(name)
+        return self._primary_value(spec)
+
+    def set_value(self, name: str, value: float, *, mode: str | None = None) -> None:
+        """
+        Set the primary output value.
+
+        For Yoko/DC sources this sets current or voltage. For RF sources this
+        sets power. Use ``set(name, "frequency", value)`` for RF frequency.
+        """
+
+        spec = self.spec(name)
+        if spec.kind == "yoko" or self._is_dc_source(spec.driver):
+            self.set_yoko(name, value, mode=mode or "current")
+            return
+        if hasattr(spec.driver, "power"):
+            self.set(name, "power", value)
+            return
+        raise AttributeError(f"{name!r} has no known primary output value.")
+
+    def configure_ramp(
+        self,
+        name: str,
+        *,
+        voltage_step: float | None = None,
+        current_step: float | None = None,
+        interval: float | None = None,
+    ) -> None:
+        """Configure ramp settings for a Yoko/DC source."""
+
+        driver = self.get(name)
+        configure_ramp = getattr(driver, "configure_ramp", None)
+        if callable(configure_ramp):
+            configure_ramp(
+                voltage_step=voltage_step,
+                current_step=current_step,
+                interval=interval,
+            )
+            return
+        if voltage_step is not None and hasattr(driver, "voltage_ramp_step"):
+            driver.voltage_ramp_step = voltage_step
+        if current_step is not None and hasattr(driver, "current_ramp_step"):
+            driver.current_ramp_step = current_step
+        if interval is not None and hasattr(driver, "ramp_interval"):
+            driver.ramp_interval = interval
+
+    def ramp(self, name: str) -> dict[str, Any]:
+        """Return ramp settings for a Yoko/DC source."""
+
+        driver = self.get(name)
+        ramp_rate = getattr(driver, "ramp_rate", None)
+        if ramp_rate is not None:
+            return dict(ramp_rate)
+        return {
+            "voltage_step": getattr(driver, "voltage_ramp_step", None),
+            "current_step": getattr(driver, "current_ramp_step", None),
+            "interval": getattr(driver, "ramp_interval", None),
+        }
+
     def on(self, name: str) -> None:
         self.get(name).on()
 
@@ -253,28 +315,57 @@ class BaseInstrumentManager:
         output = self._safe_get(driver, "output")
         if output is None:
             output = self._safe_get(driver, "status")
-        value = self._status_value(driver)
+        value = self._status_value(spec)
         return (
             f"{spec.kind}: {spec.name} address: {spec.address} | "
             f"output: {output if output is not None else 'unknown'} | "
             f"value: {value}"
         )
 
-    def _status_value(self, driver: Any) -> str:
+    def _status_value(self, spec: InstrumentSpec) -> str:
+        primary = self._primary_value(spec)
+        pieces = []
+        if primary:
+            label = primary.get("parameter", "value")
+            value = primary.get("value")
+            unit = primary.get("unit", "")
+            pieces.append(f"{label}={value} {unit}".strip())
+
+        driver = spec.driver
+        frequency = self._safe_get(driver, "frequency")
+        if frequency is not None:
+            pieces.append(f"frequency={frequency} Hz")
+        if spec.kind == "yoko" or self._is_dc_source(driver):
+            ramp = self.ramp(spec.name)
+            if any(value is not None for value in ramp.values()):
+                pieces.append(
+                    "ramp="
+                    f"I_step={ramp.get('current_step')}, "
+                    f"V_step={ramp.get('voltage_step')}, "
+                    f"interval={ramp.get('interval')}"
+                )
+        return ", ".join(pieces) if pieces else "unknown"
+
+    def _primary_value(self, spec: InstrumentSpec) -> dict[str, Any]:
+        driver = spec.driver
         get_value = getattr(driver, "GetValue", None)
         if callable(get_value):
             try:
                 info = get_value()
-                return f"{info.get('value')} {info.get('unit')}"
+                mode = self._safe_get(driver, "mode")
+                parameter = mode if mode in {"current", "voltage"} else "value"
+                return {
+                    "parameter": parameter,
+                    "value": info.get("value"),
+                    "unit": info.get("unit"),
+                }
             except Exception as exc:
-                return f"error({exc})"
+                return {"parameter": "value", "value": f"error({exc})", "unit": ""}
 
-        pieces = []
-        for attr, unit in (("frequency", "Hz"), ("power", "dBm")):
-            value = self._safe_get(driver, attr)
-            if value is not None:
-                pieces.append(f"{attr}={value} {unit}")
-        return ", ".join(pieces) if pieces else "unknown"
+        power = self._safe_get(driver, "power")
+        if power is not None:
+            return {"parameter": "power", "value": power, "unit": "dBm"}
+        return {}
 
     def _safe_snapshot(self, driver: Any) -> dict[str, Any]:
         snapshot = getattr(driver, "snapshot", None)
@@ -313,6 +404,9 @@ class BaseInstrumentManager:
         instrument = getattr(driver, "instrument", None)
         value = getattr(instrument, "resource_name", None)
         return str(value or fallback)
+
+    def _is_dc_source(self, driver: Any) -> bool:
+        return all(hasattr(driver, attr) for attr in ("current", "voltage"))
 
 
 InstrumentManager = BaseInstrumentManager
