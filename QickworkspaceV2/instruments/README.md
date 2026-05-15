@@ -294,12 +294,24 @@ yoko.ramp_rate
 Driver `DEFAULT_LIMITS` are hardware-oriented defaults. Manager-level `limits`
 are lab safety limits and override the defaults:
 
+`auto_limits=True` is the default. When an instrument is added, the manager asks
+the driver to discover hardware limits first. If discovery fails, it falls back
+to `DEFAULT_LIMITS`. User-provided `limits={...}` are applied last and should be
+used for lab safety limits.
+
 ```python
 inst.add_sgs100(
     "pump",
     "192.168.0.10",
     limits={"power": (-80, 0)},
 )
+```
+
+Disable hardware limit discovery when you want only driver defaults plus manual
+overrides:
+
+```python
+inst.add_sgs100("pump", "192.168.0.10", auto_limits=False)
 ```
 
 Then this is allowed:

@@ -99,6 +99,19 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
     def get_limits(self) -> dict:
         return dict(self.DEFAULT_LIMITS)
 
+    def discover_limits(self) -> dict:
+        limits = self.get_limits()
+        queries = {
+            "frequency": ("SOUR:FREQ? MIN", "SOUR:FREQ? MAX"),
+            "power": ("SOUR:POW? MIN", "SOUR:POW? MAX"),
+        }
+        for key, (min_query, max_query) in queries.items():
+            try:
+                limits[key] = (float(self.query(min_query)), float(self.query(max_query)))
+            except Exception:
+                pass
+        return limits
+
     def _validate_and_write(self, cmd_template: str, value: str, valid_set: set, name: str) -> None:
         val_upper = str(value).upper()
         if val_upper not in valid_set:

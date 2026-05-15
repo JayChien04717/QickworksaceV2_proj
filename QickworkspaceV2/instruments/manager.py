@@ -48,6 +48,7 @@ class BaseInstrumentManager:
         *,
         kind: str | None = None,
         limits: Mapping[str, tuple[float, float]] | None = None,
+        auto_limits: bool = True,
         notes: str = "",
         **driver_kwargs: Any,
     ) -> Any:
@@ -56,7 +57,7 @@ class BaseInstrumentManager:
         if name in self._instruments:
             raise ValueError(f"Instrument name already exists: {name!r}")
         obj = driver(address, **driver_kwargs)
-        driver_limits = self._driver_limits(obj)
+        driver_limits = self._driver_limits(obj, auto_limits=auto_limits)
         spec = InstrumentSpec(
             name=name,
             kind=kind or getattr(obj, "KIND", obj.__class__.__name__),
@@ -74,6 +75,7 @@ class BaseInstrumentManager:
         address: str,
         *,
         limits: Mapping[str, tuple[float, float]] | None = None,
+        auto_limits: bool = True,
         voltage_ramp_step: float | None = None,
         current_ramp_step: float | None = None,
         ramp_interval: float | None = None,
@@ -92,6 +94,7 @@ class BaseInstrumentManager:
             address,
             kind="yoko",
             limits=limits,
+            auto_limits=auto_limits,
             notes=notes,
         )
         if voltage_ramp_step is not None:
@@ -108,6 +111,7 @@ class BaseInstrumentManager:
         address: str,
         *,
         limits: Mapping[str, tuple[float, float]] | None = None,
+        auto_limits: bool = True,
         notes: str = "",
     ) -> Any:
         """Add a Rohde & Schwarz SGS100A RF source."""
@@ -120,6 +124,7 @@ class BaseInstrumentManager:
             address,
             kind="sgs100a",
             limits=limits,
+            auto_limits=auto_limits,
             notes=notes,
         )
 
@@ -129,6 +134,7 @@ class BaseInstrumentManager:
         address: str,
         *,
         limits: Mapping[str, tuple[float, float]] | None = None,
+        auto_limits: bool = True,
         notes: str = "",
     ) -> Any:
         """Add an Anritsu MG3692 RF source."""
@@ -141,6 +147,7 @@ class BaseInstrumentManager:
             address,
             kind="mg3692",
             limits=limits,
+            auto_limits=auto_limits,
             notes=notes,
         )
 
@@ -491,7 +498,19 @@ class BaseInstrumentManager:
                 return None
         return value
 
-    def _driver_limits(self, driver: Any) -> LimitMap:
+    def _driver_limits(self, driver: Any, *, auto_limits: bool = True) -> LimitMap:
+        if auto_limits:
+            discover_limits = getattr(driver, "discover_limits", None)
+            if callable(discover_limits):
+                try:
+                    discovered = discover_limits()
+                    if discovered:
+                        return dict(discovered)
+                except Exception as exc:
+                    print(
+                        f"[InstrumentManager] Could not auto-discover limits for "
+                        f"{driver.__class__.__name__}: {exc}. Using defaults."
+                    )
         get_limits = getattr(driver, "get_limits", None)
         if callable(get_limits):
             return dict(get_limits())

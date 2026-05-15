@@ -117,6 +117,19 @@ class AnritsuMG3692(RFSourceInstrument):
     def get_limits(self) -> dict:
         return dict(self.DEFAULT_LIMITS)
 
+    def discover_limits(self) -> dict:
+        limits = self.get_limits()
+        queries = {
+            "frequency": ("FREQ? MIN", "FREQ? MAX"),
+            "power": ("POW? MIN", "POW? MAX"),
+        }
+        for key, (min_query, max_query) in queries.items():
+            try:
+                limits[key] = (float(self.query(min_query)), float(self.query(max_query)))
+            except Exception:
+                pass
+        return limits
+
     def _map_and_write(self, cmd_template: str, value: Union[str, int, bool], name: str) -> None:
         try:
             mapped_val = ON_OFF_MAP[str(value).lower()]

@@ -60,6 +60,11 @@ class YOKOGS200(DCSourceInstrument):
     def get_limits(self) -> dict:
         return dict(self.DEFAULT_LIMITS)
 
+    def discover_limits(self) -> dict:
+        # Keep Yoko limits conservative by default. Hardware full scale is not
+        # necessarily safe for a flux line, so lab limits should override these.
+        return self.get_limits()
+
     @property
     def ramp_rate(self) -> dict:
         return {
