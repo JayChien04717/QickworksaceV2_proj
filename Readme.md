@@ -35,8 +35,7 @@ QickworkspaceV2/
   tools/             Fitting, data, scoring, and RF helper utilities
 
 example/             Example HDF5 data and viewer scripts
-tutorial/            Tutorial notebooks
-test.ipynb           Instrument manager connection test notebook
+tutorial/            Tutorial notebooks, including instrument manager tests
 ```
 
 ## Installation

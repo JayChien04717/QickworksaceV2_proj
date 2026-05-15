@@ -15,6 +15,7 @@ edit the `BaseExperiment.connect_pyro4(...)` host and data path for your lab set
 | [05_custom_experiment.ipynb](05_custom_experiment.ipynb) | Custom `BaseProgram` and `BaseExperiment` |
 | [06_real_hardware.ipynb](06_real_hardware.ipynb) | QICK hardware connection and saving |
 | [07_data_management.ipynb](07_data_management.ipynb) | HDF5 and calibration-store inspection |
+| [08_instrument_manager.ipynb](08_instrument_manager.ipynb) | Instrument manager, Yoko flux, and RF source checks |
 
 ## Backend
 
