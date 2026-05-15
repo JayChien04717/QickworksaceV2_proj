@@ -3,9 +3,27 @@ from __future__ import annotations
 import pyvisa as visa
 import numpy as np
 import time
+from tqdm.auto import tqdm
 from typing import Literal, Union
 
 from .base import DCSourceInstrument
+
+try:
+    from ..tools.system_tool import auto_unit
+except Exception:
+    def auto_unit(value, base_unit=""):
+        prefixes = {
+            -12: "p", -9: "n", -6: "u", -3: "m",
+            0: "", 3: "k", 6: "M", 9: "G",
+        }
+        arr = np.array(value, dtype=float)
+        maxval = np.max(np.abs(arr))
+        if maxval == 0:
+            exp = 0
+        else:
+            exp = int(np.floor(np.log10(maxval) / 3) * 3)
+            exp = max(min(exp, 9), -12)
+        return {"unit": f"{prefixes[exp]}{base_unit}", "value": arr / (10**exp)}
 
 
 class YOKOGS200(DCSourceInstrument):
@@ -36,6 +54,8 @@ class YOKOGS200(DCSourceInstrument):
         self.voltage_ramp_step = 1e-4
         self.current_ramp_step = 1e-8
         self.ramp_interval = 0.01
+        self.show_ramp_progress = True
+        self.ramp_progress_leave = False
 
         self._output_map = {
             "on": "1", "1": "1", 1: "1", True: "1",
@@ -140,14 +160,7 @@ class YOKOGS200(DCSourceInstrument):
     @voltage.setter
     def voltage(self, new_voltage: float):
         self.mode = "voltage"
-        start = self.level
-        stop = new_voltage
-        steps = max(1, round(abs(stop - start) / self.voltage_ramp_step))
-        temp_volts = np.linspace(start, stop, num=steps + 1, endpoint=True)
-        self.on()
-        for v in temp_volts:
-            self.level = v
-            time.sleep(self.ramp_interval)
+        self._ramp_to(new_voltage, unit="V", step=self.voltage_ramp_step)
 
     @property
     def current(self) -> float:
@@ -157,14 +170,38 @@ class YOKOGS200(DCSourceInstrument):
     @current.setter
     def current(self, new_current: float):
         self.mode = "current"
+        self._ramp_to(new_current, unit="A", step=self.current_ramp_step)
+
+    def _ramp_to(self, target: float, *, unit: str, step: float) -> None:
         start = self.level
-        stop = new_current
-        steps = max(1, round(abs(stop - start) / self.current_ramp_step))
-        temp_currents = np.linspace(start, stop, num=steps + 1, endpoint=True)
+        stop = target
+        steps = max(1, round(abs(stop - start) / step))
+        values = np.linspace(start, stop, num=steps + 1, endpoint=True)
         self.on()
-        for c in temp_currents:
-            self.level = c
+        desc = (
+            f"Yoko {self.mode} "
+            f"{self._format_ramp_value(start, unit)} -> "
+            f"{self._format_ramp_value(stop, unit)}"
+        )
+        iterator = values
+        if self.show_ramp_progress:
+            iterator = tqdm(
+                values,
+                desc=desc,
+                unit="step",
+                leave=self.ramp_progress_leave,
+                dynamic_ncols=True,
+            )
+        for value in iterator:
+            self.level = value
+            if self.show_ramp_progress:
+                iterator.set_postfix_str(f"now={self._format_ramp_value(value, unit)}")
             time.sleep(self.ramp_interval)
+
+    @staticmethod
+    def _format_ramp_value(value: float, unit: str) -> str:
+        scaled = auto_unit(value, unit)
+        return f"{float(scaled['value']):.4g} {scaled['unit']}"
 
     def GetValue(self) -> dict:
         current_mode = self.mode
@@ -188,4 +225,5 @@ class YOKOGS200(DCSourceInstrument):
             "voltage_ramp_step": self.voltage_ramp_step,
             "current_ramp_step": self.current_ramp_step,
             "ramp_interval": self.ramp_interval,
+            "show_ramp_progress": self.show_ramp_progress,
         }

@@ -46,6 +46,22 @@ inst.configure_ramp(
 inst.ramp("q1_flux")
 ```
 
+Yoko current/voltage ramps show a `tqdm` progress bar by default. The progress
+bar description shows the start and target value with `auto_unit`, the postfix
+shows the current ramp value, and tqdm shows elapsed/remaining time.
+
+```text
+Yoko current 0 A -> 500 uA:  42%|...| now=210 uA
+```
+
+Disable or keep completed ramp bars through the raw driver when needed:
+
+```python
+yoko = inst.get("q1_flux")
+yoko.show_ramp_progress = False
+yoko.ramp_progress_leave = True
+```
+
 ## Quick Start
 
 ```python
