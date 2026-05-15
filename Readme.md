@@ -127,72 +127,10 @@ freq = float(result)
 
 ## Instrument Manager
 
-Use `BaseInstrumentManager` as the notebook entry point for lab instruments:
-
-```python
-from QickworkspaceV2.instruments import BaseInstrumentManager
-
-inst = BaseInstrumentManager()
-
-inst.add_yoko(
-    "yoko",
-    "GPIB0::1::INSTR",
-    limits={
-        "current": (-3e-3, 3e-3),
-        "voltage": (-1.0, 1.0),
-    },
-    current_ramp_step=1e-8,
-    voltage_ramp_step=1e-5,
-    ramp_interval=0.01,
-)
-
-inst.add_sgs100(
-    "sgs",
-    "TCPIP::192.168.0.10::INSTR",
-    limits={
-        "frequency": (1e6, 20e9),
-        "power": (-80, 10),
-    },
-)
-
-inst.status
-```
-
-Example status output:
-
-```text
-yoko: yoko address: GPIB0::1::INSTR | output: on | value: 0.0 A
-sgs100a: sgs address: TCPIP::192.168.0.10::INSTR | output: off | value: frequency=6000000000.0 Hz, power=-40.0 dBm
-```
-
-Helpful notebook methods:
-
-```python
-inst.help()
-inst.help("yoko")
-inst.limits()
-inst.limits("sgs")
-inst.get("yoko")
-inst.value("yoko")
-```
-
-Safe setting helpers check registered limits before writing:
-
-```python
-inst.set_value("yoko", 0.0, mode="current")
-inst.set_value("sgs", -40)
-inst.set("sgs", "frequency", 6.0e9)
-inst.off("sgs")
-```
-
-Yoko ramp settings can be updated through the manager:
-
-```python
-inst.configure_ramp("yoko", current_step=1e-8, voltage_step=1e-5, interval=0.01)
-inst.ramp("yoko")
-```
-
-Use `test.ipynb` to test Yoko GPIB and SGS TCPIP connections.
+Instrument drivers and the notebook-friendly `BaseInstrumentManager` live in
+`QickworkspaceV2/instruments`. See `QickworkspaceV2/instruments/README.md` for
+usage details, multi-instrument naming, safety limits, and the test notebook
+workflow.
 
 ## Calibration Store
 
