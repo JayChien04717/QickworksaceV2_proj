@@ -1,5 +1,5 @@
 """
-Resonator/twpa — s002d-g: TWPA characterization experiments.
+TWPA experiments — s002d-g: TWPA characterization experiments.
 """
 
 from __future__ import annotations

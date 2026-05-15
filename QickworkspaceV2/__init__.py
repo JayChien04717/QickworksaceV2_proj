@@ -47,6 +47,10 @@ _LAZY_EXPORTS = {
     "ResonatorSpec": ".experiments.resonator",
     "Punchout": ".experiments.resonator",
     "ResonatorSpecFlux": ".experiments.resonator",
+    "TWPAFlux": ".experiments.twpa",
+    "TWPAGain": ".experiments.twpa",
+    "TWPAGainPower": ".experiments.twpa",
+    "TWPAPowerScan": ".experiments.twpa",
     "QubitSpec": ".experiments.qubit_ge",
     "QubitSpecFlux": ".experiments.qubit_ge",
     "TimeRabi": ".experiments.qubit_ge",
@@ -98,6 +102,8 @@ __all__ = [
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
     # experiments — resonator
     "ResonatorSpec", "Punchout", "ResonatorSpecFlux",
+    # experiments — twpa
+    "TWPAFlux", "TWPAGain", "TWPAGainPower", "TWPAPowerScan",
     # experiments — qubit ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     # experiments — coherence
