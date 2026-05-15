@@ -173,15 +173,23 @@ inst.help("yoko")
 inst.limits()
 inst.limits("sgs")
 inst.get("yoko")
+inst.value("yoko")
 ```
 
 Safe setting helpers check registered limits before writing:
 
 ```python
-inst.set_yoko("yoko", 0.0, mode="current")
+inst.set_value("yoko", 0.0, mode="current")
+inst.set_value("sgs", -40)
 inst.set("sgs", "frequency", 6.0e9)
-inst.set("sgs", "power", -40)
 inst.off("sgs")
+```
+
+Yoko ramp settings can be updated through the manager:
+
+```python
+inst.configure_ramp("yoko", current_step=1e-8, voltage_step=1e-5, interval=0.01)
+inst.ramp("yoko")
 ```
 
 Use `test.ipynb` to test Yoko GPIB and SGS TCPIP connections.
@@ -273,4 +281,3 @@ from QickworkspaceV2.experiments.qubit_ge import QubitSpec, PowerRabi
 from QickworkspaceV2.experiments.coherence import T1, Ramsey, SpinEcho
 from QickworkspaceV2.instruments import BaseInstrumentManager
 ```
-

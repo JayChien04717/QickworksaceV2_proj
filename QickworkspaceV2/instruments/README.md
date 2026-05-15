@@ -116,7 +116,7 @@ yoko_q1 = inst.get("q1_flux")
 yoko_q2 = inst.get("q2_flux")
 ```
 
-Prefer `inst.set_yoko(...)` for normal use because it checks the registered
+Prefer `inst.set_value(...)` for normal use because it checks the registered
 limits before writing to hardware.
 
 ## Common Manager API
