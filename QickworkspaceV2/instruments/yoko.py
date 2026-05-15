@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pyvisa as visa
 import numpy as np
 import time
