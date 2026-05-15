@@ -187,13 +187,7 @@ inst.close()
 
 ## Use With BaseExperiment Liveplot
 
-The old liveplot Yoko path still accepts a VISA address:
-
-```python
-expt.run(py_avg=5, yoko_inst_addr="GPIB0::1::INSTR", yoko_value=flux_values)
-```
-
-The new optional path uses `BaseInstrumentManager` names instead:
+Yoko liveplot sweeps use `BaseInstrumentManager` names:
 
 ```python
 inst.add_yoko("q1_flux", "GPIB0::1::INSTR", limits={"current": (-3e-3, 3e-3)})
@@ -227,7 +221,6 @@ from `BaseInstrumentManager` are used during the Yoko sweep.
 Current drivers:
 
 - `yoko.py`: Yokogawa GS200 property-style driver
-- `YOKOGS200.py`: Legacy Yokogawa GS200 `SetVoltage` / `SetCurrent` driver
 - `sgs100a.py`: Rohde & Schwarz SGS100A RF source
 - `mg3692.py`: Anritsu MG3692 RF source
 

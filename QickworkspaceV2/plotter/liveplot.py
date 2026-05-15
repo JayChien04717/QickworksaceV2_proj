@@ -2,12 +2,10 @@ import threading
 import queue
 import numpy as np
 import matplotlib.pyplot as plt
-import pyvisa
 from IPython.display import display, clear_output, update_display
 from tqdm.auto import tqdm
 import math
 
-from ..instruments.YOKOGS200 import YOKOGS200
 from ..tools.system_tool import auto_unit
 
 
@@ -20,7 +18,6 @@ def liveplotfun(
     x_label="X Axis",
     y_label="Y Axis",
     title_prefix="Experiment",
-    yoko_inst_addr=None,
     instrument_manager=None,
     yoko_name=None,
     yoko_mode="current",
@@ -39,9 +36,9 @@ def liveplotfun(
     Dispatches to one of four specialized internal routines based on the
     combination of arguments supplied:
 
-    - **Yoko sweep** (``yoko_inst_addr`` is set, or ``instrument_manager`` and
-      ``yoko_name`` are set): outer loop steps a Yokogawa source while the
-      inner QICK program sweeps ``x_axis_vals``.
+    - **Yoko sweep** (``instrument_manager`` and ``yoko_name`` are set): outer
+      loop steps a Yokogawa source while the inner QICK program sweeps
+      ``x_axis_vals``.
     - **2D parameter scan** (``scan_x_axis`` and ``scan_y_axis`` both set):
       a callback generates a fresh program for every (x, y) grid point.
     - **1D parameter scan** (only ``scan_x_axis`` set): a callback generates
@@ -55,7 +52,7 @@ def liveplotfun(
     interrupted : bool
     n_done : int
     """
-    if yoko_inst_addr is not None or (instrument_manager is not None and yoko_name is not None):
+    if instrument_manager is not None and yoko_name is not None:
         if y_axis_vals is None:
             raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
         return _liveplot_sweep_yoko(
@@ -64,7 +61,6 @@ def liveplotfun(
             py_avg=py_avg,
             x_axis_vals=x_axis_vals,
             y_axis_vals_yoko=y_axis_vals,
-            yoko_inst_addr=yoko_inst_addr,
             instrument_manager=instrument_manager,
             yoko_name=yoko_name,
             yoko_mode=yoko_mode,
@@ -273,9 +269,8 @@ def _liveplot_sweep_yoko(
     py_avg,
     x_axis_vals,
     y_axis_vals_yoko,
-    yoko_inst_addr,
-    instrument_manager=None,
-    yoko_name=None,
+    instrument_manager,
+    yoko_name,
     yoko_mode="current",
     yoko_voltage_ramp_step=1e-5,
     yoko_current_ramp_step=1e-8,
@@ -287,24 +282,10 @@ def _liveplot_sweep_yoko(
 ):
     _proc = np.real if iq_process == "real" else np.abs
 
-    if instrument_manager is not None:
-        if yoko_name is None:
-            raise ValueError("yoko_name must be provided when using instrument_manager.")
-        yoko = instrument_manager.get(yoko_name)
-        yoko_label = yoko_name
-        ramp = instrument_manager.ramp(yoko_name)
-    else:
-        rm = pyvisa.ResourceManager()
-        yoko = YOKOGS200(yoko_inst_addr, rm)
-        yoko.voltage_ramp_step = yoko_voltage_ramp_step
-        yoko.current_ramp_step = yoko_current_ramp_step
-        yoko.ramp_interval = yoko_ramp_interval
-        yoko_label = yoko_inst_addr
-        ramp = {
-            "voltage_step": yoko.voltage_ramp_step,
-            "current_step": yoko.current_ramp_step,
-            "interval": yoko.ramp_interval,
-        }
+    if yoko_name is None:
+        raise ValueError("yoko_name must be provided when using instrument_manager.")
+    yoko_label = yoko_name
+    ramp = instrument_manager.ramp(yoko_name)
     voltage_step = ramp.get("voltage_step")
     current_step = ramp.get("current_step")
     interval = ramp.get("interval")
@@ -358,18 +339,9 @@ def _liveplot_sweep_yoko(
         ):
             last_idx = idx
             title = auto_unit(val)
-            if instrument_manager is not None:
-                instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
-                suffix = "A" if yoko_mode == "current" else "V"
-                ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}")
-            elif yoko_mode == "current":
-                yoko.SetMode("current")
-                yoko.SetCurrent(val)
-                ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}A")
-            else:
-                yoko.SetMode("voltage")
-                yoko.SetVoltage(val)
-                ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}V")
+            instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
+            suffix = "A" if yoko_mode == "current" else "V"
+            ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}")
 
             iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
             iq_data_row = iq_list[0][0].dot([1, 1j])

@@ -17,8 +17,6 @@ try:
 except ImportError:
     _HAS_IPY = False
 
-import pyvisa
-
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
 from ...config.system_cfg import DATA_PATH
@@ -33,8 +31,6 @@ from ...tools.electrical_length import (
     set_units_on_plot_axis,
     estimate_electrical_length,
 )
-from ...instruments.YOKOGS200 import YOKOGS200
-
 
 # ── s002d: TWPAFlux ───────────────────────────────────────────────────────────
 
@@ -215,8 +211,18 @@ class TWPAGain:
         self._stop = True
         print("Stop requested — will halt after the current pump_freq step.")
 
-    def run(self, py_avg, yoko_inst, yoko_value, yoko_mode="current",
+    def run(self, py_avg, yoko_inst=None, yoko_value=None, yoko_mode="current",
+            instrument_manager=None, yoko_name=None,
             save_raw=False, qb_idx="TWPA", temp_folder=None, reference=None, **kwargs):
+        if instrument_manager is None:
+            instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
+        if yoko_name is None:
+            yoko_name = yoko_inst
+        if instrument_manager is None or yoko_name is None:
+            raise ValueError(
+                "TWPAGain now requires instrument_manager and yoko_name "
+                "(or yoko_inst as the manager-registered name)."
+            )
         self._yoko_mode = yoko_mode
         self._slices = []
         self._stop = False
@@ -235,7 +241,13 @@ class TWPAGain:
                     exp.YOKO_VOLTAGE_RAMP_STEP = self.YOKO_VOLTAGE_RAMP_STEP
                     exp.YOKO_CURRENT_RAMP_STEP = self.YOKO_CURRENT_RAMP_STEP
                     exp.YOKO_RAMP_INTERVAL = self.YOKO_RAMP_INTERVAL
-                    exp.run(py_avg, yoko_inst=yoko_inst, yoko_value=yoko_value, yoko_mode=yoko_mode)
+                    exp.run(
+                        py_avg,
+                        instrument_manager=instrument_manager,
+                        yoko_name=yoko_name,
+                        yoko_value=yoko_value,
+                        yoko_mode=yoko_mode,
+                    )
                 except KeyboardInterrupt:
                     tqdm.write("\nKeyboardInterrupt — saving collected data and stopping.")
                     self._stop = True
@@ -381,8 +393,18 @@ class TWPAGainPower:
         self._stop = True
         print("Stop requested.")
 
-    def run(self, py_avg, yoko_inst, yoko_value, yoko_mode="current",
+    def run(self, py_avg, yoko_inst=None, yoko_value=None, yoko_mode="current",
+            instrument_manager=None, yoko_name=None,
             save_raw=False, qb_idx="TWPA", temp_folder=None, reference=None, **kwargs):
+        if instrument_manager is None:
+            instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
+        if yoko_name is None:
+            yoko_name = yoko_inst
+        if instrument_manager is None or yoko_name is None:
+            raise ValueError(
+                "TWPAGainPower now requires instrument_manager and yoko_name "
+                "(or yoko_inst as the manager-registered name)."
+            )
         self._yoko_mode = yoko_mode
         self._power_slices = []
         self._collected_powers = []
@@ -408,7 +430,13 @@ class TWPAGainPower:
                         exp.YOKO_VOLTAGE_RAMP_STEP = self.YOKO_VOLTAGE_RAMP_STEP
                         exp.YOKO_CURRENT_RAMP_STEP = self.YOKO_CURRENT_RAMP_STEP
                         exp.YOKO_RAMP_INTERVAL = self.YOKO_RAMP_INTERVAL
-                        exp.run(py_avg, yoko_inst=yoko_inst, yoko_value=yoko_value, yoko_mode=yoko_mode)
+                        exp.run(
+                            py_avg,
+                            instrument_manager=instrument_manager,
+                            yoko_name=yoko_name,
+                            yoko_value=yoko_value,
+                            yoko_mode=yoko_mode,
+                        )
                         s21 = exp._build_s21_xarray()
                         s21 = s21.assign_coords(pump_freq=pf)
                         freq_slices.append(s21)
@@ -528,23 +556,29 @@ class TWPAPowerScan:
         self._stop = True
         print("Stop requested.")
 
-    def run(self, py_avg, yoko_inst, yoko_mode="current",
+    def run(self, py_avg, yoko_inst=None, yoko_mode="current",
+            instrument_manager=None, yoko_name=None,
             temp_folder=None, reference=None, **kwargs):
+        if instrument_manager is None:
+            instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
+        if yoko_name is None:
+            yoko_name = yoko_inst
+        if instrument_manager is None or yoko_name is None:
+            raise ValueError(
+                "TWPAPowerScan now requires instrument_manager and yoko_name "
+                "(or yoko_inst as the manager-registered name)."
+            )
         self._yoko_mode = yoko_mode
         self._slices = []
         self._collected_powers = []
         self._stop = False
-        _rm = pyvisa.ResourceManager()
-        _yoko = YOKOGS200(yoko_inst, _rm)
-        _yoko.voltage_ramp_step = self.YOKO_VOLTAGE_RAMP_STEP
-        _yoko.current_ramp_step = self.YOKO_CURRENT_RAMP_STEP
-        _yoko.ramp_interval = self.YOKO_RAMP_INTERVAL
-        if yoko_mode == "current":
-            _yoko.SetMode("current")
-            _yoko.SetCurrent(self.flux_value)
-        else:
-            _yoko.SetMode("voltage")
-            _yoko.SetVoltage(self.flux_value)
+        instrument_manager.configure_ramp(
+            yoko_name,
+            voltage_step=self.YOKO_VOLTAGE_RAMP_STEP,
+            current_step=self.YOKO_CURRENT_RAMP_STEP,
+            interval=self.YOKO_RAMP_INTERVAL,
+        )
+        instrument_manager.set_value(yoko_name, self.flux_value, mode=yoko_mode)
         self.pump.frequency = self.pump_freq
         self.pump.on()
         print(f"Pump ON  | freq = {self.pump_freq / 1e9:.4f} GHz"

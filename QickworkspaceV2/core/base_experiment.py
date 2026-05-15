@@ -248,16 +248,20 @@ class BaseExperiment:
         if yoko_value_kwarg is not None:
             self._sweep_vals_y = np.asarray(yoko_value_kwarg, dtype=float)
 
-        yoko_addr = kwargs.get("yoko_inst_addr") or kwargs.get("yoko_inst")
+        yoko_addr = kwargs.get("yoko_inst_addr")
+        yoko_alias = kwargs.get("yoko_inst")
         instrument_manager = (
             kwargs.get("instrument_manager")
             or kwargs.get("baseinst")
             or kwargs.get("inst_manager")
         )
-        yoko_name = kwargs.get("yoko_name") or kwargs.get("yoko_inst_name")
-        if instrument_manager is not None and yoko_name is None and yoko_addr is not None:
-            yoko_name = yoko_addr
-            yoko_addr = None
+        yoko_name = kwargs.get("yoko_name") or kwargs.get("yoko_inst_name") or yoko_alias
+        if yoko_addr is not None:
+            raise ValueError(
+                "Direct yoko_inst_addr support has been removed. Register the Yoko "
+                "with BaseInstrumentManager and pass instrument_manager=inst plus "
+                "yoko_name='q1_flux' (or yoko_inst='q1_flux')."
+            )
 
         self.iqdata, interrupted, avg_count = liveplotfun(
             prog=prog,
@@ -268,7 +272,6 @@ class BaseExperiment:
             x_label=self.X_LABEL,
             y_label=self.Y_LABEL,
             title_prefix=self.TITLE_PREFIX,
-            yoko_inst_addr=yoko_addr,
             instrument_manager=instrument_manager,
             yoko_name=yoko_name,
             yoko_mode=kwargs.get("yoko_mode", "current"),
