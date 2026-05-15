@@ -169,6 +169,43 @@ inst.close("pump")
 inst.close()
 ```
 
+## Use With BaseExperiment Liveplot
+
+The old liveplot Yoko path still accepts a VISA address:
+
+```python
+expt.run(py_avg=5, yoko_inst_addr="GPIB0::1::INSTR", yoko_value=flux_values)
+```
+
+The new optional path uses `BaseInstrumentManager` names instead:
+
+```python
+inst.add_yoko("q1_flux", "GPIB0::1::INSTR", limits={"current": (-3e-3, 3e-3)})
+
+expt.run(
+    py_avg=5,
+    instrument_manager=inst,
+    yoko_name="q1_flux",
+    yoko_value=flux_values,
+    yoko_mode="current",
+)
+```
+
+Shortcut form:
+
+```python
+expt.run(
+    py_avg=5,
+    instrument_manager=inst,
+    yoko_inst="q1_flux",
+    yoko_value=flux_values,
+    yoko_mode="current",
+)
+```
+
+When the manager path is used, the registered safety limits and ramp settings
+from `BaseInstrumentManager` are used during the Yoko sweep.
+
 ## Supported Drivers
 
 Current drivers:

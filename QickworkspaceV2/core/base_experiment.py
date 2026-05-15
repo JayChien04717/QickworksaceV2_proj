@@ -249,6 +249,15 @@ class BaseExperiment:
             self._sweep_vals_y = np.asarray(yoko_value_kwarg, dtype=float)
 
         yoko_addr = kwargs.get("yoko_inst_addr") or kwargs.get("yoko_inst")
+        instrument_manager = (
+            kwargs.get("instrument_manager")
+            or kwargs.get("baseinst")
+            or kwargs.get("inst_manager")
+        )
+        yoko_name = kwargs.get("yoko_name") or kwargs.get("yoko_inst_name")
+        if instrument_manager is not None and yoko_name is None and yoko_addr is not None:
+            yoko_name = yoko_addr
+            yoko_addr = None
 
         self.iqdata, interrupted, avg_count = liveplotfun(
             prog=prog,
@@ -260,6 +269,8 @@ class BaseExperiment:
             y_label=self.Y_LABEL,
             title_prefix=self.TITLE_PREFIX,
             yoko_inst_addr=yoko_addr,
+            instrument_manager=instrument_manager,
+            yoko_name=yoko_name,
             yoko_mode=kwargs.get("yoko_mode", "current"),
             yoko_voltage_ramp_step=self.YOKO_VOLTAGE_RAMP_STEP,
             yoko_current_ramp_step=self.YOKO_CURRENT_RAMP_STEP,
