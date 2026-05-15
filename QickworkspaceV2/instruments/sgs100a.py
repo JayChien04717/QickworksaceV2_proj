@@ -40,11 +40,15 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     def __init__(self, address: str) -> None:
         self.address = address
+        if "::" not in address:
+            self.resource_name = f"TCPIP::{address}::INSTR"
+        else:
+            self.resource_name = address
         self.rm = pyvisa.ResourceManager()
         try:
-            self.instrument = self.rm.open_resource(address)
+            self.instrument = self.rm.open_resource(self.resource_name)
         except pyvisa.Error as e:
-            print(f"Could not connect to {address}. Error: {e}")
+            print(f"Could not connect to {self.resource_name}. Error: {e}")
             raise
         self.instrument.read_termination = "\n"
         self.instrument.write_termination = "\n"

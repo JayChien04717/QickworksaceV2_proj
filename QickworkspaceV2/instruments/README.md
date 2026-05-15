@@ -67,7 +67,7 @@ inst.add_yoko(
 
 inst.add_sgs100(
     "pump",
-    "TCPIP::192.168.0.10::INSTR",
+    "192.168.0.10",
     limits={
         "frequency": (1e6, 20e9),
         "power": (-80, 10),
@@ -215,6 +215,9 @@ Current drivers:
 - `sgs100a.py`: Rohde & Schwarz SGS100A RF source
 - `mg3692.py`: Anritsu MG3692 RF source
 
+For SGS100A and MG3692, you can pass either a full VISA resource string or a
+plain IP address. Plain IPs are converted to `TCPIP::<ip>::INSTR`.
+
 Recommended new code should use:
 
 ```python
@@ -294,7 +297,7 @@ are lab safety limits and override the defaults:
 ```python
 inst.add_sgs100(
     "pump",
-    "TCPIP::192.168.0.10::INSTR",
+    "192.168.0.10",
     limits={"power": (-80, 0)},
 )
 ```
