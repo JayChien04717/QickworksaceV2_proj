@@ -18,6 +18,7 @@ inst.on(name)
 inst.off(name)
 inst.value(name)
 inst.set_value(name, value, mode=None)
+inst.set_values(targets)
 inst.status
 ```
 
@@ -107,6 +108,26 @@ Control a specific Yoko by name:
 ```python
 inst.set_value("q1_flux", 0.5e-3, mode="current")
 inst.set_value("q2_flux", -0.2e-3, mode="current")
+```
+
+Set multiple independent instruments from one notebook cell. This runs in
+parallel by default, so two Yoko ramps can happen at the same time:
+
+```python
+inst.set_values({
+    "q1_flux": {"value": 0.5e-3, "mode": "current"},
+    "q2_flux": {"value": -0.2e-3, "mode": "current"},
+})
+```
+
+For RF sources, the primary value is power:
+
+```python
+inst.set_values({
+    "q1_flux": {"value": 0.5e-3, "mode": "current"},
+    "q2_flux": {"value": -0.2e-3, "mode": "current"},
+    "pump": -40,
+})
 ```
 
 Get one raw driver when you need model-specific methods:

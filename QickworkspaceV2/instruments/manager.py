@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -245,6 +246,42 @@ class BaseInstrumentManager:
             return
         raise AttributeError(f"{name!r} has no known primary output value.")
 
+    def set_values(
+        self,
+        targets: Mapping[str, float | Mapping[str, Any]],
+        *,
+        mode: str | None = None,
+        parallel: bool = True,
+        max_workers: int | None = None,
+    ) -> TextReport:
+        """
+        Set multiple instruments' primary output values.
+
+        Examples
+        --------
+        >>> inst.set_values({
+        ...     "q1_flux": {"value": 0.5e-3, "mode": "current"},
+        ...     "q2_flux": {"value": -0.2e-3, "mode": "current"},
+        ... })
+
+        If a target value is a plain number, the shared ``mode`` argument is
+        used. Parallel mode uses threads so independent Yoko ramps can happen
+        at the same time from one notebook cell.
+        """
+
+        normalized = self._normalize_targets(targets, mode=mode)
+        for name, spec in normalized.items():
+            self._validate_set_value(name, spec["value"], spec.get("mode"))
+
+        if parallel and len(normalized) > 1:
+            return self._set_values_parallel(normalized, max_workers=max_workers)
+
+        lines = []
+        for name, spec in normalized.items():
+            self.set_value(name, spec["value"], mode=spec.get("mode"))
+            lines.append(f"{name}: set {self.value(name)}")
+        return TextReport("\n".join(lines))
+
     def configure_ramp(
         self,
         name: str,
@@ -309,6 +346,61 @@ class BaseInstrumentManager:
                 f"{spec.name}.{parameter}={value:g} is outside allowed range "
                 f"{low:g} to {high:g}"
             )
+
+    def _validate_set_value(self, name: str, value: float, mode: str | None) -> None:
+        spec = self.spec(name)
+        if spec.kind == "yoko" or self._is_dc_source(spec.driver):
+            target_mode = mode or "current"
+            if target_mode not in {"current", "voltage"}:
+                raise ValueError(f"{name}: mode must be 'current' or 'voltage'")
+            self._validate_range(spec, target_mode, value)
+            return
+        if hasattr(spec.driver, "power"):
+            self._validate_range(spec, "power", value)
+            return
+        raise AttributeError(f"{name!r} has no known primary output value.")
+
+    def _normalize_targets(
+        self,
+        targets: Mapping[str, float | Mapping[str, Any]],
+        *,
+        mode: str | None,
+    ) -> dict[str, dict[str, Any]]:
+        normalized = {}
+        for name, target in targets.items():
+            if name in normalized:
+                raise ValueError(f"Duplicate target instrument: {name!r}")
+            self.spec(name)
+            if isinstance(target, Mapping):
+                if "value" not in target:
+                    raise ValueError(f"{name}: target mapping must contain 'value'")
+                normalized[name] = {
+                    "value": target["value"],
+                    "mode": target.get("mode", mode),
+                }
+            else:
+                normalized[name] = {"value": target, "mode": mode}
+        return normalized
+
+    def _set_values_parallel(
+        self,
+        targets: Mapping[str, Mapping[str, Any]],
+        *,
+        max_workers: int | None,
+    ) -> TextReport:
+        workers = max_workers or len(targets)
+        lines = []
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(self.set_value, name, spec["value"], mode=spec.get("mode")): name
+                for name, spec in targets.items()
+            }
+            for future in as_completed(futures):
+                name = futures[future]
+                future.result()
+                lines.append(f"{name}: set {self.value(name)}")
+        lines.sort()
+        return TextReport("\n".join(lines))
 
     def _format_status_line(self, spec: InstrumentSpec) -> str:
         driver = spec.driver
