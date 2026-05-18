@@ -28,7 +28,11 @@ class T1EfProgram(BaseProgram):
         self.pulse(ch=cfg["qb_ch"], name="qb_ge_pi", t=0)
         self.delay_auto(0.02)
         self.pulse(ch=cfg["qb_ch_ef"], name="qb_ef_pi", t=0)
-        self.delay_auto(cfg["wait_time"] + 0.05, tag="wait")
+        self.delay_auto(cfg["wait_time"] + 0.01, tag="wait")
+        if cfg.get("ge_ref", False):
+            self.pulse(ch=cfg["qb_ch"], name="qb_ge_pi", t=0)
+            self.delay_auto(0.01)
+        self.delay_auto(0.02)
         self.measure(cfg)
 
 

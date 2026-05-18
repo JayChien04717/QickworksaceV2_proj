@@ -19,7 +19,7 @@ class RamseyEfProgram(BaseProgram):
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_ge_pi", gain_key="pi_gain_ge")
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse1", gain_key="pi2_gain_ef")
-        ramsey_phase = cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+        ramsey_phase = cfg.get("qb_phase_ef", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse2", gain_key="pi2_gain_ef", phase=ramsey_phase)
 
     def _body(self, cfg):
@@ -32,7 +32,10 @@ class RamseyEfProgram(BaseProgram):
         self.pulse(ch=cfg["qb_ch_ef"], name="qb_ef_pulse1", t=0)
         self.delay_auto(cfg["wait_time"] + 0.01, tag="wait")
         self.pulse(ch=cfg["qb_ch_ef"], name="qb_ef_pulse2", t=0)
-        self.delay_auto(0.05)
+        if cfg.get("ge_ref", False):
+            self.delay_auto(0.02)
+            self.pulse(ch=cfg["qb_ch"], name="qb_ge_pi", t=0)
+        self.delay_auto(0.02)
         self.measure(cfg)
 
 
