@@ -13,7 +13,15 @@ from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
-from ...tools.fitting import decaysin, fitdecaysin, fix_phase
+from ...tools.fitting import (
+    decaysin,
+    fitdecaysin,
+    fit_probg_Xhalf,
+    fit_probg_Xhalf_decay,
+    fix_phase,
+    probg_Xhalf,
+    probg_Xhalf_decay,
+)
 from ...plotter.plot_utils import plot_final
 
 
@@ -238,8 +246,8 @@ class PowerRabiChevron(BaseExperiment):
         return f"{dict_val}"
 
 
-class AngleErrorAmplificationProgram(BaseProgram):
-    """QICK program for Fig. 1 style angle error amplification."""
+class GambettaFig2Program(BaseProgram):
+    """QICK program for Gambetta Fig. 2: X90 followed by X90^n."""
 
     def _initialize(self, cfg):
         self.setup_resonator(cfg)
@@ -254,69 +262,55 @@ class AngleErrorAmplificationProgram(BaseProgram):
             self.cooling_body(cfg)
 
         ch = cfg["qb_ch"]
-        target = cfg.get("aae_target", "pi").lower()
         repetitions = int(cfg.get("aae_repetitions_current", 0))
         gate_gap = float(cfg.get("aae_gate_gap", 0.02))
-        init_gate = cfg.get("aae_init_gate", "x90_ge")
 
-        self.pulse(ch=ch, name=init_gate, t=0)
+        self.pulse(ch=ch, name="x90_ge", t=0)
         self.delay_auto(t=gate_gap)
 
-        if target in ("pi", "x", "x180"):
-            block = ("x180_ge",)
-        elif target in ("pi2", "pi/2", "x90"):
-            block = ("x90_ge", "x90_ge")
-        else:
-            raise ValueError("aae_target must be 'pi' or 'pi2'")
-
         for _ in range(repetitions):
-            for gate in block:
-                self.pulse(ch=ch, name=gate, t=0)
-                self.delay_auto(t=gate_gap)
+            self.pulse(ch=ch, name="x90_ge", t=0)
+            self.delay_auto(t=gate_gap)
 
         self.delay_auto(t=0.05, tag="waiting")
         self.measure(cfg)
 
 
-class AngleErrorAmplification(BaseExperiment):
+class GambettaFig2AAE(BaseExperiment):
     """
-    Error-amplification calibration for pi and pi/2 single-qubit gates.
+    Gambetta/Sheldon Fig. 2 style pi/2 error-amplification calibration.
 
-    The sequence follows the Fig. 1 idea from the arbitrary-angle drive
-    nonlinearity paper: prepare the qubit on the equator, repeat an ideal
-    pi-sized block, and fit the accumulated population deviation to extract
-    a small per-gate rotation error.
+    Sequence: X90 followed by X90^n.  Sweeping n amplifies a small pi/2
+    over/under-rotation into a measurable oscillation-frequency shift.
     """
 
-    EXPT_NAME = "s005c_angle_error_amplification_ge"
+    EXPT_NAME = "s005a_gambetta_fig2_aae_ge"
     TAG = "AAE"
-    X_LABEL = "Amplification Repetitions (N)"
+    X_LABEL = "Additional X90 Pulses (n)"
     Y_LABEL = "ADC Units"
-    TITLE_PREFIX = "Angle Error Amplification ge"
+    TITLE_PREFIX = "Gambetta Fig. 2 AAE ge"
     SWEEP_KEYS_TO_REMOVE = []
-    X_SAVE_NAME = "Repetitions"
+    X_SAVE_NAME = "Additional X90 Pulses"
     X_SAVE_UNIT = "N"
     X_SAVE_SCALE = 1.0
 
     def _normalize_cfg(self):
         if "pi2_gain_ge" not in self.cfg:
             self.cfg["pi2_gain_ge"] = self.cfg["pi_gain_ge"] / 2
-        self.cfg.setdefault("aae_target", "pi")
         self.cfg.setdefault("aae_gate_gap", 0.02)
-        self.cfg.setdefault("aae_init_gate", "x90_ge")
 
     def _repetitions(self):
         reps = self.cfg.get("aae_repetitions")
         if reps is None:
             start = int(self.cfg.get("aae_repetitions_start", 0))
-            stop = int(self.cfg.get("aae_repetitions_stop", 150))
-            step = int(self.cfg.get("aae_repetitions_step", 5))
+            stop = int(self.cfg.get("aae_repetitions_stop", 40))
+            step = int(self.cfg.get("aae_repetitions_step", 1))
             reps = np.arange(start, stop + 1, step, dtype=int)
         return np.asarray(reps, dtype=int)
 
     def _create_program(self):
         self._normalize_cfg()
-        return AngleErrorAmplificationProgram(
+        return GambettaFig2Program(
             self.soccfg,
             reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"],
@@ -342,7 +336,7 @@ class AngleErrorAmplification(BaseExperiment):
         title = ax.set_title(f"{self.TITLE_PREFIX} (Initializing...)")
         ax.grid(True, alpha=0.2)
 
-        plot_display_id = f"live-plot-aae-fig1-{np.random.randint(1e9)}"
+        plot_display_id = f"live-plot-aae-fig2-{np.random.randint(1e9)}"
         display(fig, display_id=plot_display_id)
 
         interrupted = False
@@ -422,14 +416,6 @@ class AngleErrorAmplification(BaseExperiment):
             signal = np.abs(self.iqdata)
         return float(self.cfg.get("aae_signal_sign", 1.0)) * signal
 
-    def _target_info(self):
-        target = self.cfg.get("aae_target", "pi").lower()
-        if target in ("pi", "x", "x180"):
-            return "pi", np.pi, 1, float(self.cfg["pi_gain_ge"])
-        if target in ("pi2", "pi/2", "x90"):
-            return "pi2", np.pi / 2, 2, float(self.cfg["pi2_gain_ge"])
-        raise ValueError("aae_target must be 'pi' or 'pi2'")
-
     def _post_fit(self, x_vals=None):
         if self.iqdata is None:
             print("No data. Call run() first.")
@@ -441,88 +427,60 @@ class AngleErrorAmplification(BaseExperiment):
             print("Not enough points for AAE fit.")
             return None
 
-        target_name, target_angle, pulses_per_block, nominal_gain = self._target_info()
-
-        def model(n, offset, amp, delta_block, phase, decay):
-            return offset + amp * np.sin(n * delta_block + phase) * np.exp(-n / decay)
-
-        offset0 = float(np.mean(y))
-        amp0 = float((np.max(y) - np.min(y)) / 2) or 1.0
-        allow_phase = bool(self.cfg.get("aae_fit_phase", False))
-        max_decay = max(float(np.max(reps_axis)), 1.0) * 3
+        nominal_angle = np.pi / 2
+        nominal_gain = float(self.cfg["pi2_gain_ge"])
 
         fit_success = False
-        perr = np.full(5, np.nan)
-        try:
-            if allow_phase:
-                p0 = [offset0, amp0, 0.01, 0.0, max_decay]
-                bounds = (
-                    [-np.inf, 0.0, -np.pi, -2 * np.pi, 1e-9],
-                    [np.inf, np.inf, np.pi, 2 * np.pi, np.inf],
-                )
-                popt, pcov = curve_fit(
-                    model,
-                    reps_axis,
-                    y,
-                    p0=p0,
-                    bounds=bounds,
-                    maxfev=20000,
-                )
-                perr = np.sqrt(np.diag(pcov))
-            else:
-                def phase_fixed_model(n, offset, amp, delta_block, decay):
-                    return model(n, offset, amp, delta_block, 0.0, decay)
-
-                p0 = [offset0, amp0, 0.01, max_decay]
-                bounds = (
-                    [-np.inf, 0.0, -np.pi, 1e-9],
-                    [np.inf, np.inf, np.pi, np.inf],
-                )
-                popt4, pcov = curve_fit(
-                    phase_fixed_model,
-                    reps_axis,
-                    y,
-                    p0=p0,
-                    bounds=bounds,
-                    maxfev=20000,
-                )
-                perr4 = np.sqrt(np.diag(pcov))
-                popt = np.array([popt4[0], popt4[1], popt4[2], 0.0, popt4[3]])
-                perr = np.array([perr4[0], perr4[1], perr4[2], 0.0, perr4[3]])
+        fit_model = "Xhalf_decay"
+        popt, pcov, _ = fit_probg_Xhalf_decay(reps_axis, y)
+        if np.any(np.isnan(popt)):
+            fit_model = "Xhalf"
+            popt, pcov, _ = fit_probg_Xhalf(reps_axis, y)
+        if not np.any(np.isnan(popt)):
             fit_success = True
-        except Exception as exc:
-            print(f"AAE fit failed: {exc}")
-            popt = np.asarray([offset0, amp0, 0.01, 0.0, max_decay], dtype=float)
 
-        offset, amp, delta_block, phase, decay = popt
-        angle_error = delta_block / pulses_per_block
-        corrected_gain = nominal_gain * target_angle / (target_angle + angle_error)
+        if fit_model == "Xhalf_decay":
+            offset, delta_deg, decay = popt
+            model = probg_Xhalf_decay
+            fit_decay = float(decay)
+        else:
+            offset, delta_deg = popt
+            model = probg_Xhalf
+            fit_decay = np.nan
+
+        delta_err_deg = np.nan
+        if pcov is not None and np.shape(pcov)[0] > 1:
+            delta_err_deg = float(np.sqrt(np.abs(pcov[1, 1])))
+
+        angle_error = float(delta_deg) * np.pi / 180
+        angle_per_pulse = nominal_angle + angle_error
+        corrected_gain = nominal_gain * nominal_angle / angle_per_pulse
         relative_gain_correction = corrected_gain / nominal_gain - 1.0
 
         self.fit_params = {
-            "target": target_name,
-            "target_angle_rad": target_angle,
-            "pulses_per_block": pulses_per_block,
+            "target": "pi2",
+            "target_angle_rad": nominal_angle,
             "nominal_gain": nominal_gain,
+            "angle_per_pulse_rad": float(angle_per_pulse),
             "angle_error_rad": float(angle_error),
-            "angle_error_deg": float(np.rad2deg(angle_error)),
+            "angle_error_deg": float(delta_deg),
             "corrected_gain": float(corrected_gain),
             "relative_gain_correction": float(relative_gain_correction),
-            "delta_block_rad": float(delta_block),
             "fit_offset": float(offset),
-            "fit_amp": float(amp),
-            "fit_phase": float(phase),
-            "fit_decay": float(decay),
+            "fit_delta_deg": float(delta_deg),
+            "fit_decay": fit_decay,
+            "fit_model": fit_model,
             "fit_success": fit_success,
         }
         self.fit_errors = {
-            "angle_error_rad": float(perr[2] / pulses_per_block),
-            "angle_error_deg": float(np.rad2deg(perr[2] / pulses_per_block)),
-            "delta_block_rad": float(perr[2]),
+            "angle_per_pulse_rad": float(delta_err_deg * np.pi / 180),
+            "angle_error_rad": float(delta_err_deg * np.pi / 180),
+            "angle_error_deg": delta_err_deg,
+            "fit_delta_deg": delta_err_deg,
         }
 
         print(
-            f"\n[AAE] target={target_name}, angle error="
+            f"\n[AAE Fig.2] X90 angle error="
             f"{self.fit_params['angle_error_deg']:.4f} deg, "
             f"gain {nominal_gain:.6g} -> {corrected_gain:.6g}"
         )
@@ -530,10 +488,10 @@ class AngleErrorAmplification(BaseExperiment):
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.scatter(reps_axis, y, s=24, color="steelblue", label="Data")
         fine_x = np.linspace(np.min(reps_axis), np.max(reps_axis), 1000)
-        ax.plot(fine_x, model(fine_x, *popt), color="firebrick", lw=2, label="Fit")
+        ax.plot(fine_x, model(fine_x, *popt), color="firebrick", lw=2, label=fit_model)
         ax.set_xlabel(self.X_LABEL)
         ax.set_ylabel(self.Y_LABEL)
-        ax.set_title(f"AAE {target_name}: {self.fit_params['angle_error_deg']:.4f} deg/gate")
+        ax.set_title(f"AAE Fig.2 X90: {self.fit_params['angle_error_deg']:.4f} deg/gate")
         ax.grid(True, alpha=0.2)
         ax.legend()
         plt.tight_layout()
@@ -550,8 +508,7 @@ class AngleErrorAmplification(BaseExperiment):
     def _save_comment(self, dict_val):
         if self.fit_params:
             return (
-                "Angle Error Amplification\n"
-                f"target={self.fit_params['target']}\n"
+                "Gambetta Fig. 2 AAE\n"
                 f"angle_error_deg={self.fit_params['angle_error_deg']:.6f}\n"
                 f"corrected_gain={self.fit_params['corrected_gain']:.8g}\n"
                 f"{dict_val}"
@@ -560,10 +517,10 @@ class AngleErrorAmplification(BaseExperiment):
 
 
 # Alias
-AAE = PowerRabiChevron
-AAEFig1 = AngleErrorAmplification
+AAE = GambettaFig2AAE
+AAEFig2 = GambettaFig2AAE
 
 __all__ = [
     "PowerRabiProgram", "PowerRabiChevron", "AAEProgram", "AAE",
-    "AngleErrorAmplificationProgram", "AngleErrorAmplification", "AAEFig1",
+    "GambettaFig2Program", "GambettaFig2AAE", "AAEFig2",
 ]

@@ -132,6 +132,11 @@ def fit_updates_from_result(result) -> dict[str, Any]:
         if config_key == "qb_freq_ge":
             updates.setdefault("qb_mixer", value)
 
+    if "aae" in experiment_type:
+        corrected_gain = value_of("corrected_gain")
+        if corrected_gain is not None:
+            updates["pi2_gain_ge"] = corrected_gain
+
     f0_ghz = value_of("f0_GHz")
     if f0_ghz is not None:
         updates["res_freq_ge"] = f0_ghz * 1000.0 if f0_ghz < 100 else f0_ghz

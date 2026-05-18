@@ -3,7 +3,7 @@ from .rabi import TimeRabi, TimeRabiProgram, PowerRabi, PowerRabiProgram, PowerR
 from .drag import DragProgram, DragCalibration
 from .aae import (
     AAEProgram, AAE,
-    AngleErrorAmplificationProgram, AngleErrorAmplification, AAEFig1,
+    GambettaFig2Program, GambettaFig2AAE, AAEFig2,
 )
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
     "PowerRabiReset",
     "DragProgram", "DragCalibration",
     "AAEProgram", "AAE",
-    "AngleErrorAmplificationProgram", "AngleErrorAmplification", "AAEFig1",
+    "GambettaFig2Program", "GambettaFig2AAE", "AAEFig2",
 ]
