@@ -261,8 +261,7 @@ class QubitTemp(BaseExperiment):
             print("[Temp] Temperature calculation failed.")
         return temp
 
-    @staticmethod
-    def _fit_amplitude(x_vals, params):
+    def _fit_amplitude(self, x_vals, params):
         fit = decaysin(x_vals, *params)
         return float((np.max(fit) - np.min(fit)) / 2)
 
