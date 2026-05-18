@@ -445,18 +445,90 @@ def _liveplot_sw_avg(
     show_final_plot=False,
     iq_process="abs",
 ):
-    return run_software_average_liveplot(
-        prog=prog,
-        soc=soc,
-        py_avg=py_avg,
-        x_axis_vals=x_axis_vals,
-        y_axis_vals=y_axis_vals,
-        x_label=x_label,
-        y_label=y_label,
-        title_prefix=title_prefix,
-        show_final_plot=show_final_plot,
-        iq_process=iq_process,
-    )
+    _y_label_proc = _process_label(iq_process)
+
+    iq = 0
+    iqdata = None
+    last_i = 0
+    interrupted = False
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    plot_display_id = f"live-plot-{np.random.randint(1e9)}"
+
+    is_2d = y_axis_vals is not None
+    if is_2d:
+        plot_artist = ax.pcolormesh(
+            x_axis_vals,
+            y_axis_vals,
+            np.zeros((len(y_axis_vals), len(x_axis_vals))),
+            cmap="viridis",
+        )
+        fig.colorbar(plot_artist, ax=ax, label="Normalized Amplitude")
+        ax.set_ylabel(y_label)
+    else:
+        (plot_artist,) = ax.plot(
+            x_axis_vals, np.zeros_like(x_axis_vals), "o-", markersize=5, alpha=0.7
+        )
+        ax.set_ylabel(_y_label_proc)
+
+    ax.set_xlabel(x_label)
+    ax.set_title(f"{title_prefix} (Initializing...)")
+    display(fig, display_id=plot_display_id)
+
+    try:
+        for i in tqdm(range(py_avg), desc="Software Average Count", mininterval=0.1):
+            last_i = i
+            iq_list = prog.acquire(soc, rounds=1, progress=False)
+            iq_data = _iq_to_complex(iq_list)
+            iq = iq_data if i == 0 else iq + iq_data
+            iqdata = iq / (i + 1)
+            plot_data = _process_iq(iqdata, iq_process)
+
+            if is_2d:
+                data_to_plot = _normalize_rows(plot_data)
+                plot_artist.set_array(data_to_plot.ravel())
+                plot_artist.set_clim(*_safe_limits(data_to_plot, pad_fraction=0.0))
+            else:
+                data_to_plot = plot_data
+                plot_artist.set_ydata(data_to_plot)
+                ax.set_ylim(*_safe_limits(data_to_plot))
+
+            ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
+            update_display(fig, display_id=plot_display_id)
+
+    except KeyboardInterrupt:
+        interrupted = True
+
+    clear_output(wait=True)
+    plt.close(fig)
+
+    if show_final_plot:
+        final_fig, final_ax = plt.subplots(figsize=(6, 4))
+        title_status = "Interrupted" if interrupted else "Completed"
+        final_ax.set_title(f"{title_prefix} ({title_status} at avg {last_i + 1})")
+        final_ax.set_xlabel(x_label)
+
+        if iqdata is not None:
+            plot_data = _process_iq(iqdata, iq_process)
+            if is_2d:
+                final_data = _normalize_rows(plot_data)
+                im = final_ax.pcolormesh(
+                    x_axis_vals, y_axis_vals, final_data, cmap="viridis"
+                )
+                final_fig.colorbar(im, ax=final_ax, label="Normalized Amplitude")
+                final_ax.set_ylabel(y_label)
+            else:
+                final_ax.plot(x_axis_vals, plot_data, "o-", markersize=5, alpha=0.7)
+                final_ax.set_ylabel(_y_label_proc)
+        else:
+            final_ax.text(
+                0.5, 0.5, "No data acquired",
+                ha="center", va="center", transform=final_ax.transAxes,
+            )
+        display(final_fig)
+        plt.close(final_fig)
+
+    return iqdata, interrupted, last_i + 1
 
 
 def _liveplot_sweep_yoko(
