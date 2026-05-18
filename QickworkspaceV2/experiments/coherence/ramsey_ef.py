@@ -62,3 +62,28 @@ class RamseyEf(BaseExperiment):
     def _extract_sweep_axis(self, prog):
         self.delay_times = prog.get_time_param("wait", "t", as_array=True)
         return self.delay_times
+
+    def correct_detune(self):
+        """Correct qubit ef frequency based on fitted detuning."""
+        if self.result is None:
+            raise RuntimeError("Run the experiment first.")
+        detune = self.result.fit_result.get("detune_MHz", (None,))[0]
+        if detune is None:
+            print("Detune not available (ramsey_freq=0 or fit failed).")
+            return self.cfg["qb_freq_ef"]
+        if abs(detune - self.cfg["ramsey_freq"]) > 0.005:
+            self.cfg["qb_freq_ef"] = self.cfg["qb_freq_ef"] - round(
+                (detune - self.cfg["ramsey_freq"]), 2
+            )
+            print(f"over detune {round((detune - self.cfg['ramsey_freq']), 5)}MHz")
+            return round(self.cfg["qb_freq_ef"], 5)
+        else:
+            print("Detune < 5kHz")
+            return self.cfg["qb_freq_ef"]
+
+    def _save_comment(self, dict_val):
+        if self.result is not None:
+            T2 = self.result.fit_result.get("T2r_us", (None,))[0]
+            if T2 is not None:
+                return f"T2 Ramsey = {T2:.2f} us\n{dict_val}"
+        return str(dict_val)
