@@ -225,13 +225,13 @@ class PowerRabiAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitdecaysin, fix_phase
+        from ..tools.fitting import fitsin, fix_phase
 
         x = data.x_axis
         y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitdecaysin(x, y)
+            popt, pcov, _ = fitsin(x, y)
             err = np.sqrt(np.diag(pcov))
             pi_gain, pi2_gain = fix_phase(popt)
             data.fit_params = np.array(popt)
@@ -243,12 +243,12 @@ class PowerRabiAnalysis(BaseAnalysis):
             data.scalar_result = pi_gain
         except Exception as exc:
             data.quality = QualityFlag.BAD
-            data.quality_message = f"PowerRabi fit failed: {exc}"
+            data.quality_message = f"PowerRabi sine fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
         if data.fit_params is None:
             return
-        from ..tools.fitting import decaysin
+        from ..tools.fitting import sinfunc
         pi_gain  = data.fit_result.get("pi_gain",  (None,))[0]
         pi2_gain = data.fit_result.get("pi2_gain", (None,))[0]
         extra = []
@@ -260,7 +260,7 @@ class PowerRabiAnalysis(BaseAnalysis):
         if pi_gain:  lines.append(f"π     = {pi_gain:.4f}")
         if pi2_gain: lines.append(f"π/2   = {pi2_gain:.4f}")
         self._show_fit(
-            data, decaysin, data.fit_params,
+            data, sinfunc, data.fit_params,
             xlabel="Gain (a.u.)",
             title=f"Power Rabi  |  π gain = {pi_gain:.4f}" if pi_gain else "Power Rabi",
             result_text="\n".join(lines),

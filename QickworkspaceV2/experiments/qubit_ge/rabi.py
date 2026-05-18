@@ -77,7 +77,7 @@ class PowerRabiProgram(BaseProgram):
 
 
 class PowerRabi(BaseExperiment):
-    """Power Rabi (ge): sweeps gain, fits decaying sinusoid → π and π/2 gains."""
+    """Power Rabi (ge): sweeps gain, fits sinusoid for pi and pi/2 gains."""
 
     EXPT_NAME = "s005_power_rabi_ge"
     TAG = "Rabi"
