@@ -40,8 +40,8 @@ class SpinEcho(BaseExperiment):
 
     EXPT_NAME = "s007_SpinEcho_ge"
     TAG = "Spin Echo"
-    X_LABEL = "Times (us)"
-    TITLE_PREFIX = "Qubit SpinEcho ge"
+    X_LABEL = "Echo Delay Time (us)"
+    TITLE_PREFIX = "Qubit Spin Echo ge"
     SWEEP_KEYS_TO_REMOVE = ["wait_time"]
     X_SAVE_NAME = "Times"
     X_SAVE_UNIT = "s"

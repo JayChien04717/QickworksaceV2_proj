@@ -9,8 +9,8 @@ import numpy as np
 from ..core.base_analysis import BaseAnalysis
 from ..core.experiment_data import ExperimentData, QualityFlag
 
-
 # ── T1 ────────────────────────────────────────────────────────────────────────
+
 
 class T1Analysis(BaseAnalysis):
     """Exponential decay fit → T1 relaxation time."""
@@ -22,7 +22,7 @@ class T1Analysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitexp, expfunc
+        from ..tools.fitting import fitexp
 
         x = data.x_axis
         y = np.abs(data.raw_iq)
@@ -35,8 +35,6 @@ class T1Analysis(BaseAnalysis):
             data.fit_errors = err
             data.fit_result = {
                 "T1_us": (T1, err[2]),
-                "amplitude": (popt[0], err[0]),
-                "offset": (popt[1], err[1]),
             }
             data.scalar_result = T1
         except Exception as exc:
@@ -47,15 +45,15 @@ class T1Analysis(BaseAnalysis):
         if data.fit_params is None:
             return
         from ..tools.fitting import expfunc
-        T1  = data.fit_result.get("T1_us",    (None,))[0]
-        A   = data.fit_result.get("amplitude", (None,))[0]
-        off = data.fit_result.get("offset",    (None,))[0]
+
+        T1 = data.fit_result.get("T1_us", (None,))[0]
         lines = []
-        if T1  is not None: lines.append(f"T1     = {T1:.2f} µs")
-        if A   is not None: lines.append(f"A      = {A:.3f}")
-        if off is not None: lines.append(f"offset = {off:.3f}")
+        if T1 is not None:
+            lines.append(f"T1     = {T1:.2f} µs")
         self._show_fit(
-            data, expfunc, data.fit_params,
+            data,
+            expfunc,
+            data.fit_params,
             xlabel="Wait time (µs)",
             title=f"T1 Relaxation  |  T1 = {T1:.2f} µs" if T1 else "T1 Relaxation",
             result_text="\n".join(lines),
@@ -63,6 +61,7 @@ class T1Analysis(BaseAnalysis):
 
 
 # ── Ramsey ────────────────────────────────────────────────────────────────────
+
 
 class RamseyAnalysis(BaseAnalysis):
     """Damped sinusoid fit → T2*, frequency detuning."""
@@ -83,7 +82,7 @@ class RamseyAnalysis(BaseAnalysis):
             self._fit_exp(data)
 
     def _fit_decaysin(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitdecaysin, decaysin
+        from ..tools.fitting import fitdecaysin
 
         x = data.x_axis
         # Use best channel (abs works for most cases)
@@ -112,7 +111,7 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey decaysin fit failed: {exc}"
 
     def _fit_exp(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitexp, expfunc
+        from ..tools.fitting import fitexp
 
         x = data.x_axis
         y = np.abs(data.raw_iq)
@@ -137,18 +136,25 @@ class RamseyAnalysis(BaseAnalysis):
             from ..tools.fitting import decaysin as simfunc
         else:
             from ..tools.fitting import expfunc as simfunc
-        T2r    = data.fit_result.get("T2r_us",           (None,))[0]
-        detune = data.fit_result.get("detune_MHz",        (None,))[0]
-        corr   = data.fit_result.get("corrected_freq_MHz",(None,))[0]
-        title  = "Ramsey"
-        if T2r:    title += f"  |  T2* = {T2r:.2f} µs"
-        if detune: title += f",  Δf = {detune:.3f} MHz"
+        T2r = data.fit_result.get("T2r_us", (None,))[0]
+        detune = data.fit_result.get("detune_MHz", (None,))[0]
+        corr = data.fit_result.get("corrected_freq_MHz", (None,))[0]
+        title = "Ramsey"
+        if T2r:
+            title += f"  |  T2* = {T2r:.2f} µs"
+        if detune:
+            title += f",  Δf = {detune:.3f} MHz"
         lines = []
-        if T2r:    lines.append(f"T2*    = {T2r:.2f} µs")
-        if detune: lines.append(f"detune = {detune:.3f} MHz")
-        if corr:   lines.append(f"f_corr = {corr:.3f} MHz")
+        if T2r:
+            lines.append(f"T2*    = {T2r:.2f} µs")
+        if detune:
+            lines.append(f"detune = {detune:.3f} MHz")
+        if corr:
+            lines.append(f"f_corr = {corr:.3f} MHz")
         self._show_fit(
-            data, simfunc, data.fit_params,
+            data,
+            simfunc,
+            data.fit_params,
             xlabel="Free evolution time (µs)",
             title=title,
             result_text="\n".join(lines),
@@ -157,8 +163,9 @@ class RamseyAnalysis(BaseAnalysis):
 
 # ── SpinEcho ──────────────────────────────────────────────────────────────────
 
+
 class SpinEchoAnalysis(BaseAnalysis):
-    """Hahn echo fit → T2E."""
+    """Hahn echo fit -- T2E."""
 
     thresholds = {
         "T2e_us": {"min": 0.1, "max": 5000.0},
@@ -171,6 +178,8 @@ class SpinEchoAnalysis(BaseAnalysis):
         ramsey_freq = data.config.get("ramsey_freq", 0.0)
         x = data.x_axis
         y = np.abs(data.raw_iq)
+        detune = None
+        detune_err = None
 
         try:
             if ramsey_freq != 0:
@@ -179,18 +188,22 @@ class SpinEchoAnalysis(BaseAnalysis):
                 popt, pcov, _ = fitdecaysin(x, y)
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[3]))
-                data.fit_params = np.array(popt)
-                data.fit_errors = err
+                T2e_err = err[3]
+                detune = float(popt[1])
+                detune_err = err[1]
             else:
                 from ..tools.fitting import fitexp
 
                 popt, pcov, _ = fitexp(x, y)
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[2]))
-                data.fit_params = np.array(popt)
-                data.fit_errors = err
+                T2e_err = err[2]
 
-            data.fit_result = {"T2e_us": (T2e, None)}
+            data.fit_params = np.array(popt)
+            data.fit_errors = err
+            data.fit_result = {"T2e_us": (T2e, T2e_err)}
+            if detune is not None:
+                data.fit_result["detune_MHz"] = (detune, detune_err)
             data.scalar_result = T2e
         except Exception as exc:
             data.quality = QualityFlag.BAD
@@ -204,16 +217,28 @@ class SpinEchoAnalysis(BaseAnalysis):
             from ..tools.fitting import decaysin as simfunc
         else:
             from ..tools.fitting import expfunc as simfunc
+
         T2e = data.fit_result.get("T2e_us", (None,))[0]
+        detune = data.fit_result.get("detune_MHz", (None,))[0]
+
+        title = "Spin Echo"
+        lines = []
+        if T2e:
+            title += f"  |  T2E = {T2e:.2f} us"
+            lines.append(f"T2E    = {T2e:.2f} us")
+        if detune:
+            title += f",  df = {detune:.3f} MHz"
+            lines.append(f"detune = {detune:.3f} MHz")
+
         self._show_fit(
-            data, simfunc, data.fit_params,
-            xlabel="Echo time (µs)",
-            title=f"Spin Echo  |  T2E = {T2e:.2f} µs" if T2e else "Spin Echo",
-            result_text=f"T2E = {T2e:.2f} µs" if T2e else "",
+            data,
+            simfunc,
+            data.fit_params,
+            xlabel="Echo delay time (us)",
+            title=title,
+            result_text="\n".join(lines),
         )
 
-
-# ── PowerRabi ─────────────────────────────────────────────────────────────────
 
 class PowerRabiAnalysis(BaseAnalysis):
     """Decaying sinusoid → π gain and π/2 gain."""
@@ -249,18 +274,39 @@ class PowerRabiAnalysis(BaseAnalysis):
         if data.fit_params is None:
             return
         from ..tools.fitting import sinfunc
-        pi_gain  = data.fit_result.get("pi_gain",  (None,))[0]
+
+        pi_gain = data.fit_result.get("pi_gain", (None,))[0]
         pi2_gain = data.fit_result.get("pi2_gain", (None,))[0]
         extra = []
         if pi_gain:
-            extra.append({"x": pi_gain,  "color": "#d62728", "ls": "--", "lw": 1.2, "label": f"π = {pi_gain:.4f}"})
+            extra.append(
+                {
+                    "x": pi_gain,
+                    "color": "#d62728",
+                    "ls": "--",
+                    "lw": 1.2,
+                    "label": f"π = {pi_gain:.4f}",
+                }
+            )
         if pi2_gain:
-            extra.append({"x": pi2_gain, "color": "#2ca02c", "ls": "--", "lw": 1.2, "label": f"π/2 = {pi2_gain:.4f}"})
+            extra.append(
+                {
+                    "x": pi2_gain,
+                    "color": "#2ca02c",
+                    "ls": "--",
+                    "lw": 1.2,
+                    "label": f"π/2 = {pi2_gain:.4f}",
+                }
+            )
         lines = []
-        if pi_gain:  lines.append(f"π     = {pi_gain:.4f}")
-        if pi2_gain: lines.append(f"π/2   = {pi2_gain:.4f}")
+        if pi_gain:
+            lines.append(f"π     = {pi_gain:.4f}")
+        if pi2_gain:
+            lines.append(f"π/2   = {pi2_gain:.4f}")
         self._show_fit(
-            data, sinfunc, data.fit_params,
+            data,
+            sinfunc,
+            data.fit_params,
             xlabel="Gain (a.u.)",
             title=f"Power Rabi  |  π gain = {pi_gain:.4f}" if pi_gain else "Power Rabi",
             result_text="\n".join(lines),
@@ -269,6 +315,7 @@ class PowerRabiAnalysis(BaseAnalysis):
 
 
 # ── TimeRabi ──────────────────────────────────────────────────────────────────
+
 
 class TimeRabiAnalysis(BaseAnalysis):
     """Sinusoidal fit to time-domain Rabi → pi_length."""
@@ -300,9 +347,12 @@ class TimeRabiAnalysis(BaseAnalysis):
         if data.fit_params is None:
             return
         from ..tools.fitting import decaysin
+
         pi_len = data.fit_result.get("pi_length_us", (None,))[0]
         self._show_fit(
-            data, decaysin, data.fit_params,
+            data,
+            decaysin,
+            data.fit_params,
             xlabel="Pulse length (µs)",
             title=f"Time Rabi  |  π time = {pi_len:.3f} µs" if pi_len else "Time Rabi",
             result_text=f"π length = {pi_len:.3f} µs" if pi_len else "",
@@ -310,6 +360,7 @@ class TimeRabiAnalysis(BaseAnalysis):
 
 
 # ── QubitTemp ─────────────────────────────────────────────────────────────────
+
 
 class QubitTempAnalysis(BaseAnalysis):
     """Qubit temperature estimation from |e⟩ population."""
@@ -336,6 +387,7 @@ class QubitTempAnalysis(BaseAnalysis):
 
 
 # ── SingleShot ────────────────────────────────────────────────────────────────
+
 
 class SingleShotAnalysis(BaseAnalysis):
     """Single-shot readout quality metrics — fidelity, SNR, angle."""

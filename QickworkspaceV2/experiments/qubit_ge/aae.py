@@ -4,28 +4,24 @@ QubitGE/aae — s005a_AAE: Amplitude-Amplitude-Envelope (power Rabi chevron).
 
 from __future__ import annotations
 
-import numpy as np
 import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
+import numpy as np
+from IPython.display import clear_output, display, update_display
 from scipy.ndimage import gaussian_filter1d
-from IPython.display import display, clear_output, update_display
+from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
-from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 from ...tools.fitting import (
-    decaysin,
-    fitdecaysin,
     fit_probg_Xhalf,
     fit_probg_Xhalf_decay,
-    fix_phase,
     probg_Xhalf,
     probg_Xhalf_decay,
 )
-from ...plotter.plot_utils import plot_final
 
 
-class PowerRabiProgram(BaseProgram):
+class PowerRabiChevronProgram(BaseProgram):
     """QICK program for AAE power Rabi: repeats the pulse ``iteration`` times."""
 
     def _initialize(self, cfg):
@@ -47,7 +43,8 @@ class PowerRabiProgram(BaseProgram):
 
 
 # Aliases for backward compatibility
-AAEProgram = PowerRabiProgram
+PowerRabiProgram = PowerRabiChevronProgram
+AAEProgram = PowerRabiChevronProgram
 
 
 class PowerRabiChevron(BaseExperiment):
@@ -69,6 +66,21 @@ class PowerRabiChevron(BaseExperiment):
     Y_SAVE_NAME = "Iterations"
     Y_SAVE_UNIT = "N"
     Y_SAVE_SCALE = 1.0
+
+    def _create_program(self):
+        self.cfg.setdefault("iteration", self.cfg.get("iter_start", 1))
+        return PowerRabiChevronProgram(
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
+        )
+
+    def _extract_sweep_axis(self, prog):
+        return prog.get_pulse_param("qb_pulse", "gain", as_array=True)
+
+    def _extract_sweep_axis_y(self, prog):
+        return self._sweep_vals_y
 
     def _build_scan_axes(self):
         cfg = self.cfg
@@ -141,21 +153,6 @@ class PowerRabiChevron(BaseExperiment):
         self.iqdata = iqdata_full
         return self._post_fit()
 
-    def _create_program(self):
-        self.cfg.setdefault("iteration", self.cfg.get("iter_start", 1))
-        return PowerRabiProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("qb_pulse", "gain", as_array=True)
-
-    def _extract_sweep_axis_y(self, prog):
-        return self._sweep_vals_y
-
     def analyze_and_plot(self):
         return self._post_fit()
 
@@ -196,9 +193,14 @@ class PowerRabiChevron(BaseExperiment):
         try:
             p0 = [sign_guess * amp_guess, x0_guess, width_guess, off_guess]
             popt, _ = curve_fit(
-                sinc2_model, gains, sum_trace, p0=p0,
-                bounds=([-np.inf, gains.min(), dx, -np.inf],
-                        [np.inf, gains.max(), np.inf, np.inf]),
+                sinc2_model,
+                gains,
+                sum_trace,
+                p0=p0,
+                bounds=(
+                    [-np.inf, gains.min(), dx, -np.inf],
+                    [np.inf, gains.max(), np.inf, np.inf],
+                ),
                 maxfev=10000,
             )
             A_fit, x0_fit, width_fit, offset_fit = popt
@@ -214,21 +216,35 @@ class PowerRabiChevron(BaseExperiment):
 
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
         ax0 = axes[0]
-        im = ax0.pcolormesh(gains, iters, np.abs(self.iqdata), shading="auto", cmap="viridis")
+        im = ax0.pcolormesh(
+            gains, iters, np.abs(self.iqdata), shading="auto", cmap="viridis"
+        )
         fig.colorbar(im, ax=ax0, label="ADC Units (Abs)")
-        ax0.axvline(optimal_gain, color="red", linestyle="--", alpha=0.8,
-                    label=f"Fit={optimal_gain:.4f}")
+        ax0.axvline(
+            optimal_gain,
+            color="red",
+            linestyle="--",
+            alpha=0.8,
+            label=f"Fit={optimal_gain:.4f}",
+        )
         ax0.set_title("Power Rabi Chevron")
         ax0.legend()
 
         ax1 = axes[1]
-        ax1.scatter(gains, raw_sum_trace, s=20, color="steelblue", alpha=0.5, label="Raw Data")
+        ax1.scatter(
+            gains, raw_sum_trace, s=20, color="steelblue", alpha=0.5, label="Raw Data"
+        )
         ax1.plot(gains, sum_trace, "--", color="gray", alpha=0.7, label="Smoothed")
 
         if fit_success:
             fine_x = np.linspace(gains.min(), gains.max(), 2000)
-            ax1.plot(fine_x, sinc2_model(fine_x, *popt), color="firebrick",
-                     lw=2, label="Sinc² Fit")
+            ax1.plot(
+                fine_x,
+                sinc2_model(fine_x, *popt),
+                color="firebrick",
+                lw=2,
+                label="Sinc² Fit",
+            )
 
         ax1.axvline(optimal_gain, color="red", linestyle="--")
         ax1.set_title("Summed Trace & Physical Fit")
@@ -263,14 +279,13 @@ class GambettaFig2Program(BaseProgram):
 
         ch = cfg["qb_ch"]
         repetitions = int(cfg.get("aae_repetitions_current", 0))
-        gate_gap = float(cfg.get("aae_gate_gap", 0.02))
 
         self.pulse(ch=ch, name="x90_ge", t=0)
-        self.delay_auto(t=gate_gap)
+        self.delay_auto(t=0.02)
 
         for _ in range(repetitions):
             self.pulse(ch=ch, name="x90_ge", t=0)
-            self.delay_auto(t=gate_gap)
+            self.delay_auto(t=0.02)
 
         self.delay_auto(t=0.05, tag="waiting")
         self.measure(cfg)
@@ -358,8 +373,6 @@ class GambettaFig2AAE(BaseExperiment):
 
                 if self.IQ_PROCESS == "real":
                     data_to_plot[idx] = np.real(iq_point)
-                elif self.IQ_PROCESS == "imag":
-                    data_to_plot[idx] = np.imag(iq_point)
                 else:
                     data_to_plot[idx] = np.abs(iq_point)
 
@@ -421,7 +434,9 @@ class GambettaFig2AAE(BaseExperiment):
             print("No data. Call run() first.")
             return None
 
-        reps_axis = np.asarray(self._sweep_vals_x if x_vals is None else x_vals, dtype=float)
+        reps_axis = np.asarray(
+            self._sweep_vals_x if x_vals is None else x_vals, dtype=float
+        )
         y = np.asarray(self._processed_signal(), dtype=float)
         if len(reps_axis) < 5:
             print("Not enough points for AAE fit.")
@@ -491,7 +506,9 @@ class GambettaFig2AAE(BaseExperiment):
         ax.plot(fine_x, model(fine_x, *popt), color="firebrick", lw=2, label=fit_model)
         ax.set_xlabel(self.X_LABEL)
         ax.set_ylabel(self.Y_LABEL)
-        ax.set_title(f"AAE Fig.2 X90: {self.fit_params['angle_error_deg']:.4f} deg/gate")
+        ax.set_title(
+            f"AAE Fig.2 X90: {self.fit_params['angle_error_deg']:.4f} deg/gate"
+        )
         ax.grid(True, alpha=0.2)
         ax.legend()
         plt.tight_layout()
@@ -502,8 +519,10 @@ class GambettaFig2AAE(BaseExperiment):
     def _build_fit_result(self):
         if not self.fit_params:
             return {}
-        return {key: (val, self.fit_errors.get(key) if self.fit_errors else None)
-                for key, val in self.fit_params.items()}
+        return {
+            key: (val, self.fit_errors.get(key) if self.fit_errors else None)
+            for key, val in self.fit_params.items()
+        }
 
     def _save_comment(self, dict_val):
         if self.fit_params:
@@ -521,6 +540,12 @@ AAE = GambettaFig2AAE
 AAEFig2 = GambettaFig2AAE
 
 __all__ = [
-    "PowerRabiProgram", "PowerRabiChevron", "AAEProgram", "AAE",
-    "GambettaFig2Program", "GambettaFig2AAE", "AAEFig2",
+    "PowerRabiProgram",
+    "PowerRabiChevronProgram",
+    "PowerRabiChevron",
+    "AAEProgram",
+    "AAE",
+    "GambettaFig2Program",
+    "GambettaFig2AAE",
+    "AAEFig2",
 ]
