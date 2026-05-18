@@ -292,7 +292,13 @@ class AutoRB:
     def summary(self) -> str:
         lines = ["AutoRB Summary", "=" * 50]
         for key, val in self.results.items():
-            lines.append(f"  {key:<10s}  F={val['fidelity']*100:.4f}%  EPC={val['epc']*100:.5f}%")
+            if "fidelity" in val:
+                lines.append(
+                    f"  {key:<10s}  F={val['fidelity']*100:.4f}%  "
+                    f"EPC={val['epc']*100:.5f}%"
+                )
+            else:
+                lines.append(f"  {key:<10s}  EPC={val['epc']*100:.5f}%")
         return "\n".join(lines)
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None):
