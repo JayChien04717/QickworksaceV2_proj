@@ -1,7 +1,10 @@
 from .qubit_spec import QubitSpec, QubitSpecProgram, QubitSpecFlux, QubitSpecFluxProgram
 from .rabi import TimeRabi, TimeRabiProgram, PowerRabi, PowerRabiProgram, PowerRabiReset
 from .drag import DragProgram, DragCalibration
-from .aae import AAEProgram, AAE
+from .aae import (
+    AAEProgram, AAE,
+    AngleErrorAmplificationProgram, AngleErrorAmplification, AAEFig1,
+)
 
 __all__ = [
     "QubitSpec", "QubitSpecProgram", "QubitSpecFlux", "QubitSpecFluxProgram",
@@ -10,4 +13,5 @@ __all__ = [
     "PowerRabiReset",
     "DragProgram", "DragCalibration",
     "AAEProgram", "AAE",
+    "AngleErrorAmplificationProgram", "AngleErrorAmplification", "AAEFig1",
 ]
