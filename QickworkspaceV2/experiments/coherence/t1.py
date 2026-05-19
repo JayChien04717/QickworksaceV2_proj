@@ -4,9 +4,9 @@ Coherence/t1 — s008: T1 relaxation time (ge).
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
 from ...analysis.qubit import T1Analysis
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 
 
 class T1Program(BaseProgram):
@@ -38,10 +38,10 @@ class T1(BaseExperiment):
 
     EXPT_NAME = "s008_T1_ge"
     TAG = "T1"
-    X_LABEL = "Times (us)"
+    X_LABEL = "Delay time (us)"
     TITLE_PREFIX = "Qubit T1 ge"
     SWEEP_KEYS_TO_REMOVE = ["wait_time"]
-    X_SAVE_NAME = "Times"
+    X_SAVE_NAME = "Delay time"
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
@@ -49,8 +49,10 @@ class T1(BaseExperiment):
 
     def _create_program(self):
         return T1Program(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):

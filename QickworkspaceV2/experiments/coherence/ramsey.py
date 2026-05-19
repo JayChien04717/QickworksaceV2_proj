@@ -4,9 +4,9 @@ Coherence/ramsey — s006: Ramsey (ge) + AC Stark.
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
 from ...analysis.qubit import RamseyAnalysis
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 
 
 class RamseyProgram(BaseProgram):
@@ -20,7 +20,9 @@ class RamseyProgram(BaseProgram):
         ramsey_phase = (
             cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
         )
-        self.setup_qb_pulse(cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase)
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
+        )
 
     def _body(self, cfg):
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
@@ -44,10 +46,10 @@ class Ramsey(BaseExperiment):
 
     EXPT_NAME = "s006_Ramsey_ge"
     TAG = "Ramsey"
-    X_LABEL = "Ramsey Times (us)"
+    X_LABEL = "Delay time (us)"
     TITLE_PREFIX = "Qubit Ramsey ge"
     SWEEP_KEYS_TO_REMOVE = ["wait_time"]
-    X_SAVE_NAME = "Times"
+    X_SAVE_NAME = "Delay time"
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
@@ -55,8 +57,10 @@ class Ramsey(BaseExperiment):
 
     def _create_program(self):
         return RamseyProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
@@ -97,8 +101,12 @@ class ACStarkProgram(BaseProgram):
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
-        ramsey_phase = cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
-        self.setup_qb_pulse(cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase)
+        ramsey_phase = (
+            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+        )
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
+        )
 
     def _body(self, cfg):
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
@@ -119,6 +127,8 @@ class ACStark(Ramsey):
 
     def _create_program(self):
         return ACStarkProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )

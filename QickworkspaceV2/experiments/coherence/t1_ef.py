@@ -4,9 +4,9 @@ T1 EF (s013) — energy relaxation from |f⟩ to |e⟩.
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
 from ...analysis.qubit import T1Analysis
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 
 
 class T1EfProgram(BaseProgram):
@@ -41,10 +41,10 @@ class T1Ef(BaseExperiment):
 
     EXPT_NAME = "s013_T1_ef"
     TAG = "T1"
-    X_LABEL = "Times (us)"
+    X_LABEL = "Delay time (us)"
     TITLE_PREFIX = "Qubit T1 ef"
     SWEEP_KEYS_TO_REMOVE = ["wait_time"]
-    X_SAVE_NAME = "Times"
+    X_SAVE_NAME = "Delay time"
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
@@ -52,8 +52,10 @@ class T1Ef(BaseExperiment):
 
     def _create_program(self):
         return T1EfProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):

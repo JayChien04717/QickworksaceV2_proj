@@ -4,9 +4,9 @@ Coherence/spin_echo — s007: Spin Echo (Hahn echo, ge).
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
 from ...analysis.qubit import SpinEchoAnalysis
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 
 
 class SpinEchoProgram(BaseProgram):
@@ -18,8 +18,12 @@ class SpinEchoProgram(BaseProgram):
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse_pi", gain_key="pi_gain_ge")
-        ramsey_phase = cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
-        self.setup_qb_pulse(cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase)
+        ramsey_phase = (
+            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+        )
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
+        )
 
     def _body(self, cfg):
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
@@ -40,10 +44,10 @@ class SpinEcho(BaseExperiment):
 
     EXPT_NAME = "s007_SpinEcho_ge"
     TAG = "Spin Echo"
-    X_LABEL = "Echo Delay Time (us)"
+    X_LABEL = "Delay time (us)"
     TITLE_PREFIX = "Qubit Spin Echo ge"
     SWEEP_KEYS_TO_REMOVE = ["wait_time"]
-    X_SAVE_NAME = "Times"
+    X_SAVE_NAME = "Delay time"
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
@@ -51,15 +55,16 @@ class SpinEcho(BaseExperiment):
 
     def _create_program(self):
         return SpinEchoProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
-        self.delay_times = (
-            prog.get_time_param("wait1", "t", as_array=True)
-            + prog.get_time_param("wait2", "t", as_array=True)
-        )
+        self.delay_times = prog.get_time_param(
+            "wait1", "t", as_array=True
+        ) + prog.get_time_param("wait2", "t", as_array=True)
         return self.delay_times
 
     def _save_comment(self, dict_val):

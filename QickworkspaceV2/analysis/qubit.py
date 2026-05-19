@@ -22,7 +22,7 @@ class T1Analysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitexp, expfunc
+        from ..tools.fitting import expfunc, fitexp
 
         x = data.x_axis
 
@@ -55,7 +55,7 @@ class T1Analysis(BaseAnalysis):
             data,
             expfunc,
             data.fit_params,
-            xlabel="Wait time (µs)",
+            xlabel="Delay time (us)",
             title=f"T1 Relaxation  |  T1 = {T1:.2f} µs" if T1 else "T1 Relaxation",
             result_text="\n".join(lines),
         )
@@ -83,12 +83,14 @@ class RamseyAnalysis(BaseAnalysis):
             self._fit_exp(data)
 
     def _fit_decaysin(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitdecaysin, decaysin
+        from ..tools.fitting import decaysin, fitdecaysin
 
         x = data.x_axis
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitdecaysin, decaysin
+            )
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[3]))
             detune = float(popt[1])
@@ -112,7 +114,7 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey decaysin fit failed: {exc}"
 
     def _fit_exp(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitexp, expfunc
+        from ..tools.fitting import expfunc, fitexp
 
         x = data.x_axis
 
@@ -159,7 +161,7 @@ class RamseyAnalysis(BaseAnalysis):
             data,
             simfunc,
             data.fit_params,
-            xlabel="Free evolution time (µs)",
+            xlabel="Delay time (us)",
             title=title,
             result_text="\n".join(lines),
         )
@@ -186,16 +188,18 @@ class SpinEchoAnalysis(BaseAnalysis):
 
         try:
             if ramsey_freq != 0:
-                from ..tools.fitting import fitdecaysin, decaysin
+                from ..tools.fitting import decaysin, fitdecaysin
 
-                _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
+                _, popt, pcov, channel, score = self._fit_channel(
+                    data, fitdecaysin, decaysin
+                )
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[3]))
                 T2e_err = err[3]
                 detune = float(popt[1])
                 detune_err = err[1]
             else:
-                from ..tools.fitting import fitexp, expfunc
+                from ..tools.fitting import expfunc, fitexp
 
                 _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
                 err = np.sqrt(np.diag(pcov))
@@ -241,7 +245,7 @@ class SpinEchoAnalysis(BaseAnalysis):
             data,
             simfunc,
             data.fit_params,
-            xlabel="Echo delay time (us)",
+            xlabel="Delay time (us)",
             title=title,
             result_text="\n".join(lines),
         )
@@ -333,12 +337,14 @@ class TimeRabiAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitdecaysin, decaysin
+        from ..tools.fitting import decaysin, fitdecaysin
 
         x = data.x_axis
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitdecaysin, decaysin
+            )
             err = np.sqrt(np.diag(pcov))
             # pi time = 1 / (2 * frequency)
             pi_length = 1.0 / (2.0 * abs(popt[1])) if popt[1] != 0 else 0.0
