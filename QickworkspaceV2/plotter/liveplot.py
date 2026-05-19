@@ -57,6 +57,11 @@ def _is_all_iq(iq_process):
     return str(iq_process or "abs").lower() in {"all", "iq", "channels", "multi"}
 
 
+def _single_channel_iq_process(iq_process):
+    """Fallback multi-channel requests to abs for heatmap-style plots."""
+    return "abs" if _is_all_iq(iq_process) else iq_process
+
+
 def _iq_channel_dict(iqdata):
     """Return all real-valued IQ views used by live plots."""
     return {
@@ -232,7 +237,7 @@ class MeshRenderer:
 class SoftwareAverageRunner:
     """Acquire repeated QICK averages and emit processed plot data."""
 
-    def __init__(self, prog, soc, py_avg, y_axis_vals=None, iq_process="abs"):
+    def __init__(self, prog, soc, py_avg, y_axis_vals=None, iq_process="all"):
         self.prog = prog
         self.soc = soc
         self.py_avg = py_avg
@@ -272,9 +277,24 @@ def run_software_average_liveplot(
     y_label="Y Axis",
     title_prefix="Experiment",
     show_final_plot=False,
-    iq_process="abs",
+    iq_process="all",
 ):
     """Composable implementation for the software-average liveplot path."""
+    if _is_all_iq(iq_process) and y_axis_vals is None:
+        return _liveplot_sw_avg(
+            prog=prog,
+            soc=soc,
+            py_avg=py_avg,
+            x_axis_vals=x_axis_vals,
+            y_axis_vals=y_axis_vals,
+            x_label=x_label,
+            y_label=y_label,
+            title_prefix=title_prefix,
+            show_final_plot=show_final_plot,
+            iq_process=iq_process,
+        )
+
+    iq_process = _single_channel_iq_process(iq_process)
     data_queue = queue.LifoQueue(maxsize=1)
     stop_event = threading.Event()
     state = LivePlotState(total_avg=py_avg)
@@ -370,7 +390,7 @@ def liveplotfun(
     scan_y_axis=None,
     get_prog_callback=None,
     show_final_plot=True,
-    iq_process="abs",
+    iq_process="all",
 ):
     """
     General-purpose live plotter (Facade pattern).
@@ -469,7 +489,7 @@ def _liveplot_sw_avg(
     y_label="Y Axis",
     title_prefix="Experiment",
     show_final_plot=False,
-    iq_process="abs",
+    iq_process="all",
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
@@ -624,8 +644,9 @@ def _liveplot_sweep_yoko(
     x_label="X Axis",
     y_label="Y Axis",
     title_prefix="Experiment",
-    iq_process="abs",
+    iq_process="all",
 ):
+    iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 
     if yoko_name is None:
@@ -762,7 +783,7 @@ def _liveplot_1d_scan(
     x_label="Scan Parameter",
     title_prefix="1D Scan",
     show_final_plot=True,
-    iq_process="abs",
+    iq_process="all",
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
@@ -891,8 +912,9 @@ def _liveplot_2d_scan(
     y_label="Y Axis",
     title_prefix="2D Scan",
     show_final_plot=True,
-    iq_process="abs",
+    iq_process="all",
 ):
+    iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 
     iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)

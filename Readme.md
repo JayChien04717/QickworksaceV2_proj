@@ -116,6 +116,17 @@ result = expt.run(py_avg=5)
 print(result.fit_result)
 ```
 
+Live plotting shows all IQ views by default (`Abs`, `Phase`, `I`, and `Q`) for
+1D sweeps. To force a single displayed channel, pass `iq_process`:
+
+```python
+result = expt.run(py_avg=5)                    # default: iq_process="all"
+result = expt.run(py_avg=5, iq_process="abs")  # options: "abs", "phase", "real", "imag"
+```
+
+For 2D heatmaps and Yoko sweeps, `iq_process="all"` falls back to the amplitude
+channel so the plot remains a single color map.
+
 `ExperimentData` stores raw IQ data, x/y axes, fit parameters, quality flags,
 and config metadata. It also keeps old notebook compatibility:
 

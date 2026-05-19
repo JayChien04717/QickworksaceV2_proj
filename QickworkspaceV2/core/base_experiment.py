@@ -125,7 +125,7 @@ class BaseExperiment:
     TITLE_PREFIX: str = ""
     SWEEP_KEYS_TO_REMOVE: list = []
 
-    IQ_PROCESS: str = "abs"
+    IQ_PROCESS: str = "all"
 
     YOKO_VOLTAGE_RAMP_STEP: float = 1e-5
     YOKO_CURRENT_RAMP_STEP: float = 1e-8
