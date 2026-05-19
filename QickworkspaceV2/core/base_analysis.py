@@ -16,6 +16,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional, Type
 
+import numpy as np
+
 if TYPE_CHECKING:
     from .experiment_data import ExperimentData, QualityFlag
 
@@ -86,6 +88,13 @@ class BaseAnalysis(ABC):
         if data.x_axis is None or data.raw_iq is None:
             return
         quality = data.quality.value if data.quality is not None else "no_information"
+        fit_channel = data.metadata.get("fit_channel", "abs")
+        fit_snr = data.metadata.get("fit_channel_snr")
+        if fit_channel:
+            channel_text = f"channel = {fit_channel}"
+            if fit_snr is not None:
+                channel_text += f"  SNR={fit_snr:.2f}"
+            result_text = f"{result_text}\n{channel_text}" if result_text else channel_text
         plot_fit_result(
             data.x_axis, data.raw_iq, simfunc, fit_params,
             x_label=xlabel,
@@ -93,7 +102,77 @@ class BaseAnalysis(ABC):
             result_text=result_text,
             quality=quality,
             extra_lines=extra_lines,
+            fit_channel=fit_channel,
         )
+
+    @staticmethod
+    def _channel_data(iq_data, channel: str):
+        """Return a real-valued fitting trace from complex IQ data."""
+        channel = (channel or "abs").lower()
+        aliases = {
+            "amp": "abs",
+            "amplitude": "abs",
+            "i": "real",
+            "avgi": "real",
+            "q": "imag",
+            "avgq": "imag",
+        }
+        channel = aliases.get(channel, channel)
+        iq = np.asarray(iq_data)
+        if channel == "abs":
+            return np.abs(iq)
+        if channel == "real":
+            return np.real(iq)
+        if channel == "imag":
+            return np.imag(iq)
+        if channel == "phase":
+            return np.unwrap(np.angle(iq))
+        raise ValueError(f"Unknown fit_channel '{channel}'")
+
+    def _fit_channel(self, data, fitfunc, simfunc, *, fitparams=None, channels=None):
+        """
+        Fit one or more IQ channels and return the best result.
+
+        ``data.config['fit_channel']`` defaults to ``'auto'``.  In auto mode the
+        score is the fitted curve span divided by residual standard deviation.
+        """
+        if data.x_axis is None or data.raw_iq is None:
+            raise ValueError("Missing x_axis or raw_iq")
+
+        requested = str(data.config.get("fit_channel", "auto")).lower()
+        if requested == "auto":
+            channels = channels or ("abs", "real", "imag", "phase")
+        else:
+            channels = (requested,)
+
+        x = np.asarray(data.x_axis)
+        best = None
+        errors = []
+        for channel in channels:
+            try:
+                y = np.asarray(self._channel_data(data.raw_iq, channel), dtype=float)
+                local_fitparams = list(fitparams) if fitparams is not None else None
+                popt, pcov, _ = fitfunc(x, y, fitparams=local_fitparams)
+                fit_y = simfunc(x, *popt)
+                residual = y - fit_y
+                noise = float(np.nanstd(residual))
+                span = float(np.nanmax(fit_y) - np.nanmin(fit_y))
+                score = span / max(noise, 1e-12)
+                if not np.all(np.isfinite(popt)) or not np.isfinite(score):
+                    raise RuntimeError("non-finite fit result")
+                candidate = (score, channel, y, np.asarray(popt), pcov)
+                if best is None or candidate[0] > best[0]:
+                    best = candidate
+            except Exception as exc:
+                errors.append(f"{channel}: {exc}")
+
+        if best is None:
+            raise RuntimeError("; ".join(errors) if errors else "no channels fit")
+
+        score, channel, y, popt, pcov = best
+        data.metadata["fit_channel"] = channel
+        data.metadata["fit_channel_snr"] = float(score)
+        return y, popt, pcov, channel, float(score)
 
     @abstractmethod
     def _run(self, data: "ExperimentData") -> None:

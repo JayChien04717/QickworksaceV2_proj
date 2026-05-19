@@ -22,19 +22,20 @@ class T1Analysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitexp
+        from ..tools.fitting import fitexp, expfunc
 
         x = data.x_axis
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitexp(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
             err = np.sqrt(np.diag(pcov))
             T1 = abs(float(popt[2]))
             data.fit_params = np.array(popt)
             data.fit_errors = err
             data.fit_result = {
                 "T1_us": (T1, err[2]),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
             }
             data.scalar_result = T1
         except Exception as exc:
@@ -82,14 +83,12 @@ class RamseyAnalysis(BaseAnalysis):
             self._fit_exp(data)
 
     def _fit_decaysin(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitdecaysin
+        from ..tools.fitting import fitdecaysin, decaysin
 
         x = data.x_axis
-        # Use best channel (abs works for most cases)
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitdecaysin(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[3]))
             detune = float(popt[1])
@@ -104,6 +103,8 @@ class RamseyAnalysis(BaseAnalysis):
                 "detune_MHz": (detune, err[1]),
                 "corrected_freq_MHz": (corrected_freq, None),
                 "amplitude": (popt[0], err[0]),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
             }
             data.scalar_result = T2r
         except Exception as exc:
@@ -111,18 +112,21 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey decaysin fit failed: {exc}"
 
     def _fit_exp(self, data: ExperimentData) -> None:
-        from ..tools.fitting import fitexp
+        from ..tools.fitting import fitexp, expfunc
 
         x = data.x_axis
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitexp(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[2]))
             data.fit_params = np.array(popt)
             data.fit_errors = err
-            data.fit_result = {"T2r_us": (T2r, err[2])}
+            data.fit_result = {
+                "T2r_us": (T2r, err[2]),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
+            }
             data.scalar_result = T2r
         except Exception as exc:
             data.quality = QualityFlag.BAD
@@ -177,31 +181,34 @@ class SpinEchoAnalysis(BaseAnalysis):
 
         ramsey_freq = data.config.get("ramsey_freq", 0.0)
         x = data.x_axis
-        y = np.abs(data.raw_iq)
         detune = None
         detune_err = None
 
         try:
             if ramsey_freq != 0:
-                from ..tools.fitting import fitdecaysin
+                from ..tools.fitting import fitdecaysin, decaysin
 
-                popt, pcov, _ = fitdecaysin(x, y)
+                _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[3]))
                 T2e_err = err[3]
                 detune = float(popt[1])
                 detune_err = err[1]
             else:
-                from ..tools.fitting import fitexp
+                from ..tools.fitting import fitexp, expfunc
 
-                popt, pcov, _ = fitexp(x, y)
+                _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[2]))
                 T2e_err = err[2]
 
             data.fit_params = np.array(popt)
             data.fit_errors = err
-            data.fit_result = {"T2e_us": (T2e, T2e_err)}
+            data.fit_result = {
+                "T2e_us": (T2e, T2e_err),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
+            }
             if detune is not None:
                 data.fit_result["detune_MHz"] = (detune, detune_err)
             data.scalar_result = T2e
@@ -250,13 +257,12 @@ class PowerRabiAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitsin, fix_phase
+        from ..tools.fitting import fitsin, fix_phase, sinfunc
 
         x = data.x_axis
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitsin(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitsin, sinfunc)
             err = np.sqrt(np.diag(pcov))
             pi_gain, pi2_gain = fix_phase(popt)
             data.fit_params = np.array(popt)
@@ -264,6 +270,8 @@ class PowerRabiAnalysis(BaseAnalysis):
             data.fit_result = {
                 "pi_gain": (round(pi_gain, 6), None),
                 "pi2_gain": (round(pi2_gain, 6), None),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
             }
             data.scalar_result = pi_gain
         except Exception as exc:
@@ -325,19 +333,22 @@ class TimeRabiAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitdecaysin
+        from ..tools.fitting import fitdecaysin, decaysin
 
         x = data.x_axis
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitdecaysin(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitdecaysin, decaysin)
             err = np.sqrt(np.diag(pcov))
             # pi time = 1 / (2 * frequency)
             pi_length = 1.0 / (2.0 * abs(popt[1])) if popt[1] != 0 else 0.0
             data.fit_params = np.array(popt)
             data.fit_errors = err
-            data.fit_result = {"pi_length_us": (pi_length, None)}
+            data.fit_result = {
+                "pi_length_us": (pi_length, None),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
+            }
             data.scalar_result = pi_length
         except Exception as exc:
             data.quality = QualityFlag.BAD

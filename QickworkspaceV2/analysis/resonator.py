@@ -162,13 +162,12 @@ class LorentzianAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         if data.x_axis is None or data.raw_iq is None:
             return
-        from ..tools.fitting import fitlor
+        from ..tools.fitting import fitlor, lorfunc
 
         x = data.x_axis
-        y = np.abs(data.raw_iq)
 
         try:
-            popt, pcov, _ = fitlor(x, y)
+            _, popt, pcov, channel, score = self._fit_channel(data, fitlor, lorfunc)
             err = np.sqrt(np.diag(pcov))
             data.fit_params = np.array(popt)
             data.fit_errors = err
@@ -176,6 +175,8 @@ class LorentzianAnalysis(BaseAnalysis):
                 "f0_MHz": (popt[2], err[2]),
                 "linewidth_MHz": (abs(popt[1]), err[1]),
                 "amplitude": (popt[0], err[0]),
+                "fit_channel": (channel, None),
+                "fit_channel_snr": (score, None),
             }
             data.scalar_result = popt[2]
         except Exception as exc:

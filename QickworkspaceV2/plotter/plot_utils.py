@@ -52,6 +52,7 @@ def plot_fit_result(
     result_text: str = "",
     quality: str = "no_information",
     extra_lines=None,
+    fit_channel: str = "abs",
 ) -> plt.Figure:
     """
     Render a professional 2×3 figure for a completed fit.
@@ -75,6 +76,16 @@ def plot_fit_result(
         "I":         iq_data.real,
         "Q":         iq_data.imag,
     }
+    channel_label = {
+        "abs": "Amplitude",
+        "amplitude": "Amplitude",
+        "amp": "Amplitude",
+        "real": "I",
+        "i": "I",
+        "imag": "Q",
+        "q": "Q",
+        "phase": "Phase",
+    }.get(str(fit_channel).lower(), "Amplitude")
 
     x_fit = np.linspace(xpts[0], xpts[-1], 600) if fit_params is not None else None
     fit_y = simfunc(x_fit, *fit_params) if fit_params is not None else None
@@ -96,8 +107,8 @@ def plot_fit_result(
         ax = fig.add_subplot(gs[row, col])
         ax.plot(xpts, channels[key], **_DATA_KW)
 
-        # Fit overlay on Amplitude only
-        if key == "Amplitude" and fit_y is not None:
+        # Fit overlay on the selected fitting channel.
+        if key == channel_label and fit_y is not None:
             ax.plot(x_fit, fit_y, **_FIT_KW)
 
         # Extra vertical markers
@@ -115,7 +126,7 @@ def plot_fit_result(
 
     # ── Main panel ────────────────────────────────────────────────────────────
     ax_main = fig.add_subplot(gs[:, 2])
-    ax_main.plot(xpts, channels["Amplitude"], label="data", **_DATA_KW)
+    ax_main.plot(xpts, channels[channel_label], label=f"{channel_label} data", **_DATA_KW)
 
     if fit_y is not None:
         ax_main.plot(x_fit, fit_y, label="fit", **_FIT_KW)
@@ -128,7 +139,7 @@ def plot_fit_result(
         ax_main.legend(fontsize=8.5, framealpha=0.85)
 
     ax_main.set_xlabel(x_label, fontsize=10)
-    ax_main.set_ylabel("Amplitude (ADC)", fontsize=10)
+    ax_main.set_ylabel(f"{channel_label} (ADC)", fontsize=10)
     ax_main.tick_params(labelsize=8.5)
     ax_main.grid(True, **_GRID_KW)
     for spine in ax_main.spines.values():
