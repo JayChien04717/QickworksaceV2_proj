@@ -34,6 +34,95 @@ from ...tools.electrical_length import (
 
 # ── s002d: TWPAFlux ───────────────────────────────────────────────────────────
 
+def _safe_labber_token(value):
+    text = str(value)
+    for char in '<>:"/\\|?*':
+        text = text.replace(char, "_")
+    return text.replace(" ", "_")
+
+
+def _twpa_config_comment(run_cfg, qb_idx=None, config_all=None, extra=None):
+    from ...tools.system_tool import config_to_yaml
+
+    if config_all is not None:
+        try:
+            comment = config_all.to_yaml(q_id=qb_idx)
+        except Exception:
+            comment = config_to_yaml(run_cfg)
+    else:
+        comment = config_to_yaml(run_cfg)
+
+    if extra:
+        comment = f"{comment}\nTWPA metadata:\n{extra}"
+    return comment
+
+
+def _trace_coordinate_comment(da, outer_dims):
+    if not outer_dims:
+        return ""
+
+    lines = [
+        "trace_index is row-major flattening of: " + ", ".join(outer_dims),
+        "outer_shape: " + ", ".join(f"{dim}={da.sizes[dim]}" for dim in outer_dims),
+    ]
+    for dim in outer_dims:
+        vals = np.asarray(da[dim].values, dtype=float)
+        lines.append(f"{dim}_values: {np.array2string(vals, separator=', ', threshold=100000)}")
+    return "\n".join(lines)
+
+
+def _save_twpa_xarray_labber(
+    da,
+    run_cfg,
+    qb_idx="TWPA",
+    config_all=None,
+    title=None,
+    expt_name="TWPA",
+    tag="TWPA",
+    extra_comment=None,
+):
+    from ...tools.system_tool import hdf5_generator, get_next_filename_labber
+
+    if "frequency" not in da.dims:
+        raise ValueError("TWPA Labber save requires a 'frequency' dimension.")
+
+    outer_dims = [dim for dim in da.dims if dim != "frequency"]
+    da_save = da.transpose(*outer_dims, "frequency") if outer_dims else da.transpose("frequency")
+    freq_hz = np.asarray(da_save["frequency"].values, dtype=float)
+    values = np.asarray(da_save.values)
+
+    y_info = None
+    if outer_dims:
+        z_values = values.reshape((-1, len(freq_hz)))
+        y_info = {
+            "name": "Trace Index",
+            "unit": "",
+            "values": np.arange(z_values.shape[0], dtype=float),
+        }
+    else:
+        z_values = values.reshape(len(freq_hz))
+
+    title_suffix = f"_{_safe_labber_token(title)}" if title else ""
+    file_name = f"{expt_name}_{qb_idx}{title_suffix}"
+    file_path = get_next_filename_labber(BaseExperiment._data_path or DATA_PATH, file_name)
+
+    metadata = _trace_coordinate_comment(da_save, outer_dims)
+    if extra_comment:
+        metadata = f"{extra_comment}\n{metadata}" if metadata else str(extra_comment)
+    comment = _twpa_config_comment(run_cfg, qb_idx=qb_idx, config_all=config_all, extra=metadata)
+
+    hdf5_generator(
+        filepath=file_path,
+        x_info={"name": "Frequency", "unit": "Hz", "values": freq_hz},
+        y_info=y_info,
+        z_info={"name": "S21", "unit": "ADC unit", "values": z_values},
+        comment=comment,
+        tag=tag,
+    )
+    print(f"TWPA Labber data saved to {file_path}")
+    return file_path
+
+
 class TWPAFluxProgram(BaseProgram):
     """QICK program for TWPA spectroscopy vs flux: 2D sweep."""
 
@@ -311,6 +400,23 @@ class TWPAGain:
             print(f"Reference saved to {ref_path}")
         return gain_path, ref_path
 
+    def saveLabber(self, qb_idx="TWPA", config_all=None, title=None):
+        gain = self._build_gain_xarray()
+        extra = (
+            f"pump_power={float(self.pump_power):.12g} dBm\n"
+            f"pump_state=1\n"
+            f"yoko_mode={self._yoko_mode or 'current'}"
+        )
+        return _save_twpa_xarray_labber(
+            gain,
+            self.run_cfg,
+            qb_idx=qb_idx,
+            config_all=config_all,
+            title=title,
+            expt_name="TWPA_gain",
+            extra_comment=extra,
+        )
+
     def analyze(self, reference, gain_min=12, gain_median=15, ripple_max=5,
                 f_min=4e9, f_max=8e9, n_best=5, exclusion_radius=20, freq_exclude=None):
         gain = self._build_gain_xarray()
@@ -503,6 +609,19 @@ class TWPAGainPower:
             print(f"Reference saved to {ref_path}")
         return gain_path, ref_path
 
+    def saveLabber(self, qb_idx="TWPA", config_all=None, title=None):
+        da = self._build_xarray()
+        extra = f"pump_state=1\nyoko_mode={self._yoko_mode or 'current'}"
+        return _save_twpa_xarray_labber(
+            da,
+            self.run_cfg,
+            qb_idx=qb_idx,
+            config_all=config_all,
+            title=title,
+            expt_name="TWPA_gain_power",
+            extra_comment=extra,
+        )
+
     def analyze(self, reference, gain_min=12, gain_median=15, ripple_max=5,
                 f_min=4e9, f_max=8e9, exclusion_radius=20, freq_exclude=None):
         da = self._build_xarray()
@@ -693,6 +812,24 @@ class TWPAPowerScan:
             ds_ref.to_netcdf(ref_path)
             print(f"Reference saved to {ref_path}")
         return gain_path, ref_path
+
+    def saveLabber(self, qb_idx="TWPA", config_all=None, title=None):
+        da = self._build_xarray()
+        extra = (
+            f"pump_freq={float(self.pump_freq):.12g} Hz\n"
+            f"flux_value={float(self.flux_value):.12g}\n"
+            f"pump_state=1\n"
+            f"yoko_mode={self._yoko_mode or 'current'}"
+        )
+        return _save_twpa_xarray_labber(
+            da,
+            self.run_cfg,
+            qb_idx=qb_idx,
+            config_all=config_all,
+            title=title,
+            expt_name="TWPA_power_scan",
+            extra_comment=extra,
+        )
 
     def analyze(self, reference, f_min=4e9, f_max=8e9, gain_min=10, freq_exclude=None):
         da = self._build_xarray()
