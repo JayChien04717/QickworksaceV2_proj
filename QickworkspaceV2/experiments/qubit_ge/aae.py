@@ -13,14 +13,83 @@ from tqdm.auto import tqdm
 
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
-from ...tools.fitting import (
-    fit_probg_Xhalf,
-    fit_probg_Xhalf_decay,
-    probg_Xhalf,
-    probg_Xhalf_decay,
-)
 
 AAE_GATE_GAP = 0.02
+
+
+def prob_adc_Xhalf(n, offset, amplitude, delta_deg):
+    """ADC-unit model for repeated X/2 pulse rotation error."""
+    delta = delta_deg * np.pi / 180
+    return offset + amplitude * ((-1) ** n) * np.cos(np.pi / 2 + 2 * n * delta)
+
+
+def prob_adc_Xhalf_decay(n, offset, amplitude, delta_deg, decay):
+    """ADC-unit model for repeated X/2 pulse rotation error with decay."""
+    delta = delta_deg * np.pi / 180
+    return offset + (
+        amplitude
+        * ((-1) ** n)
+        * np.cos(np.pi / 2 + 2 * n * delta)
+        * np.exp(-n / decay)
+    )
+
+
+def fit_adc_Xhalf(xdata, ydata, fitparams=None):
+    if fitparams is None:
+        fitparams = [None] * 3
+    else:
+        fitparams = list(fitparams)
+
+    y_span = max(float(np.ptp(ydata)), 1e-12)
+    if fitparams[0] is None:
+        fitparams[0] = float(np.average(ydata))
+    if fitparams[1] is None:
+        fitparams[1] = 0.5 * y_span
+    if fitparams[2] is None:
+        fitparams[2] = 0.1
+
+    bounds = (
+        [float(np.min(ydata)) - y_span, -2 * y_span, -20.0],
+        [float(np.max(ydata)) + y_span, 2 * y_span, 20.0],
+    )
+    return curve_fit(
+        prob_adc_Xhalf,
+        xdata,
+        ydata,
+        p0=fitparams,
+        bounds=bounds,
+        maxfev=10000,
+    )
+
+
+def fit_adc_Xhalf_decay(xdata, ydata, fitparams=None):
+    if fitparams is None:
+        fitparams = [None] * 4
+    else:
+        fitparams = list(fitparams)
+
+    y_span = max(float(np.ptp(ydata)), 1e-12)
+    if fitparams[0] is None:
+        fitparams[0] = float(np.average(ydata))
+    if fitparams[1] is None:
+        fitparams[1] = 0.5 * y_span
+    if fitparams[2] is None:
+        fitparams[2] = 0.1
+    if fitparams[3] is None:
+        fitparams[3] = max(float(np.max(xdata) - np.min(xdata)), 1.0)
+
+    bounds = (
+        [float(np.min(ydata)) - y_span, -2 * y_span, -20.0, 1.0],
+        [float(np.max(ydata)) + y_span, 2 * y_span, 20.0, 1000.0],
+    )
+    return curve_fit(
+        prob_adc_Xhalf_decay,
+        xdata,
+        ydata,
+        p0=fitparams,
+        bounds=bounds,
+        maxfev=10000,
+    )
 
 
 class PowerRabiChevronProgram(BaseProgram):
@@ -447,26 +516,27 @@ class GambettaFig2AAE(BaseExperiment):
         nominal_gain = float(self.cfg["pi2_gain_ge"])
 
         fit_success = False
-        fit_model = "Xhalf_decay"
-        popt, pcov, _ = fit_probg_Xhalf_decay(reps_axis, y)
-        if np.any(np.isnan(popt)):
-            fit_model = "Xhalf"
-            popt, pcov, _ = fit_probg_Xhalf(reps_axis, y)
+        fit_model = "Xhalf_adc_decay"
+        try:
+            popt, pcov = fit_adc_Xhalf_decay(reps_axis, y)
+        except Exception:
+            fit_model = "Xhalf_adc"
+            popt, pcov = fit_adc_Xhalf(reps_axis, y)
         if not np.any(np.isnan(popt)):
             fit_success = True
 
-        if fit_model == "Xhalf_decay":
-            offset, delta_deg, decay = popt
-            model = probg_Xhalf_decay
+        if fit_model == "Xhalf_adc_decay":
+            offset, amplitude, delta_deg, decay = popt
+            model = prob_adc_Xhalf_decay
             fit_decay = float(decay)
         else:
-            offset, delta_deg = popt
-            model = probg_Xhalf
+            offset, amplitude, delta_deg = popt
+            model = prob_adc_Xhalf
             fit_decay = np.nan
 
         delta_err_deg = np.nan
-        if pcov is not None and np.shape(pcov)[0] > 1:
-            delta_err_deg = float(np.sqrt(np.abs(pcov[1, 1])))
+        if pcov is not None and np.shape(pcov)[0] > 2:
+            delta_err_deg = float(np.sqrt(np.abs(pcov[2, 2])))
 
         angle_error = float(delta_deg) * np.pi / 180
         angle_per_pulse = nominal_angle + angle_error
@@ -483,6 +553,7 @@ class GambettaFig2AAE(BaseExperiment):
             "corrected_gain": float(corrected_gain),
             "relative_gain_correction": float(relative_gain_correction),
             "fit_offset": float(offset),
+            "fit_amplitude": float(amplitude),
             "fit_delta_deg": float(delta_deg),
             "fit_decay": fit_decay,
             "fit_model": fit_model,
