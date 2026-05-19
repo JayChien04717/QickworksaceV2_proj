@@ -20,6 +20,8 @@ from ...tools.fitting import (
     probg_Xhalf_decay,
 )
 
+AAE_GATE_GAP = 0.02
+
 
 class PowerRabiChevronProgram(BaseProgram):
     """QICK program for AAE power Rabi: repeats the pulse ``iteration`` times."""
@@ -281,11 +283,11 @@ class GambettaFig2Program(BaseProgram):
         repetitions = int(cfg.get("aae_repetitions_current", 0))
 
         self.pulse(ch=ch, name="x90_ge", t=0)
-        self.delay_auto(t=0.02)
+        self.delay_auto(t=AAE_GATE_GAP)
 
         for _ in range(repetitions):
             self.pulse(ch=ch, name="x90_ge", t=0)
-            self.delay_auto(t=0.02)
+            self.delay_auto(t=AAE_GATE_GAP)
 
         self.delay_auto(t=0.05, tag="waiting")
         self.measure(cfg)
@@ -312,7 +314,6 @@ class GambettaFig2AAE(BaseExperiment):
     def _normalize_cfg(self):
         if "pi2_gain_ge" not in self.cfg:
             self.cfg["pi2_gain_ge"] = self.cfg["pi_gain_ge"] / 2
-        self.cfg.setdefault("aae_gate_gap", 0.02)
 
     def _repetitions(self):
         reps = self.cfg.get("aae_repetitions")
@@ -427,7 +428,7 @@ class GambettaFig2AAE(BaseExperiment):
             signal = np.imag(self.iqdata)
         else:
             signal = np.abs(self.iqdata)
-        return float(self.cfg.get("aae_signal_sign", 1.0)) * signal
+        return signal
 
     def _post_fit(self, x_vals=None):
         if self.iqdata is None:
@@ -501,7 +502,7 @@ class GambettaFig2AAE(BaseExperiment):
         )
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.scatter(reps_axis, y, s=24, color="steelblue", label="Data")
+        ax.plot(reps_axis, y, marker="o", lw=1.5, color="steelblue", label="Data")
         fine_x = np.linspace(np.min(reps_axis), np.max(reps_axis), 1000)
         ax.plot(fine_x, model(fine_x, *popt), color="firebrick", lw=2, label=fit_model)
         ax.set_xlabel(self.X_LABEL)
