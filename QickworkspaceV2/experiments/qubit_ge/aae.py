@@ -1,6 +1,4 @@
-"""
-QubitGE/aae — s005a_AAE: Amplitude-Amplitude-Envelope (power Rabi chevron).
-"""
+"""QubitGE power Rabi chevron experiment."""
 
 from __future__ import annotations
 
@@ -14,86 +12,9 @@ from tqdm.auto import tqdm
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
 
-AAE_GATE_GAP = 0.02
-
-
-def prob_adc_Xhalf(n, offset, amplitude, delta_deg):
-    """ADC-unit model for repeated X/2 pulse rotation error."""
-    delta = delta_deg * np.pi / 180
-    return offset + amplitude * ((-1) ** n) * np.cos(np.pi / 2 + 2 * n * delta)
-
-
-def prob_adc_Xhalf_decay(n, offset, amplitude, delta_deg, decay):
-    """ADC-unit model for repeated X/2 pulse rotation error with decay."""
-    delta = delta_deg * np.pi / 180
-    return offset + (
-        amplitude
-        * ((-1) ** n)
-        * np.cos(np.pi / 2 + 2 * n * delta)
-        * np.exp(-n / decay)
-    )
-
-
-def fit_adc_Xhalf(xdata, ydata, fitparams=None):
-    if fitparams is None:
-        fitparams = [None] * 3
-    else:
-        fitparams = list(fitparams)
-
-    y_span = max(float(np.ptp(ydata)), 1e-12)
-    if fitparams[0] is None:
-        fitparams[0] = float(np.average(ydata))
-    if fitparams[1] is None:
-        fitparams[1] = 0.5 * y_span
-    if fitparams[2] is None:
-        fitparams[2] = 0.1
-
-    bounds = (
-        [float(np.min(ydata)) - y_span, -2 * y_span, -20.0],
-        [float(np.max(ydata)) + y_span, 2 * y_span, 20.0],
-    )
-    return curve_fit(
-        prob_adc_Xhalf,
-        xdata,
-        ydata,
-        p0=fitparams,
-        bounds=bounds,
-        maxfev=10000,
-    )
-
-
-def fit_adc_Xhalf_decay(xdata, ydata, fitparams=None):
-    if fitparams is None:
-        fitparams = [None] * 4
-    else:
-        fitparams = list(fitparams)
-
-    y_span = max(float(np.ptp(ydata)), 1e-12)
-    if fitparams[0] is None:
-        fitparams[0] = float(np.average(ydata))
-    if fitparams[1] is None:
-        fitparams[1] = 0.5 * y_span
-    if fitparams[2] is None:
-        fitparams[2] = 0.1
-    if fitparams[3] is None:
-        fitparams[3] = max(float(np.max(xdata) - np.min(xdata)), 1.0)
-
-    bounds = (
-        [float(np.min(ydata)) - y_span, -2 * y_span, -20.0, 1.0],
-        [float(np.max(ydata)) + y_span, 2 * y_span, 20.0, 1000.0],
-    )
-    return curve_fit(
-        prob_adc_Xhalf_decay,
-        xdata,
-        ydata,
-        p0=fitparams,
-        bounds=bounds,
-        maxfev=10000,
-    )
-
 
 class PowerRabiChevronProgram(BaseProgram):
-    """QICK program for AAE power Rabi: repeats the pulse ``iteration`` times."""
+    """QICK program for power Rabi chevron: repeats the pulse ``iteration`` times."""
 
     def _initialize(self, cfg):
         self.setup_resonator(cfg)
@@ -115,12 +36,11 @@ class PowerRabiChevronProgram(BaseProgram):
 
 # Aliases for backward compatibility
 PowerRabiProgram = PowerRabiChevronProgram
-AAEProgram = PowerRabiChevronProgram
 
 
 class PowerRabiChevron(BaseExperiment):
     """
-    AAE Power Rabi Chevron experiment.
+    Power Rabi Chevron experiment.
 
     Performs a 2D scan: inner loop sweeps gain (hardware), outer loop
     sweeps iteration count (software).
@@ -183,7 +103,7 @@ class PowerRabiChevron(BaseExperiment):
         ax.set_ylabel("Iterations (N)")
         title = ax.set_title(f"{self.TITLE_PREFIX} (Initializing...)")
 
-        plot_display_id = f"live-plot-aae-{np.random.randint(1e9)}"
+        plot_display_id = f"live-plot-rabi-chevron-{np.random.randint(1e9)}"
         display(fig, display_id=plot_display_id)
 
         interrupted = False
@@ -329,295 +249,11 @@ class PowerRabiChevron(BaseExperiment):
     def _save_comment(self, dict_val):
         if self.fit_params:
             g = self.fit_params.get("optimal_gain", "N/A")
-            return f"AAE Power Rabi\nOptimal gain = {g}\n{dict_val}"
+            return f"Power Rabi Chevron\nOptimal gain = {g}\n{dict_val}"
         return f"{dict_val}"
-
-
-class GambettaFig2Program(BaseProgram):
-    """QICK program for Gambetta Fig. 2: X90 followed by X90^n."""
-
-    def _initialize(self, cfg):
-        self.setup_resonator(cfg)
-        self.setup_qubit_gen(cfg, "ge")
-        if cfg.get("cooling", False):
-            self.apply_cool(cfg)
-        self.setup_standard_gates(cfg, prefix="ge")
-
-    def _body(self, cfg):
-        self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
-        if cfg.get("cooling", False):
-            self.cooling_body(cfg)
-
-        ch = cfg["qb_ch"]
-        repetitions = int(cfg.get("aae_repetitions_current", 0))
-
-        self.pulse(ch=ch, name="x90_ge", t=0)
-        self.delay_auto(t=AAE_GATE_GAP)
-
-        for _ in range(repetitions):
-            self.pulse(ch=ch, name="x90_ge", t=0)
-            self.delay_auto(t=AAE_GATE_GAP)
-
-        self.delay_auto(t=0.05, tag="waiting")
-        self.measure(cfg)
-
-
-class GambettaFig2AAE(BaseExperiment):
-    """
-    Gambetta/Sheldon Fig. 2 style pi/2 error-amplification calibration.
-
-    Sequence: X90 followed by X90^n.  Sweeping n amplifies a small pi/2
-    over/under-rotation into a measurable oscillation-frequency shift.
-    """
-
-    EXPT_NAME = "s005a_gambetta_fig2_aae_ge"
-    TAG = "AAE"
-    X_LABEL = "Additional X90 Pulses (n)"
-    Y_LABEL = "ADC Units"
-    TITLE_PREFIX = "Gambetta Fig. 2 AAE ge"
-    SWEEP_KEYS_TO_REMOVE = []
-    X_SAVE_NAME = "Additional X90 Pulses"
-    X_SAVE_UNIT = "N"
-    X_SAVE_SCALE = 1.0
-
-    def _normalize_cfg(self):
-        if "pi2_gain_ge" not in self.cfg:
-            self.cfg["pi2_gain_ge"] = self.cfg["pi_gain_ge"] / 2
-
-    def _repetitions(self):
-        reps = self.cfg.get("aae_repetitions")
-        if reps is None:
-            start = int(self.cfg.get("aae_repetitions_start", 0))
-            stop = int(self.cfg.get("aae_repetitions_stop", 40))
-            step = int(self.cfg.get("aae_repetitions_step", 1))
-            reps = np.arange(start, stop + 1, step, dtype=int)
-        return np.asarray(reps, dtype=int)
-
-    def _create_program(self):
-        self._normalize_cfg()
-        return GambettaFig2Program(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return self._repetitions()
-
-    def run(self, py_avg, iq_process="abs", show_final_plot=False, **kwargs):
-        self.IQ_PROCESS = iq_process
-        reps_axis = self._repetitions()
-        self._sweep_vals_x = reps_axis
-        self._sweep_vals_y = None
-
-        iqdata = np.zeros(len(reps_axis), dtype=complex)
-        data_to_plot = np.zeros(len(reps_axis), dtype=float)
-
-        fig, ax = plt.subplots(figsize=(6, 4))
-        (line,) = ax.plot(reps_axis, data_to_plot, marker="o", lw=1.5)
-        ax.set_xlabel(self.X_LABEL)
-        ax.set_ylabel(self.Y_LABEL)
-        title = ax.set_title(f"{self.TITLE_PREFIX} (Initializing...)")
-        ax.grid(True, alpha=0.2)
-
-        plot_display_id = f"live-plot-aae-fig2-{np.random.randint(1e9)}"
-        display(fig, display_id=plot_display_id)
-
-        interrupted = False
-        last_idx = 0
-        try:
-            for idx, rep_val in enumerate(tqdm(reps_axis, desc="AAE repetitions")):
-                last_idx = idx
-                self.cfg["aae_repetitions_current"] = int(rep_val)
-                prog = self._create_program()
-                self._last_prog = prog
-
-                iq_list = prog.acquire(self.soc, rounds=py_avg, progress=False)
-                arr = np.asarray(iq_list[0][0])
-                if arr.ndim > 0 and arr.shape[-1] == 2:
-                    iq_point = arr.dot([1, 1j]).reshape(-1)[0]
-                else:
-                    iq_point = arr.reshape(-1)[0]
-                iqdata[idx] = iq_point
-
-                if self.IQ_PROCESS == "real":
-                    data_to_plot[idx] = np.real(iq_point)
-                else:
-                    data_to_plot[idx] = np.abs(iq_point)
-
-                line.set_ydata(data_to_plot)
-                measured = data_to_plot[: idx + 1]
-                margin = 0.05 * max(np.ptp(measured), 1e-12)
-                ax.set_ylim(np.min(measured) - margin, np.max(measured) + margin)
-                title.set_text(f"{self.TITLE_PREFIX} | N={rep_val}")
-                update_display(fig, display_id=plot_display_id)
-
-        except KeyboardInterrupt:
-            interrupted = True
-
-        clear_output(wait=True)
-        if not show_final_plot:
-            plt.close(fig)
-
-        if interrupted:
-            print(f"Interrupted at N={reps_axis[last_idx]}.")
-            reps_axis = reps_axis[: last_idx + 1]
-            iqdata = iqdata[: last_idx + 1]
-
-        self.iqdata = iqdata
-        self._sweep_vals_x = reps_axis
-        old_result = self._post_fit(reps_axis)
-
-        from ...core.experiment_data import ExperimentData
-
-        result = ExperimentData(
-            experiment_type=self.EXPT_NAME,
-            raw_iq=self.iqdata,
-            x_axis=self._sweep_vals_x,
-            y_axis=None,
-            fit_params=self.fit_params,
-            fit_errors=self.fit_errors,
-            config=dict(self.cfg),
-            interrupted=interrupted,
-            avg_count=py_avg,
-            x_name=self.X_SAVE_NAME,
-            x_unit=self.X_SAVE_UNIT,
-            x_scale=self.X_SAVE_SCALE,
-        )
-        if isinstance(old_result, dict):
-            result.fit_result = self._build_fit_result()
-        self.result = result
-        return result
-
-    def _processed_signal(self):
-        if self.IQ_PROCESS == "real":
-            signal = np.real(self.iqdata)
-        elif self.IQ_PROCESS == "imag":
-            signal = np.imag(self.iqdata)
-        else:
-            signal = np.abs(self.iqdata)
-        return signal
-
-    def _post_fit(self, x_vals=None):
-        if self.iqdata is None:
-            print("No data. Call run() first.")
-            return None
-
-        reps_axis = np.asarray(
-            self._sweep_vals_x if x_vals is None else x_vals, dtype=float
-        )
-        y = np.asarray(self._processed_signal(), dtype=float)
-        if len(reps_axis) < 5:
-            print("Not enough points for AAE fit.")
-            return None
-
-        nominal_angle = np.pi / 2
-        nominal_gain = float(self.cfg["pi2_gain_ge"])
-
-        fit_success = False
-        fit_model = "Xhalf_adc_decay"
-        try:
-            popt, pcov = fit_adc_Xhalf_decay(reps_axis, y)
-        except Exception:
-            fit_model = "Xhalf_adc"
-            popt, pcov = fit_adc_Xhalf(reps_axis, y)
-        if not np.any(np.isnan(popt)):
-            fit_success = True
-
-        if fit_model == "Xhalf_adc_decay":
-            offset, amplitude, delta_deg, decay = popt
-            model = prob_adc_Xhalf_decay
-            fit_decay = float(decay)
-        else:
-            offset, amplitude, delta_deg = popt
-            model = prob_adc_Xhalf
-            fit_decay = np.nan
-
-        delta_err_deg = np.nan
-        if pcov is not None and np.shape(pcov)[0] > 2:
-            delta_err_deg = float(np.sqrt(np.abs(pcov[2, 2])))
-
-        angle_error = float(delta_deg) * np.pi / 180
-        angle_per_pulse = nominal_angle + angle_error
-        corrected_gain = nominal_gain * nominal_angle / angle_per_pulse
-        relative_gain_correction = corrected_gain / nominal_gain - 1.0
-
-        self.fit_params = {
-            "target": "pi2",
-            "target_angle_rad": nominal_angle,
-            "nominal_gain": nominal_gain,
-            "angle_per_pulse_rad": float(angle_per_pulse),
-            "angle_error_rad": float(angle_error),
-            "angle_error_deg": float(delta_deg),
-            "corrected_gain": float(corrected_gain),
-            "relative_gain_correction": float(relative_gain_correction),
-            "fit_offset": float(offset),
-            "fit_amplitude": float(amplitude),
-            "fit_delta_deg": float(delta_deg),
-            "fit_decay": fit_decay,
-            "fit_model": fit_model,
-            "fit_success": fit_success,
-        }
-        self.fit_errors = {
-            "angle_per_pulse_rad": float(delta_err_deg * np.pi / 180),
-            "angle_error_rad": float(delta_err_deg * np.pi / 180),
-            "angle_error_deg": delta_err_deg,
-            "fit_delta_deg": delta_err_deg,
-        }
-
-        print(
-            f"\n[AAE Fig.2] X90 angle error="
-            f"{self.fit_params['angle_error_deg']:.4f} deg, "
-            f"gain {nominal_gain:.6g} -> {corrected_gain:.6g}"
-        )
-
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(reps_axis, y, marker="o", lw=1.5, color="steelblue", label="Data")
-        fit_y = model(reps_axis, *popt)
-        ax.plot(reps_axis, fit_y, marker="s", ms=4, color="firebrick", lw=2, label=fit_model)
-        ax.set_xlabel(self.X_LABEL)
-        ax.set_ylabel(self.Y_LABEL)
-        ax.set_title(
-            f"AAE Fig.2 X90: {self.fit_params['angle_error_deg']:.4f} deg/gate"
-        )
-        ax.grid(True, alpha=0.2)
-        ax.legend()
-        plt.tight_layout()
-        plt.show()
-
-        return dict(self.fit_params)
-
-    def _build_fit_result(self):
-        if not self.fit_params:
-            return {}
-        return {
-            key: (val, self.fit_errors.get(key) if self.fit_errors else None)
-            for key, val in self.fit_params.items()
-        }
-
-    def _save_comment(self, dict_val):
-        if self.fit_params:
-            return (
-                "Gambetta Fig. 2 AAE\n"
-                f"angle_error_deg={self.fit_params['angle_error_deg']:.6f}\n"
-                f"corrected_gain={self.fit_params['corrected_gain']:.8g}\n"
-                f"{dict_val}"
-            )
-        return f"{dict_val}"
-
-
-# Alias
-AAE = GambettaFig2AAE
-AAEFig2 = GambettaFig2AAE
 
 __all__ = [
     "PowerRabiProgram",
     "PowerRabiChevronProgram",
     "PowerRabiChevron",
-    "AAEProgram",
-    "AAE",
-    "GambettaFig2Program",
-    "GambettaFig2AAE",
-    "AAEFig2",
 ]

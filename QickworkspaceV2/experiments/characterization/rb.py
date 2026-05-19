@@ -35,6 +35,13 @@ _INTERLEAVED_FILE_SUFFIX = {
 }
 
 
+def _safe_rb_file_suffix(label):
+    suffix = _INTERLEAVED_FILE_SUFFIX.get(label, str(label))
+    for char in '<>:"/\\|?*':
+        suffix = suffix.replace(char, "_")
+    return suffix
+
+
 class RBProgram(BaseProgram):
     """QICK program that unrolls a Clifford gate sequence at compile time."""
 
@@ -188,9 +195,9 @@ class RandomizedBenchmarking(BaseExperiment):
             raise RuntimeError("Call run() first.")
         from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
         if title is not None:
-            expt_name = f"s015_RB_{title}_{qb_idx}"
+            expt_name = f"s015_RB_{_safe_rb_file_suffix(title)}_{qb_idx}"
         elif self._interleaved is not None:
-            suffix = _INTERLEAVED_FILE_SUFFIX.get(self._interleaved, self._interleaved)
+            suffix = _safe_rb_file_suffix(self._interleaved)
             expt_name = f"s015_RB_{suffix}_{qb_idx}"
         else:
             expt_name = f"s015_RB_{qb_idx}_ref"
