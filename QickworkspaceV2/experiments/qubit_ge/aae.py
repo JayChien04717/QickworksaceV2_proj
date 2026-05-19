@@ -503,8 +503,8 @@ class GambettaFig2AAE(BaseExperiment):
 
         fig, ax = plt.subplots(figsize=(6, 4))
         ax.plot(reps_axis, y, marker="o", lw=1.5, color="steelblue", label="Data")
-        fine_x = np.linspace(np.min(reps_axis), np.max(reps_axis), 1000)
-        ax.plot(fine_x, model(fine_x, *popt), color="firebrick", lw=2, label=fit_model)
+        fit_y = model(reps_axis, *popt)
+        ax.plot(reps_axis, fit_y, marker="s", ms=4, color="firebrick", lw=2, label=fit_model)
         ax.set_xlabel(self.X_LABEL)
         ax.set_ylabel(self.Y_LABEL)
         ax.set_title(
