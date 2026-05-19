@@ -22,23 +22,49 @@ def _iq_to_complex(iq_list):
 
 def _process_iq(iqdata, iq_process):
     """Select the plotted IQ channel."""
-    if iq_process == "real":
+    iq_process = (iq_process or "abs").lower()
+    if iq_process in {"real", "i", "avgi"}:
         return np.real(iqdata)
-    if iq_process == "imag":
+    if iq_process in {"imag", "q", "avgq"}:
         return np.imag(iqdata)
     if iq_process == "phase":
-        return np.angle(iqdata)
+        return np.unwrap(np.angle(iqdata))
     return np.abs(iqdata)
 
 
 def _process_label(iq_process):
+    iq_process = (iq_process or "abs").lower()
     labels = {
         "real": "ADC Units (Real)",
+        "i": "ADC Units (Real)",
+        "avgi": "ADC Units (Real)",
         "imag": "ADC Units (Imag)",
+        "q": "ADC Units (Imag)",
+        "avgq": "ADC Units (Imag)",
         "phase": "Phase (rad)",
         "abs": "ADC Units (Abs)",
+        "amp": "ADC Units (Abs)",
+        "amplitude": "ADC Units (Abs)",
+        "all": "IQ Channels",
+        "iq": "IQ Channels",
+        "channels": "IQ Channels",
+        "multi": "IQ Channels",
     }
     return labels.get(iq_process, labels["abs"])
+
+
+def _is_all_iq(iq_process):
+    return str(iq_process or "abs").lower() in {"all", "iq", "channels", "multi"}
+
+
+def _iq_channel_dict(iqdata):
+    """Return all real-valued IQ views used by live plots."""
+    return {
+        "Abs": np.abs(iqdata),
+        "Phase": np.unwrap(np.angle(iqdata)),
+        "I": np.real(iqdata),
+        "Q": np.imag(iqdata),
+    }
 
 
 def _safe_limits(data, pad_fraction=0.1):
@@ -446,17 +472,40 @@ def _liveplot_sw_avg(
     iq_process="abs",
 ):
     _y_label_proc = _process_label(iq_process)
+    plot_all_iq = _is_all_iq(iq_process)
 
     iq = 0
     iqdata = None
     last_i = 0
     interrupted = False
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    if plot_all_iq and y_axis_vals is None:
+        fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        axes_flat = axes.ravel()
+        ax = axes_flat[0]
+    else:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        axes_flat = None
     plot_display_id = f"live-plot-{np.random.randint(1e9)}"
 
     is_2d = y_axis_vals is not None
-    if is_2d:
+    if plot_all_iq and not is_2d:
+        plot_artist = {}
+        for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
+            (line,) = channel_ax.plot(
+                x_axis_vals,
+                np.zeros_like(x_axis_vals),
+                "o-",
+                markersize=4,
+                alpha=0.75,
+            )
+            plot_artist[channel_name] = line
+            channel_ax.set_title(channel_name)
+            channel_ax.set_xlabel(x_label)
+            channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+            channel_ax.grid(True, alpha=0.25)
+        fig.suptitle(f"{title_prefix} (Initializing...)")
+    elif is_2d:
         plot_artist = ax.pcolormesh(
             x_axis_vals,
             y_axis_vals,
@@ -471,8 +520,9 @@ def _liveplot_sw_avg(
         )
         ax.set_ylabel(_y_label_proc)
 
-    ax.set_xlabel(x_label)
-    ax.set_title(f"{title_prefix} (Initializing...)")
+    if not (plot_all_iq and not is_2d):
+        ax.set_xlabel(x_label)
+        ax.set_title(f"{title_prefix} (Initializing...)")
     display(fig, display_id=plot_display_id)
 
     try:
@@ -482,18 +532,27 @@ def _liveplot_sw_avg(
             iq_data = _iq_to_complex(iq_list)
             iq = iq_data if i == 0 else iq + iq_data
             iqdata = iq / (i + 1)
-            plot_data = _process_iq(iqdata, iq_process)
 
-            if is_2d:
+            if plot_all_iq and not is_2d:
+                channel_data = _iq_channel_dict(iqdata)
+                for channel_ax, (channel_name, data_to_plot) in zip(
+                    axes_flat, channel_data.items()
+                ):
+                    plot_artist[channel_name].set_ydata(data_to_plot)
+                    channel_ax.set_ylim(*_safe_limits(data_to_plot))
+                fig.suptitle(f"{title_prefix} | Average: {i + 1} / {py_avg}")
+            elif is_2d:
+                plot_data = _process_iq(iqdata, iq_process)
                 data_to_plot = _normalize_rows(plot_data)
                 plot_artist.set_array(data_to_plot.ravel())
                 plot_artist.set_clim(*_safe_limits(data_to_plot, pad_fraction=0.0))
+                ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
             else:
+                plot_data = _process_iq(iqdata, iq_process)
                 data_to_plot = plot_data
                 plot_artist.set_ydata(data_to_plot)
                 ax.set_ylim(*_safe_limits(data_to_plot))
-
-            ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
+                ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
             update_display(fig, display_id=plot_display_id)
 
     except KeyboardInterrupt:
@@ -503,14 +562,32 @@ def _liveplot_sw_avg(
     plt.close(fig)
 
     if show_final_plot:
-        final_fig, final_ax = plt.subplots(figsize=(6, 4))
+        if plot_all_iq and not is_2d:
+            final_fig, final_axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            final_ax = final_axes.ravel()[0]
+        else:
+            final_fig, final_ax = plt.subplots(figsize=(6, 4))
         title_status = "Interrupted" if interrupted else "Completed"
-        final_ax.set_title(f"{title_prefix} ({title_status} at avg {last_i + 1})")
-        final_ax.set_xlabel(x_label)
+        if plot_all_iq and not is_2d:
+            final_fig.suptitle(f"{title_prefix} ({title_status} at avg {last_i + 1})")
+        else:
+            final_ax.set_title(f"{title_prefix} ({title_status} at avg {last_i + 1})")
+            final_ax.set_xlabel(x_label)
 
         if iqdata is not None:
-            plot_data = _process_iq(iqdata, iq_process)
-            if is_2d:
+            if plot_all_iq and not is_2d:
+                for channel_ax, (channel_name, data_to_plot) in zip(
+                    final_axes.ravel(), _iq_channel_dict(iqdata).items()
+                ):
+                    channel_ax.plot(
+                        x_axis_vals, data_to_plot, "o-", markersize=4, alpha=0.75
+                    )
+                    channel_ax.set_title(channel_name)
+                    channel_ax.set_xlabel(x_label)
+                    channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+                    channel_ax.grid(True, alpha=0.25)
+            elif is_2d:
+                plot_data = _process_iq(iqdata, iq_process)
                 final_data = _normalize_rows(plot_data)
                 im = final_ax.pcolormesh(
                     x_axis_vals, y_axis_vals, final_data, cmap="viridis"
@@ -518,6 +595,7 @@ def _liveplot_sw_avg(
                 final_fig.colorbar(im, ax=final_ax, label="Normalized Amplitude")
                 final_ax.set_ylabel(y_label)
             else:
+                plot_data = _process_iq(iqdata, iq_process)
                 final_ax.plot(x_axis_vals, plot_data, "o-", markersize=5, alpha=0.7)
                 final_ax.set_ylabel(_y_label_proc)
         else:
@@ -687,19 +765,35 @@ def _liveplot_1d_scan(
     iq_process="abs",
 ):
     _y_label_proc = _process_label(iq_process)
+    plot_all_iq = _is_all_iq(iq_process)
 
     iq_sum = 0
     iqdata = None
     last_avg = 0
     interrupted = False
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    (line,) = ax.plot(
-        scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=5, alpha=0.7
-    )
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(_y_label_proc)
-    title = ax.set_title(f"{title_prefix} (Initializing...)")
+    if plot_all_iq:
+        fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        axes_flat = axes.ravel()
+        line = {}
+        for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
+            (channel_line,) = channel_ax.plot(
+                scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=4, alpha=0.75
+            )
+            line[channel_name] = channel_line
+            channel_ax.set_xlabel(x_label)
+            channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+            channel_ax.set_title(channel_name)
+            channel_ax.grid(True, alpha=0.25)
+        title = fig.suptitle(f"{title_prefix} (Initializing...)")
+    else:
+        fig, ax = plt.subplots(figsize=(6, 4))
+        (line,) = ax.plot(
+            scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=5, alpha=0.7
+        )
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(_y_label_proc)
+        title = ax.set_title(f"{title_prefix} (Initializing...)")
 
     plot_display_id = f"live-plot-1d-{np.random.randint(1e9)}"
     display(fig, display_id=plot_display_id)
@@ -717,10 +811,17 @@ def _liveplot_1d_scan(
             iq_sum = current_iq_data if avg == 0 else iq_sum + current_iq_data
             iqdata = iq_sum / (avg + 1)
 
-            plot_data = _process_iq(iqdata, iq_process)
-            line.set_ydata(plot_data)
+            if plot_all_iq:
+                for channel_ax, (channel_name, plot_data) in zip(
+                    axes_flat, _iq_channel_dict(iqdata).items()
+                ):
+                    line[channel_name].set_ydata(plot_data)
+                    channel_ax.set_ylim(*_safe_limits(plot_data, pad_fraction=0.05))
+            else:
+                plot_data = _process_iq(iqdata, iq_process)
+                line.set_ydata(plot_data)
 
-            ax.set_ylim(*_safe_limits(plot_data, pad_fraction=0.05))
+                ax.set_ylim(*_safe_limits(plot_data, pad_fraction=0.05))
 
             title.set_text(f"{title_prefix} | Average: {avg + 1} / {py_avg}")
             update_display(fig, display_id=plot_display_id)
@@ -736,24 +837,41 @@ def _liveplot_1d_scan(
         print(f"Scan interrupted at average: {last_avg + 1}")
 
     if show_final_plot:
-        fig_final, ax_final = plt.subplots(figsize=(6, 4))
         title_status = "Interrupted" if interrupted else "Completed"
-        ax_final.set_title(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
-        ax_final.set_xlabel(x_label)
-        ax_final.set_ylabel(_y_label_proc)
+        if plot_all_iq:
+            fig_final, axes_final = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            fig_final.suptitle(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
+        else:
+            fig_final, ax_final = plt.subplots(figsize=(6, 4))
+            ax_final.set_title(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
+            ax_final.set_xlabel(x_label)
+            ax_final.set_ylabel(_y_label_proc)
 
         if iqdata is not None:
-            ax_final.plot(
-                scan_x_axis,
-                _process_iq(iqdata, iq_process),
-                "o-",
-                markersize=5,
-                alpha=0.7,
-            )
+            if plot_all_iq:
+                for channel_ax, (channel_name, plot_data) in zip(
+                    axes_final.ravel(), _iq_channel_dict(iqdata).items()
+                ):
+                    channel_ax.plot(
+                        scan_x_axis, plot_data, "o-", markersize=4, alpha=0.75
+                    )
+                    channel_ax.set_xlabel(x_label)
+                    channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+                    channel_ax.set_title(channel_name)
+                    channel_ax.grid(True, alpha=0.25)
+            else:
+                ax_final.plot(
+                    scan_x_axis,
+                    _process_iq(iqdata, iq_process),
+                    "o-",
+                    markersize=5,
+                    alpha=0.7,
+                )
         else:
-            ax_final.text(
+            target_ax = axes_final.ravel()[0] if plot_all_iq else ax_final
+            target_ax.text(
                 0.5, 0.5, "No data acquired",
-                ha="center", va="center", transform=ax_final.transAxes,
+                ha="center", va="center", transform=target_ax.transAxes,
             )
 
         display(fig_final)
