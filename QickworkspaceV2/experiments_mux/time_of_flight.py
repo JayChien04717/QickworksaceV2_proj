@@ -77,10 +77,25 @@ class MuxTOF(BaseExperiment):
 
     def _normalized_cfg(self):
         cfg = dict(self.cfg)
+
+        def _first_value(value, default=None):
+            if value is None:
+                return default
+            if isinstance(value, np.ndarray):
+                value = value.tolist()
+            if isinstance(value, (list, tuple)):
+                values = [v for v in value if v is not None]
+                return values[0] if values else default
+            return value
+
         if "ro_len" not in cfg and "ro_length" in cfg:
             cfg["ro_len"] = cfg["ro_length"]
         if "res_len" not in cfg and "res_length" in cfg:
             cfg["res_len"] = cfg["res_length"]
+        cfg["ro_len"] = _first_value(cfg.get("ro_len"), 1)
+        cfg["res_len"] = _first_value(cfg.get("res_len"), cfg["ro_len"])
+        cfg["relax_delay"] = _first_value(cfg.get("relax_delay"), 0)
+        cfg["nqz_res"] = _first_value(cfg.get("mux_nqz", cfg.get("nqz_res")), 1)
         if "active_ro_chs" not in cfg:
             cfg["active_ro_chs"] = cfg.get("ro_chs", [])
         if "trigger_ro_chs" not in cfg:
