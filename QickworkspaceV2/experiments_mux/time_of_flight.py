@@ -20,9 +20,10 @@ class MuxTOFProgram(AveragerProgramV2):
 
     def _initialize(self, cfg):
         res_ch = cfg["res_ch"]
-        ro_chs = cfg.get("ro_chs", cfg.get("active_ro_chs"))
+        ro_chs = cfg.get("active_ro_chs", cfg.get("ro_chs"))
+        active_slots = cfg.get("active_slots", list(range(len(ro_chs))))
         if not ro_chs:
-            raise ValueError("MuxTOF requires 'ro_chs' or 'active_ro_chs'.")
+            raise ValueError("MuxTOF requires 'active_ro_chs' or 'ro_chs'.")
 
         self.declare_gen(
             ch=res_ch,
@@ -34,12 +35,12 @@ class MuxTOFProgram(AveragerProgramV2):
             mux_phases=cfg["res_phases"],
         )
 
-        for ch, freq, phase in zip(ro_chs, cfg["res_freqs"], cfg["ro_phases"]):
+        for ch, slot in zip(ro_chs, active_slots):
             self.declare_readout(
                 ch=ch,
                 length=cfg["ro_len"],
-                freq=freq,
-                phase=phase,
+                freq=cfg["res_freqs"][slot],
+                phase=cfg["ro_phases"][slot],
                 gen_ch=res_ch,
             )
 
@@ -108,9 +109,7 @@ class MuxTOF(BaseExperiment):
         self.t = self._extract_sweep_axis(prog)
         self._sweep_vals_x = self.t
 
-        ro_chs = list(cfg["ro_chs"])
-        active_ro_chs = list(cfg.get("active_ro_chs", ro_chs))
-        active_ro_indices = [ro_chs.index(ch) for ch in active_ro_chs]
+        active_ro_chs = list(cfg.get("active_ro_chs", cfg["ro_chs"]))
         qubit_names = list(cfg.get("qubit_names", [f"ro{ch}" for ch in active_ro_chs]))
         trace_count = len(active_ro_chs)
         iq_sum = None
@@ -136,7 +135,7 @@ class MuxTOF(BaseExperiment):
         try:
             for i in tqdm(range(py_avg), desc="Software Average Count"):
                 self.iq_list = prog.acquire_decimated(self.soc, rounds=1, progress=False)
-                current = np.asarray([self.iq_list[idx].dot([1, 1j]) for idx in active_ro_indices])
+                current = np.asarray([trace.dot([1, 1j]) for trace in self.iq_list[:trace_count]])
                 iq_sum = current if iq_sum is None else iq_sum + current
                 self.iqdata = iq_sum / (i + 1)
                 avg_done = i + 1
