@@ -177,21 +177,72 @@ class ExperimentConfig:
                 selected[key] = value
         return selected
 
-    def muxconfig(self, qb_list, mux_ro_ch_start=2, mux_gen=12) -> AddictDict:
-        """Extract a mux-ready configuration for a subset of qubits."""
-        indices = self._resolve_indices(qb_list)
+    def muxconfig(self, qb_list, mux_ro_ch_start=2, mux_gen=12, LO_ext=None) -> AddictDict:
+        """Build a slot-stable mux configuration for selected qubits.
+
+        The mux generator scale is set by the pulse mask count. To keep that
+        scale fixed for a chip/config, the pulse mask covers every configured
+        qubit slot while non-armed qubits get zero resonator gain.
+        """
+        active_slots = self._resolve_indices(qb_list)
+        active_set = set(active_slots)
+        all_slots = list(range(len(self._raw_list)))
         selected = AddictDict()
+
         for key, value in self.unified_config.items():
             if isinstance(value, list):
-                selected[key] = [value[i] for i in indices if i < len(value)]
+                selected[key] = [value[i] if i < len(value) else None for i in all_slots]
             else:
                 selected[key] = value
-        selected["mux_ro_chs"] = [i + mux_ro_ch_start for i in indices]
-        selected["gen_mask"] = list(indices)
+
+        all_names = self.qubit_names()
+        active_names = [all_names[i] for i in active_slots]
+        ro_chs = [i + mux_ro_ch_start for i in all_slots]
+        active_ro_chs = [i + mux_ro_ch_start for i in active_slots]
+
+        res_freqs = list(selected.get("res_freq_ge", []))
+        res_gains = list(selected.get("res_gain_ge", []))
+        res_phases = list(selected.get("res_phase", [0] * len(all_slots)))
+        ro_phases = list(selected.get("ro_phase", [0] * len(all_slots)))
+
+        def _pad(values, default):
+            values = list(values)
+            if len(values) < len(all_slots):
+                values.extend([default] * (len(all_slots) - len(values)))
+            return values[:len(all_slots)]
+
+        res_freqs = _pad(res_freqs, None)
+        if LO_ext is not None:
+            res_freqs = [freq - LO_ext if freq is not None else None for freq in res_freqs]
+        res_gains = _pad(res_gains, 0)
+        res_phases = _pad(res_phases, 0)
+        ro_phases = _pad(ro_phases, 0)
+        res_gains = [gain if slot in active_set else 0 for slot, gain in enumerate(res_gains)]
+
+        selected["all_qubit_names"] = all_names
+        selected["qubit_names"] = active_names
+        selected["active_slots"] = active_slots
+        selected["mask"] = all_slots
+        selected["res_ch"] = mux_gen
+        selected["ro_chs"] = ro_chs
+        selected["active_ro_chs"] = active_ro_chs
+        selected["res_freqs"] = res_freqs
+        selected["res_gains"] = res_gains
+        selected["res_phases"] = res_phases
+        selected["ro_phases"] = ro_phases
+        selected["mux_scale_count"] = len(all_slots)
+        selected["LO_ext"] = LO_ext
+        selected["trig_time"] = 0.75
+
+        # Backward-compatible aliases for older notebooks.
+        selected["mux_ro_chs"] = active_ro_chs
+        selected["gen_mask"] = list(all_slots)
         selected["mux_gen"] = mux_gen
-        selected["mux_ro_phases"] = [0] * len(indices)
-        if "res_freq_ge" in selected and selected["res_freq_ge"]:
-            selected["mixer_freq"] = int(round(np.mean(selected["res_freq_ge"])))
+        selected["mux_ro_phases"] = [ro_phases[i] for i in active_slots]
+
+        active_freqs = [res_freqs[i] for i in active_slots if res_freqs[i] is not None]
+        if active_freqs:
+            selected["mixer_freq"] = int(round(np.mean(active_freqs)))
         return selected
 
     def to_yaml_mux(self, qb_list, **kwargs) -> str:
