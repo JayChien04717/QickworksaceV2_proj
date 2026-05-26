@@ -27,7 +27,7 @@ class MuxTOFProgram(AveragerProgramV2):
 
         self.declare_gen(
             ch=res_ch,
-            nqz=cfg.get("nqz_res", 1),
+            nqz=1,
             ro_ch=ro_chs[0],
             mixer_freq=cfg.get("mixer_freq", 0),
             mux_freqs=cfg["res_freqs"],
@@ -95,7 +95,6 @@ class MuxTOF(BaseExperiment):
         cfg["ro_len"] = _first_value(cfg.get("ro_len"), 1)
         cfg["res_len"] = _first_value(cfg.get("res_len"), cfg["ro_len"])
         cfg["relax_delay"] = _first_value(cfg.get("relax_delay"), 0)
-        cfg["nqz_res"] = _first_value(cfg.get("mux_nqz", cfg.get("nqz_res")), 1)
         if "active_ro_chs" not in cfg:
             cfg["active_ro_chs"] = cfg.get("ro_chs", [])
         if "trigger_ro_chs" not in cfg:
