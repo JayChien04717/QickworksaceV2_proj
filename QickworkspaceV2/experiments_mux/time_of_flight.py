@@ -54,7 +54,7 @@ class MuxTOFProgram(AveragerProgramV2):
 
     def _body(self, cfg):
         trigger_chs = cfg.get("trigger_ro_chs", cfg.get("active_ro_chs", cfg["ro_chs"]))
-        self.trigger(ros=trigger_chs, pins=[0], t=cfg["trig_time"], ddr4=False)
+        self.trigger(ros=trigger_chs, pins=[0], t=0, ddr4=False)
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
 
 
@@ -77,24 +77,10 @@ class MuxTOF(BaseExperiment):
 
     def _normalized_cfg(self):
         cfg = dict(self.cfg)
-
-        def _first_value(value, default=None):
-            if value is None:
-                return default
-            if isinstance(value, np.ndarray):
-                value = value.tolist()
-            if isinstance(value, (list, tuple)):
-                values = [v for v in value if v is not None]
-                return values[0] if values else default
-            return value
-
         if "ro_len" not in cfg and "ro_length" in cfg:
             cfg["ro_len"] = cfg["ro_length"]
         if "res_len" not in cfg and "res_length" in cfg:
             cfg["res_len"] = cfg["res_length"]
-        cfg["ro_len"] = _first_value(cfg.get("ro_len"), 1)
-        cfg["res_len"] = _first_value(cfg.get("res_len"), cfg["ro_len"])
-        cfg["relax_delay"] = _first_value(cfg.get("relax_delay"), 0)
         if "active_ro_chs" not in cfg:
             cfg["active_ro_chs"] = cfg.get("ro_chs", [])
         if "trigger_ro_chs" not in cfg:
@@ -130,16 +116,21 @@ class MuxTOF(BaseExperiment):
         interrupted = False
 
         if plot:
-            fig, axes = plt.subplots(trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False)
+            fig, axes = plt.subplots(
+                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+            )
             axes = axes[:, 0]
             lines = []
             for ax, name in zip(axes, qubit_names):
-                (line,) = ax.plot(self.t, np.full_like(self.t, np.nan, dtype=float), alpha=0.85)
+                (line,) = ax.plot(
+                    self.t, np.full_like(self.t, np.nan, dtype=float), alpha=0.85
+                )
                 ax.set_ylabel(name)
                 ax.set_xlim(np.min(self.t), np.max(self.t))
                 lines.append(line)
             axes[-1].set_xlabel(self.X_LABEL)
             title = axes[0].set_title(f"{self.TITLE_PREFIX} | Average: 0 / 0")
+            fig.tight_layout()
             plot_id = f"live-plot-mux-tof-{np.random.randint(int(1e9))}"
             display(fig, display_id=plot_id)
         else:
@@ -148,8 +139,12 @@ class MuxTOF(BaseExperiment):
         avg_done = 0
         try:
             for i in tqdm(range(py_avg), desc="Software Average Count"):
-                self.iq_list = prog.acquire_decimated(self.soc, rounds=1, progress=False)
-                current = np.asarray([trace.dot([1, 1j]) for trace in self.iq_list[:trace_count]])
+                self.iq_list = prog.acquire_decimated(
+                    self.soc, rounds=1, progress=False
+                )
+                current = np.asarray(
+                    [trace.dot([1, 1j]) for trace in self.iq_list[:trace_count]]
+                )
                 iq_sum = current if iq_sum is None else iq_sum + current
                 self.iqdata = iq_sum / (i + 1)
                 avg_done = i + 1
@@ -161,7 +156,9 @@ class MuxTOF(BaseExperiment):
                         cmin, cmax = np.min(plot_data), np.max(plot_data)
                         span = max(cmax - cmin, 1e-9)
                         ax.set_ylim(cmin - 0.1 * span, cmax + 0.1 * span)
-                    title.set_text(f"{self.TITLE_PREFIX} | Average: {avg_done} / {py_avg}")
+                    title.set_text(
+                        f"{self.TITLE_PREFIX} | Average: {avg_done} / {py_avg}"
+                    )
                     update_display(fig, display_id=plot_id)
         except KeyboardInterrupt:
             interrupted = True
@@ -190,7 +187,10 @@ class MuxTOF(BaseExperiment):
                 ax.set_xlim(np.min(self.t), np.max(self.t))
                 ax.legend()
             final_axes[-1].set_xlabel(self.X_LABEL)
-            final_axes[0].set_title(self.TITLE_PREFIX + (" (Interrupted)" if interrupted else ""))
+            final_axes[0].set_title(
+                self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
+            )
+            final_fig.tight_layout()
             display(final_fig)
             figures.append(final_fig)
             plt.close(final_fig)
@@ -209,7 +209,9 @@ class MuxTOF(BaseExperiment):
             },
             figures=figures,
             quality=QualityFlag.GOOD if self.iqdata is not None else QualityFlag.BAD,
-            quality_message="Mux TOF acquired." if self.iqdata is not None else "No data acquired.",
+            quality_message="Mux TOF acquired."
+            if self.iqdata is not None
+            else "No data acquired.",
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,

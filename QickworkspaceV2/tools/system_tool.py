@@ -29,7 +29,8 @@ def get_next_filename_labber(
     if yoko_value is not None:
         if not isinstance(yoko_value, dict):
             raise ValueError(
-                "yoko_value must be a dict with 'value' and 'unit' keys. Got: %s" % type(yoko_value).__name__
+                "yoko_value must be a dict with 'value' and 'unit' keys. Got: %s"
+                % type(yoko_value).__name__
             )
         try:
             value = yoko_value["value"]
@@ -38,7 +39,9 @@ def get_next_filename_labber(
             filename = f"{exp_name}_{value['value']:.2f}{value['unit']}{unit}"
             return os.path.join(save_path, filename)
         except KeyError:
-            raise ValueError("yoko_value dictionary must contain 'value' and 'unit' keys")
+            raise ValueError(
+                "yoko_value dictionary must contain 'value' and 'unit' keys"
+            )
     else:
         max_index = 0
         pattern = re.compile(rf"^{re.escape(exp_name)}_(\d+)\.hdf5$")
@@ -86,14 +89,18 @@ def clean_config(config):
     """Recursively clean a config dict for serialization (removes QickParam, converts numpy)."""
     try:
         from qick.asm_v2 import QickParam
+
         _qick_param_types = (QickParam,)
     except ImportError:
         _qick_param_types = ()
 
     def _clean(obj):
         if isinstance(obj, (dict, AddictDict)):
-            return {k: _clean(v) for k, v in obj.items()
-                    if not (_qick_param_types and isinstance(v, _qick_param_types))}
+            return {
+                k: _clean(v)
+                for k, v in obj.items()
+                if not (_qick_param_types and isinstance(v, _qick_param_types))
+            }
         elif isinstance(obj, (list, tuple)):
             return [_clean(i) for i in obj]
         elif isinstance(obj, set):
@@ -131,10 +138,17 @@ class ExperimentConfig:
         Keys whose values are collapsed to a scalar when all qubits share the same value.
     """
 
-    def __init__(self, data: Union[List, Dict], keys_to_unify: Optional[List[str]] = None):
+    def __init__(
+        self, data: Union[List, Dict], keys_to_unify: Optional[List[str]] = None
+    ):
         self._raw_list = data
         self.keys_to_unify = keys_to_unify or [
-            "reps", "res_length", "ro_length", "trig_time", "relax_delay",
+            "reps",
+            "res_length",
+            "ro_length",
+            "trig_time",
+            "relax_delay",
+            "nqz_res",
         ]
         self._name_map = {}
         if isinstance(self._raw_list, list):
@@ -177,12 +191,13 @@ class ExperimentConfig:
                 selected[key] = value
         return selected
 
-    def muxconfig(self, qb_list, mux_ro_ch_start=2, mux_gen=12, LO_ext=None) -> AddictDict:
-        """Build a slot-stable mux configuration for selected qubits.
+    def muxconfig(
+        self, qb_list, mux_ro_ch_start=2, mux_gen=12, LO_ext=None
+    ) -> AddictDict:
+        """Build a mux configuration for selected qubits.
 
-        The mux generator scale is set by the pulse mask count. To keep that
-        scale fixed for a chip/config, the pulse mask covers every configured
-        qubit slot while non-armed qubits get zero resonator gain.
+        The mux generator tones and readout channels remain slot-stable. For
+        example, Q1/Q3 with mux_ro_ch_start=2 uses readout channels [2, 4].
         """
         active_slots = self._resolve_indices(qb_list)
         active_set = set(active_slots)
@@ -191,13 +206,14 @@ class ExperimentConfig:
 
         for key, value in self.unified_config.items():
             if isinstance(value, list):
-                selected[key] = [value[i] if i < len(value) else None for i in all_slots]
+                selected[key] = [
+                    value[i] if i < len(value) else None for i in all_slots
+                ]
             else:
                 selected[key] = value
 
         all_names = self.qubit_names()
         active_names = [all_names[i] for i in active_slots]
-        ro_chs = [i + mux_ro_ch_start for i in all_slots]
         active_ro_chs = [i + mux_ro_ch_start for i in active_slots]
 
         res_freqs = list(selected.get("res_freq_ge", []))
@@ -209,28 +225,30 @@ class ExperimentConfig:
             values = list(values)
             if len(values) < len(all_slots):
                 values.extend([default] * (len(all_slots) - len(values)))
-            return values[:len(all_slots)]
+            return values[: len(all_slots)]
 
         res_freqs = _pad(res_freqs, None)
         if LO_ext is not None:
-            res_freqs = [freq - LO_ext if freq is not None else None for freq in res_freqs]
+            res_freqs = [
+                freq - LO_ext if freq is not None else None for freq in res_freqs
+            ]
         res_gains = _pad(res_gains, 0)
         res_phases = _pad(res_phases, 0)
         ro_phases = _pad(ro_phases, 0)
-        res_gains = [gain if slot in active_set else 0 for slot, gain in enumerate(res_gains)]
+        res_gains = [
+            gain if slot in active_set else 0 for slot, gain in enumerate(res_gains)
+        ]
 
-        selected["all_qubit_names"] = all_names
         selected["qubit_names"] = active_names
         selected["active_slots"] = active_slots
         selected["mask"] = all_slots
         selected["res_ch"] = mux_gen
-        selected["ro_chs"] = ro_chs
+        selected["ro_chs"] = active_ro_chs
         selected["active_ro_chs"] = active_ro_chs
         selected["res_freqs"] = res_freqs
         selected["res_gains"] = res_gains
         selected["res_phases"] = res_phases
         selected["ro_phases"] = ro_phases
-        selected["mux_scale_count"] = len(all_slots)
         selected["LO_ext"] = LO_ext
         selected["trig_time"] = 0.75
 
@@ -324,7 +342,9 @@ class ExperimentConfig:
                     if self._recursive_update(raw_nested_cfg, k, v):
                         updated_count += 1
             if q_index is not None:
-                print(f"Merged dictionary into {q_index}. Updated {updated_count} parameters.")
+                print(
+                    f"Merged dictionary into {q_index}. Updated {updated_count} parameters."
+                )
 
         elif isinstance(param, str) and "." not in param:
             leaf_key = param
@@ -362,7 +382,10 @@ class ExperimentConfig:
                     curr = curr[k]
                 return isinstance(curr, dict) and path_keys[-1] in curr
 
-            has_key = [_key_exists_in(self._raw_list[j], keys) for j in range(len(self._raw_list))]
+            has_key = [
+                _key_exists_in(self._raw_list[j], keys)
+                for j in range(len(self._raw_list))
+            ]
             for j in range(len(self._raw_list)):
                 if not has_key[j] and j not in target_indices:
                     cfg_j = self._raw_list[j]
@@ -383,7 +406,10 @@ class ExperimentConfig:
                 for k in keys[:-1]:
                     if isinstance(target, dict):
                         if k not in target:
-                            warnings.warn(f"Creating new nested key '{k}' in path '{key_path}'", stacklevel=2)
+                            warnings.warn(
+                                f"Creating new nested key '{k}' in path '{key_path}'",
+                                stacklevel=2,
+                            )
                         target = target.setdefault(k, {})
                     else:
                         target = getattr(target, k)
@@ -395,7 +421,9 @@ class ExperimentConfig:
                 else:
                     setattr(target, leaf_key, val_to_set)
         else:
-            raise TypeError("First argument must be a string (key path) or a dict (config).")
+            raise TypeError(
+                "First argument must be a string (key path) or a dict (config)."
+            )
 
         self._mark_dirty()
 
@@ -446,6 +474,7 @@ class ExperimentConfig:
 
     def save_to_py(self, filename: str = "latest_cfg.py") -> None:
         from ..config.system_cfg import DATA_PATH
+
         clean_data = self._clean_data(self._raw_list)
         with open(filename, "w", encoding="utf-8") as f:
             f.write("# Auto-generated configuration file\n")
@@ -463,7 +492,9 @@ class ExperimentConfig:
             name = clean_data.get("name", f"Q{indices[0]}")
             filename = f"{name}_config.py"
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(f"# Auto-generated configuration file for {clean_data.get('name', q_id)}\n")
+            f.write(
+                f"# Auto-generated configuration file for {clean_data.get('name', q_id)}\n"
+            )
             f.write("from addict import Dict\n\n")
             f.write(f"{var_name} = ")
             pprint.pprint(clean_data, stream=f, width=120, sort_dicts=False)
@@ -490,7 +521,9 @@ class ExperimentConfig:
 
     def _dump_dict_with_spacing(self, data, is_list_item=False, indent=0) -> str:
         if not isinstance(data, dict):
-            if isinstance(data, list) and all(not isinstance(x, (dict, list)) for x in data):
+            if isinstance(data, list) and all(
+                not isinstance(x, (dict, list)) for x in data
+            ):
                 return yaml.dump(data, default_flow_style=True, sort_keys=False).strip()
             return yaml.dump(data, default_flow_style=False, sort_keys=False).strip()
 
@@ -511,11 +544,17 @@ class ExperimentConfig:
             if isinstance(val, dict):
                 parts.append(f"{line_pfx}{key}:")
                 parts.append(self._dump_dict_with_spacing(val, indent=eff_indent + 1))
-            elif isinstance(val, list) and all(not isinstance(x, (dict, list)) for x in val):
-                list_str = yaml.dump(val, default_flow_style=True, sort_keys=False).strip()
+            elif isinstance(val, list) and all(
+                not isinstance(x, (dict, list)) for x in val
+            ):
+                list_str = yaml.dump(
+                    val, default_flow_style=True, sort_keys=False
+                ).strip()
                 parts.append(f"{line_pfx}{key}: {list_str}")
             else:
-                dumped = yaml.dump({key: val}, default_flow_style=False, sort_keys=False).strip()
+                dumped = yaml.dump(
+                    {key: val}, default_flow_style=False, sort_keys=False
+                ).strip()
                 lines = dumped.split("\n")
                 parts.append(f"{line_pfx}{lines[0]}")
                 for line in lines[1:]:
@@ -560,13 +599,18 @@ class ExperimentConfig:
     def _clean_data(self, data: Any) -> Any:
         try:
             from qick.asm_v2 import QickParam
+
             _qp = (QickParam,)
         except ImportError:
             _qp = ()
 
         def _clean(obj):
             if isinstance(obj, (dict, AddictDict)):
-                return {k: _clean(v) for k, v in obj.items() if not (_qp and isinstance(v, _qp))}
+                return {
+                    k: _clean(v)
+                    for k, v in obj.items()
+                    if not (_qp and isinstance(v, _qp))
+                }
             elif isinstance(obj, list):
                 return [_clean(v) for v in obj]
             elif isinstance(obj, np.ndarray):
@@ -600,7 +644,11 @@ class ExperimentConfig:
     def _refine_cfg(self, collected_data) -> AddictDict:
         refined_dict = AddictDict(collected_data)
         for key, value_list in refined_dict.items():
-            if key in self.keys_to_unify and isinstance(value_list, list) and value_list:
+            if (
+                key in self.keys_to_unify
+                and isinstance(value_list, list)
+                and value_list
+            ):
                 unique_values = set(value_list)
                 if len(unique_values) == 1:
                     single_value = unique_values.pop()
@@ -622,8 +670,14 @@ class ExperimentConfig:
 def auto_unit(value, base_unit=""):
     """Scale a numeric value to the most appropriate SI metric prefix."""
     prefixes = {
-        -12: "p", -9: "n", -6: "u", -3: "m",
-        0: "", 3: "k", 6: "M", 9: "G",
+        -12: "p",
+        -9: "n",
+        -6: "u",
+        -3: "m",
+        0: "",
+        3: "k",
+        6: "M",
+        9: "G",
     }
     arr = np.array(value, dtype=float)
     maxval = np.max(np.abs(arr))
