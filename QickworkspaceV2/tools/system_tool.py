@@ -473,12 +473,9 @@ class ExperimentConfig:
     read_qubit_config = read_config
 
     def save_to_py(self, filename: str = "latest_cfg.py") -> None:
-        from ..config.system_cfg import DATA_PATH
-
         clean_data = self._clean_data(self._raw_list)
         with open(filename, "w", encoding="utf-8") as f:
             f.write("# Auto-generated configuration file\n")
-            f.write(f"DATA_PATH = r'{DATA_PATH}'\n\n")
             f.write("config_list = ")
             pprint.pprint(clean_data, stream=f, width=120, sort_dicts=False)
             f.write("\n")

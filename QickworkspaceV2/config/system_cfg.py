@@ -1,16 +1,13 @@
 ﻿"""
-system_cfg — experiment configuration and hardware channel map.
+system_cfg — experiment configuration template.
 
-This module is the single place to edit:
-  * DATA_PATH   — where HDF5 files are saved
-  * config_list — hardware config dicts, one per qubit (nested structure)
-  * ExperimentConfig — re-exported from QickworkspaceV2.tools.system_tool
-                       (the full-featured version with dot-notation, auto-search,
-                        addict.Dict returns, and muxconfig)
+This file keeps a sample ``config_list`` that users can copy and edit for a
+specific measurement setup. It is intentionally not imported from
+``QickworkspaceV2.config`` as package API.
 
-Usage (matches original qick_workspace pattern exactly):
+Typical notebook usage:
     from QickworkspaceV2.tools.system_tool import ExperimentConfig
-    from QickworkspaceV2.config.system_cfg import config_list, DATA_PATH
+    from QickworkspaceV2.config.system_cfg import config_list
 
     qubit = "Q1"
     config_all = ExperimentConfig(config_list)
@@ -30,12 +27,6 @@ Usage (matches original qick_workspace pattern exactly):
         ("relax_delay", 0),
     ])
 """
-
-from ..tools.system_tool import ExperimentConfig  # noqa: F401  full-featured re-export
-
-# ── Data storage path ────────────────────────────────────────────────────────
-# Edit this to point at your local Labber data directory.
-DATA_PATH: str = r"D:\Labber_Data\Jay\purcell_tmon\Rshield\temperature"
 
 # ── Hardware configuration ───────────────────────────────────────────────────
 # One dict per qubit.  Nested sub-dicts (ch, res, qb, cooling) are flattened

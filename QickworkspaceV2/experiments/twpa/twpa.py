@@ -19,7 +19,6 @@ except ImportError:
 
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
-from ...config.system_cfg import DATA_PATH
 from ...tools.scoring import (
     score_ai_twpa_c_gain_data,
     find_best_operation_point,
@@ -104,7 +103,7 @@ def _save_twpa_xarray_labber(
 
     title_suffix = f"_{_safe_labber_token(title)}" if title else ""
     file_name = f"{expt_name}_{qb_idx}{title_suffix}"
-    file_path = get_next_filename_labber(BaseExperiment._data_path or DATA_PATH, file_name)
+    file_path = get_next_filename_labber(BaseExperiment._require_data_path(), file_name)
 
     metadata = _trace_coordinate_comment(da_save, outer_dims)
     if extra_comment:
@@ -265,7 +264,7 @@ class TWPAFlux(BaseExperiment):
                    "yoko_mode": self._yoko_mode or "none", "normalized": 1,
                    "reference_ifbl": smallest_flux},
         )
-        root = save_dir or BaseExperiment._data_path or DATA_PATH
+        root = save_dir or BaseExperiment._require_data_path()
         yy, mm, dd = datetime.datetime.today().strftime("%Y-%m-%d").split("-")
         out_dir = os.path.join(root, yy, mm, f"Data_{mm}{dd}")
         os.makedirs(out_dir, exist_ok=True)

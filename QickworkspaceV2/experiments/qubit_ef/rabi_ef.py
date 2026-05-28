@@ -407,7 +407,6 @@ class QubitTemp(BaseExperiment):
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
         """Save meas/ref EF Rabi raw data as a two-state Labber log."""
-        from ...config.system_cfg import DATA_PATH
         from ...tools.system_tool import (
             config_to_yaml,
             get_next_filename_labber,
@@ -418,7 +417,7 @@ class QubitTemp(BaseExperiment):
             raise RuntimeError("Call run() first.")
 
         expt_name = f"{self.EXPT_NAME}_{qb_idx}" if title is None else f"{self.EXPT_NAME}_{qb_idx}_{title}"
-        save_dir = BaseExperiment._data_path or DATA_PATH
+        save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         dict_val = config_all.to_yaml(q_id=qb_idx) if config_all is not None else config_to_yaml(self.cfg)
 

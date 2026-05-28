@@ -1,3 +1,1 @@
-from .system_cfg import ExperimentConfig, DATA_PATH, config_list
-
-__all__ = ["ExperimentConfig", "DATA_PATH", "config_list"]
+"""Configuration templates live in submodules and are not package-level API."""

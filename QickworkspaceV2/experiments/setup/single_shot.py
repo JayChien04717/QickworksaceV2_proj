@@ -9,7 +9,6 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram
-from ...config.system_cfg import DATA_PATH
 from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
 from .singleshot_utils import plot_hist, general_hist, hist, _fit_gmm
 
@@ -116,7 +115,7 @@ class SingleShot_gef:
         from ...core.base_experiment import BaseExperiment
         has_f = "If" in self.data
         expt_name = ("s000_singleshot_gef" if has_f else "s000_singleshot_ge") + f"_{qb_idx}"
-        save_dir = BaseExperiment._data_path or DATA_PATH
+        save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         print("Current data file: " + file_path)
         dict_val = config_to_yaml(self.cfg)
