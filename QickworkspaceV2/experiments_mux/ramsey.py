@@ -297,14 +297,16 @@ class MuxRamsey(BaseExperiment):
         corrections = {}
 
         for name, slot in zip(qubit_names, active_slots):
-            detune = self.result.fit_result.get(f"{name}_detune_MHz", (None,))[0]
-            if detune is None:
-                print(f"{name}: detune not available.")
+            fit_freq = self.result.fit_result.get(f"{name}_fit_freq_MHz", (None,))[0]
+            if fit_freq is None:
+                print(f"{name}: fitted Ramsey frequency not available.")
                 continue
 
+            ramsey_freq = float(cfg["ramsey_freq"][slot])
+            detune = float(fit_freq) - ramsey_freq
             old_freq = float(qb_freqs[slot])
-            delta = round(float(detune), 2)
-            if abs(float(detune)) > 0.005:
+            delta = round(detune, 2)
+            if abs(detune) > 0.005:
                 new_freq = old_freq - delta
                 qb_freqs[slot] = new_freq
                 status = "corrected"
@@ -317,8 +319,9 @@ class MuxRamsey(BaseExperiment):
             corrections[name] = {
                 "old_qb_freq_ge": old_freq,
                 "new_qb_freq_ge": new_freq,
-                "detune_MHz": float(detune),
-                "ramsey_freq_MHz": float(cfg["ramsey_freq"][slot]),
+                "fit_freq_MHz": float(fit_freq),
+                "ramsey_freq_MHz": ramsey_freq,
+                "detune_MHz": detune,
                 "detune_error_MHz": delta,
                 "status": status,
             }

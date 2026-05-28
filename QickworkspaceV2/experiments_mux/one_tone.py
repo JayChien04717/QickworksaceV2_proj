@@ -231,8 +231,8 @@ class MuxOneTone(BaseExperiment):
                 if not np.any(finite):
                     continue
                 freq_axis = center + self.freq_offsets
-                res_freq, method = MuxOneTone._fit_res_freq(
-                    freq_axis[finite], iq_trace[finite], trace[finite]
+                res_freq, method = MuxOneTone._fit_res_freq_mag_min(
+                    freq_axis[finite], trace[finite]
                 )
                 fit_result[f"{name}_res_freq_mhz"] = (round(float(res_freq), 6), None)
                 fit_method[name] = method
@@ -297,25 +297,9 @@ class MuxOneTone(BaseExperiment):
         return result
 
     @staticmethod
-    def _fit_res_freq(freq_axis_mhz, iq_trace, plot_trace):
-        try:
-            from ..tools.fitting import fithanger
-
-            xdata = np.asarray(freq_axis_mhz, dtype=float)
-            ydata = np.abs(np.asarray(iq_trace, dtype=complex))
-            popt, pcov, _ = fithanger(xdata, ydata)
-            f0 = float(popt[0])
-            if not np.isfinite(f0) or f0 < np.min(xdata) or f0 > np.max(xdata):
-                raise RuntimeError("hanger fit returned invalid f0")
-            return f0, "hanger"
-        except Exception:
-            min_idx = int(np.argmin(plot_trace))
-            max_idx = int(np.argmax(plot_trace))
-            median = np.median(plot_trace)
-            contrast_min = abs(plot_trace[min_idx] - median)
-            contrast_max = abs(plot_trace[max_idx] - median)
-            best_idx = min_idx if contrast_min >= contrast_max else max_idx
-            return float(np.asarray(freq_axis_mhz)[best_idx]), "extremum"
+    def _fit_res_freq_mag_min(freq_axis_mhz, plot_trace):
+        idx = int(np.nanargmin(plot_trace))
+        return float(np.asarray(freq_axis_mhz, dtype=float)[idx]), "mag_min"
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):

@@ -108,6 +108,7 @@ class MuxPunchout(BaseExperiment):
         f_steps=101,
         gains=None,
         iq_process="abs",
+        normalize_per_power=True,
         plot=False,
     ):
         cfg = dict(self.cfg)
@@ -159,16 +160,20 @@ class MuxPunchout(BaseExperiment):
 
         figures = []
         plot_data = self._process_plot_data(self.iqdata, iq_process)
+        display_data = (
+            self._normalize_per_power(plot_data) if normalize_per_power else plot_data
+        )
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             fig, axes = plt.subplots(
                 trace_count, 1, figsize=(8, max(3, 3 * trace_count)), squeeze=False
             )
-            for ax, name, center, trace in zip(axes[:, 0], qubit_names, centers_abs, plot_data):
+            for ax, name, center, trace in zip(axes[:, 0], qubit_names, centers_abs, display_data):
                 x = center + self.freq_offsets
                 mesh = ax.pcolormesh(x, self.gain_axis, trace, shading="auto")
                 ax.set_ylabel(f"{name} gain")
                 ax.set_xlabel(self.X_LABEL)
-                fig.colorbar(mesh, ax=ax, label=iq_process)
+                cbar_label = f"{iq_process} normalized per power" if normalize_per_power else iq_process
+                fig.colorbar(mesh, ax=ax, label=cbar_label)
             axes[0, 0].set_title(
                 self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
             )
@@ -191,6 +196,7 @@ class MuxPunchout(BaseExperiment):
                 "center_freqs_mhz": centers_abs.tolist(),
                 "frequency_axes_mhz": self.freq_axes,
                 "gain_axis": self.gain_axis.tolist(),
+                "normalize_per_power": bool(normalize_per_power),
                 "points_acquired": points_done,
                 "LO_ext": cfg.get("LO_ext"),
             },
@@ -216,6 +222,15 @@ class MuxPunchout(BaseExperiment):
         if iq_process == "phase":
             return np.unwrap(np.angle(iqdata), axis=-1)
         return np.abs(iqdata)
+
+    @staticmethod
+    def _normalize_per_power(plot_data):
+        data = np.asarray(plot_data, dtype=float)
+        row_min = np.nanmin(data, axis=-1, keepdims=True)
+        row_max = np.nanmax(data, axis=-1, keepdims=True)
+        row_span = row_max - row_min
+        normalized = (data - row_min) / np.where(row_span > 0, row_span, 1.0)
+        return normalized
 
 
 __all__ = ["MuxPunchout", "MuxPunchoutProgram"]
