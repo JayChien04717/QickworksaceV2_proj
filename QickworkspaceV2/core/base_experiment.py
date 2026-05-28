@@ -76,6 +76,7 @@ class BaseExperiment:
     @classmethod
     def setup(cls, soc, soccfg, data_path: str):
         """Initialise shared QICK session (call once at notebook startup)."""
+        data_path = cls._validate_data_path(data_path)
         cls._soc = soc
         cls._soccfg = soccfg
         cls._data_path = data_path
@@ -86,9 +87,10 @@ class BaseExperiment:
         ns_host: str,
         ns_port: int = 8888,
         proxy_name: str = "myqick",
-        data_path: str = "",
+        data_path: Optional[str] = None,
     ):
         """Connect to QICK through Pyro4 and activate it for all experiments."""
+        data_path = cls._validate_data_path(data_path)
         try:
             import Pyro4
             from qick.pyro import make_proxy
@@ -115,7 +117,26 @@ class BaseExperiment:
 
     @classmethod
     def set_data_path(cls, data_path: str):
-        cls._data_path = data_path
+        cls._data_path = cls._validate_data_path(data_path)
+
+    @staticmethod
+    def _validate_data_path(data_path: Optional[str]) -> str:
+        if data_path is None or str(data_path).strip() == "":
+            raise ValueError(
+                "data_path is required. Call BaseExperiment.setup(soc, soccfg, data_path=...) "
+                "or BaseExperiment.connect_pyro4(..., data_path=...) before running experiments."
+            )
+        return str(data_path)
+
+    @classmethod
+    def _require_data_path(cls) -> str:
+        if cls._data_path is None or str(cls._data_path).strip() == "":
+            raise RuntimeError(
+                "BaseExperiment data path is not configured. Call "
+                "BaseExperiment.setup(soc, soccfg, data_path=...) or "
+                "BaseExperiment.connect_pyro4(..., data_path=...) first."
+            )
+        return str(cls._data_path)
 
     # ── Subclass metadata ────────────────────────────────────────────────────
     EXPT_NAME: str = ""
@@ -351,7 +372,6 @@ class BaseExperiment:
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
         """Legacy Labber-format HDF5 save (unchanged from original)."""
-        from ..config.system_cfg import DATA_PATH
         from ..tools.system_tool import (
             config_to_yaml,
             get_next_filename_labber,
@@ -363,7 +383,7 @@ class BaseExperiment:
         else:
             expt_name = f"{self.EXPT_NAME}_{qb_idx}"
 
-        save_dir = BaseExperiment._data_path or DATA_PATH
+        save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
 
         if config_all is not None:
