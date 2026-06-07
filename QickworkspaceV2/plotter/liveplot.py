@@ -391,6 +391,7 @@ def liveplotfun(
     get_prog_callback=None,
     show_final_plot=True,
     iq_process="all",
+    liveplot=True,
 ):
     """
     General-purpose live plotter (Facade pattern).
@@ -414,6 +415,50 @@ def liveplotfun(
     interrupted : bool
     n_done : int
     """
+    if not liveplot:
+        # Bypasses Matplotlib/IPython completely.
+        
+        # 1. Yoko Sweep
+        if instrument_manager is not None and yoko_name is not None:
+            if y_axis_vals is None:
+                raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
+            iqdata_full = np.zeros((len(y_axis_vals), len(x_axis_vals)), dtype=complex)
+            for idx, val in enumerate(tqdm(y_axis_vals, desc=f"Sweeping Yoko {yoko_name}")):
+                instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
+                iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
+                iqdata_full[idx, :] = _iq_to_complex(iq_list)
+            return iqdata_full, False, len(y_axis_vals)
+            
+        # 2. 2D Scan
+        elif scan_x_axis is not None and scan_y_axis is not None:
+            if get_prog_callback is None:
+                raise ValueError("get_prog_callback must be provided for 2D scan.")
+            iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)
+            for y_idx, y_val in enumerate(tqdm(scan_y_axis, desc="2D Outer Scan")):
+                for x_idx, x_val in enumerate(scan_x_axis):
+                    prog_instance = get_prog_callback(x_val, y_val)
+                    iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
+                    iqdata_full[y_idx, x_idx] = _iq_to_complex(iq_list)
+            return iqdata_full, False, len(scan_y_axis)
+            
+        # 3. 1D Scan
+        elif scan_x_axis is not None:
+            if get_prog_callback is None:
+                raise ValueError("get_prog_callback must be provided for 1D scan.")
+            iqlst = []
+            for val in tqdm(scan_x_axis, desc="1D Scan"):
+                prog_instance = get_prog_callback(val)
+                iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
+                iqlst.append(_iq_to_complex(iq_list))
+            return np.array(iqlst), False, len(scan_x_axis)
+            
+        # 4. Standard Software Averaging
+        else:
+            # Directly use acquire(rounds=py_avg)
+            iq_list = prog.acquire(soc, rounds=py_avg, progress=True)
+            iqdata = _iq_to_complex(iq_list)
+            return iqdata, False, py_avg
+
     if instrument_manager is not None and yoko_name is not None:
         if y_axis_vals is None:
             raise ValueError("y_axis_vals must be provided for a Yoko sweep.")

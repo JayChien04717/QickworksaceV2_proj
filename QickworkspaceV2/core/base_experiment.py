@@ -147,6 +147,7 @@ class BaseExperiment:
     SWEEP_KEYS_TO_REMOVE: list = []
 
     IQ_PROCESS: str = "all"
+    LivePlot: bool = True
 
     YOKO_VOLTAGE_RAMP_STEP: float = 1e-5
     YOKO_CURRENT_RAMP_STEP: float = 1e-8
@@ -226,6 +227,7 @@ class BaseExperiment:
         py_avg: int,
         iq_process: Optional[str] = None,
         show_final_plot: bool = False,
+        liveplot: Optional[bool] = None,
         **kwargs,
     ) -> ExperimentData:
         """
@@ -240,6 +242,9 @@ class BaseExperiment:
                 freq = float(expt.run(py_avg))
         """
         from ..plotter.liveplot import liveplotfun
+
+        if liveplot is None:
+            liveplot = self.LivePlot
 
         if iq_process is not None:
             self.IQ_PROCESS = iq_process
@@ -301,6 +306,7 @@ class BaseExperiment:
             yoko_ramp_interval=self.YOKO_RAMP_INTERVAL,
             show_final_plot=show_final_plot,
             iq_process=self.IQ_PROCESS,
+            liveplot=liveplot,
         )
 
         if self.iqdata is None:
