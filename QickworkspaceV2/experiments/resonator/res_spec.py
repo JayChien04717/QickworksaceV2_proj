@@ -34,7 +34,7 @@ class ResonatorSpec(BaseExperiment):
     Lorentzian to extract resonator parameters.
     """
 
-    EXPT_NAME = "s002_onetone_ge"
+    EXPT_NAME = "s002_res_ge"
     TAG = "OneTone"
     X_LABEL = "Frequency (MHz)"
     TITLE_PREFIX = "Resonator Spectroscopy"

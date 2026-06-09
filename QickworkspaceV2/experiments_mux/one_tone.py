@@ -61,7 +61,7 @@ class MuxOneToneProgram(AveragerProgramV2):
 class MuxOneTone(BaseExperiment):
     """Mux one-tone spectroscopy with one trace per active qubit/readout."""
 
-    EXPT_NAME = "s002_mux_onetone_ge"
+    EXPT_NAME = "s002_mux_res_ge"
     TAG = "MuxOneTone"
     X_LABEL = "Detuning from center (MHz)"
     Y_LABEL = "ADC Units"

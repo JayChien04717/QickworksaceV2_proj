@@ -36,7 +36,7 @@ class ResonatorSpec_ef(BaseExperiment):
     Circle fit extracts resonator parameters in excited-state frame.
     """
 
-    EXPT_NAME = "s009_onetone_ef"
+    EXPT_NAME = "s009_res_ef"
     TAG = "OneTone"
     X_LABEL = "Frequency (MHz)"
     TITLE_PREFIX = "Resonator Spectroscopy (ef)"

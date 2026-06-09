@@ -42,7 +42,7 @@ class ResonatorSpecFlux(BaseExperiment):
     Sweeps resonator frequency (inner axis) and flux/Yoko (outer axis).
     """
 
-    EXPT_NAME = "s002c_onetone_flux_ge"
+    EXPT_NAME = "s002c_res_flux_ge"
     TAG = "OneTone"
     X_LABEL = "Frequency (MHz)"
     Y_LABEL = "Flux Gain / Yoko (A)"
