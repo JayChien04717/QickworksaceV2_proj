@@ -141,6 +141,83 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             data.quality_message = f"all fits failed: {original_exc}"
 
 
+class DispersiveShiftAnalysis(BaseAnalysis):
+    """Fit |g> and |e> resonator traces and report both 2chi and chi."""
+
+    thresholds = {}
+
+    def _run(self, data: ExperimentData) -> None:
+        traces = np.asarray(data.raw_iq)
+        if data.x_axis is None or traces.ndim < 2 or traces.shape[0] != 2:
+            data.quality = QualityFlag.BAD
+            data.quality_message = "Expected raw_iq with shape (2, frequency)"
+            return
+
+        fitted = []
+        for state, trace in zip(("g", "e"), traces):
+            spectrum = ExperimentData(
+                experiment_type=f"resonator_spec_{state}",
+                raw_iq=np.squeeze(trace),
+                x_axis=np.asarray(data.x_axis),
+                config=dict(data.config),
+            )
+            ResonatorSpecAnalysis().run(spectrum)
+            frequency = (
+                spectrum.fit_result.get("f_res[MHz]")
+                or spectrum.fit_result.get("f0_MHz")
+            )
+            if frequency is None:
+                data.quality = QualityFlag.BAD
+                data.quality_message = f"Could not fit resonator spectrum for |{state}>"
+                return
+            fitted.append((float(frequency[0]), frequency[1]))
+
+        f_g, f_e = fitted[0][0], fitted[1][0]
+        shift = f_e - f_g
+        errors = [item[1] for item in fitted]
+        shift_error = None
+        if all(error is not None and np.isfinite(error) for error in errors):
+            shift_error = float(np.hypot(*errors))
+        data.fit_result = {
+            "f_res_g_MHz": fitted[0],
+            "f_res_e_MHz": fitted[1],
+            "resonator_shift_MHz": (shift, shift_error),
+            "abs_resonator_shift_MHz": (abs(shift), shift_error),
+            "chi_MHz": (shift / 2, None if shift_error is None else shift_error / 2),
+            "abs_chi_MHz": (
+                abs(shift) / 2,
+                None if shift_error is None else shift_error / 2,
+            ),
+        }
+        data.scalar_result = shift / 2
+
+    def plot(self, data: ExperimentData) -> None:
+        import matplotlib.pyplot as plt
+
+        traces = np.asarray(data.raw_iq)
+        if data.x_axis is None or traces.ndim < 2:
+            return
+        f_g = data.get_param("f_res_g_MHz")
+        f_e = data.get_param("f_res_e_MHz")
+        chi = data.get_param("chi_MHz")
+
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(data.x_axis, np.abs(traces[0]), label="|g>")
+        ax.plot(data.x_axis, np.abs(traces[1]), label="|e>")
+        if f_g is not None:
+            ax.axvline(f_g, color="C0", linestyle="--", alpha=0.7)
+        if f_e is not None:
+            ax.axvline(f_e, color="C1", linestyle="--", alpha=0.7)
+        title = "Dispersive Shift"
+        if chi is not None:
+            title += f" | chi = {chi:.4f} MHz, 2chi = {2 * chi:.4f} MHz"
+        ax.set(title=title, xlabel="Frequency (MHz)", ylabel="|IQ| (ADC unit)")
+        ax.legend()
+        ax.grid(alpha=0.25)
+        fig.tight_layout()
+        plt.show()
+
+
 class ResonatorPunchoutAnalysis(BaseAnalysis):
     """Analysis for resonator punchout (s002b) — detect critical power."""
 

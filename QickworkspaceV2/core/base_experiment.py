@@ -289,8 +289,8 @@ class BaseExperiment:
             When False, only render the current fit/analysis state.
             Retained for backward compatibility.
         plot_analysis : bool or None, optional
-            Preferred explicit name for ``analyze``. Defaults to True when
-            neither argument is supplied.
+            True reruns analysis and draws its fit plot. False draws only the
+            stored measurement data. Defaults to True.
         """
         if analyze is not None and plot_analysis is not None and analyze != plot_analysis:
             raise ValueError("analyze and plot_analysis specify conflicting values")
@@ -304,13 +304,53 @@ class BaseExperiment:
         if self.Analysis is None:
             raise RuntimeError(f"{self.__class__.__name__} has no Analysis class.")
 
-        analysis_inst = self.Analysis()
         result = self.result
-        if should_analyze:
-            result = analysis_inst.run(result)
-            self.result = result
+        if not should_analyze:
+            self._plot_raw_result(result)
+            return result
+
+        analysis_inst = self.Analysis()
+        result = analysis_inst.run(result)
+        self.result = result
         analysis_inst.plot(result)
         return result
+
+    def _plot_raw_result(self, result: ExperimentData) -> None:
+        """Plot stored data without fitting or rendering a fit curve."""
+        import matplotlib.pyplot as plt
+
+        if result.raw_iq is None:
+            raise RuntimeError("No raw data to plot. Call run() first.")
+
+        raw = np.asarray(result.raw_iq).squeeze()
+        process = str(result.metadata.get("iq_process", "abs")).lower()
+        if process in {"real", "i", "avgi"}:
+            values, ylabel = np.real(raw), "I (ADC unit)"
+        elif process in {"imag", "q", "avgq"}:
+            values, ylabel = np.imag(raw), "Q (ADC unit)"
+        elif process == "phase":
+            values, ylabel = np.unwrap(np.angle(raw)), "Phase (rad)"
+        else:
+            values, ylabel = np.abs(raw), "|IQ| (ADC unit)"
+
+        x = result.x_axis
+        if values.ndim == 1:
+            x = np.arange(values.size) if x is None else x
+            plt.plot(x, values, "o-", markersize=3)
+        elif values.ndim == 2 and x is not None and values.shape[-1] == len(x):
+            for index, trace in enumerate(values):
+                plt.plot(x, trace, label=f"Trace {index}")
+            plt.legend()
+        else:
+            plt.imshow(values, aspect="auto", origin="lower")
+            plt.colorbar(label=ylabel)
+
+        plt.xlabel(result.x_name or self.X_LABEL or "Sweep")
+        plt.ylabel(ylabel)
+        plt.title(self.TITLE_PREFIX or result.experiment_type)
+        plt.grid(alpha=0.25)
+        plt.tight_layout()
+        plt.show()
 
     def _prepare_run_options(
         self,
