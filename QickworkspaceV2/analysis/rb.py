@@ -27,13 +27,14 @@ class RBAnalysis(BaseAnalysis):
         from ..tools.fitting import fitrb, rb_func
 
         x = data.x_axis  # Clifford lengths
-        y = np.abs(data.raw_iq) if data.raw_iq.ndim == 1 else np.abs(data.raw_iq).mean(axis=-1)
+        raw = np.abs(np.asarray(data.raw_iq))
+        y = raw if raw.ndim == 1 else raw.reshape(len(data.x_axis), -1).mean(axis=1)
 
         try:
-            popt, pcov, _ = fitrb(x, y)
+            popt, pcov = fitrb(x, y)
             err = np.sqrt(np.diag(pcov))
             # RB model: A * p^m + B  where p = 1 - EPC * d/(d-1), d=2 for single qubit
-            A, p, B = popt
+            p, A, B = popt
             # EPC = (1 - p) * (d-1)/d  for d=2 → EPC = (1-p)/2
             d = 2
             epc = (1 - p) * (d - 1) / d
@@ -44,8 +45,8 @@ class RBAnalysis(BaseAnalysis):
             data.fit_result = {
                 "epc": (round(epc, 6), None),
                 "fidelity": (round(fidelity, 6), None),
-                "p": (p, err[1]),
-                "A": (A, err[0]),
+                "p": (p, err[0]),
+                "A": (A, err[1]),
                 "B": (B, err[2]),
             }
             data.scalar_result = fidelity

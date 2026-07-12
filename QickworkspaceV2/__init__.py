@@ -3,17 +3,20 @@ QickworkspaceV2 — IBM/IQM-style automated quantum calibration framework.
 
 Quick start
 -----------
-    from .core.base_experiment import BaseExperiment
-    from .config.system_cfg import ExperimentConfig
-    from .calibration import CalibrationStore, AutoCalibrate
-    from .experiments import ResonatorSpec, QubitSpec, T1
+    from QickworkspaceV2 import BaseExperiment, ExperimentConfig
+    from QickworkspaceV2.calibration import CalibrationStore, AutoCalibrate
+    from QickworkspaceV2.experiments import ResonatorSpec, QubitSpec, T1
+    from my_lab_config import config_list
 
     # --- Hardware setup ---
-    BaseExperiment.connect_pyro4("192.168.1.100", ns_port=8888)
+    BaseExperiment.connect_pyro4(
+        "192.168.1.100",
+        ns_port=8888,
+        data_path=r"D:\Labber_Data\my_experiment",
+    )
 
-    # --- Config ---
-    from .config.system_cfg import ExperimentConfig
-    cfg_all = ExperimentConfig()
+    # --- Config (the source module may live outside this project) ---
+    cfg_all = ExperimentConfig(config_list)
 
     # --- Single experiment ---
     cfg = cfg_all.get_qubit("Q1")
@@ -39,7 +42,7 @@ from .core.composite import BatchExperiment, ParallelExperiment
 from .calibration import CalibrationStore, CalibrationGraph, CalibrationNode, CalibrationMonitor, AutoCalibrate
 
 _LAZY_EXPORTS = {
-    "ExperimentConfig": ".config.system_cfg",
+    "ExperimentConfig": ".tools.system_tool",
     "SingleShot_gef": ".experiments.setup",
     "SingleShot_ge_opt": ".experiments.setup",
     "hist": ".experiments.setup",
@@ -47,10 +50,6 @@ _LAZY_EXPORTS = {
     "ResonatorSpec": ".experiments.resonator",
     "Punchout": ".experiments.resonator",
     "ResonatorSpecFlux": ".experiments.resonator",
-    "TWPAFlux": ".experiments.twpa",
-    "TWPAGain": ".experiments.twpa",
-    "TWPAGainPower": ".experiments.twpa",
-    "TWPAPowerScan": ".experiments.twpa",
     "QubitSpec": ".experiments.qubit_ge",
     "QubitSpecFlux": ".experiments.qubit_ge",
     "TimeRabi": ".experiments.qubit_ge",
@@ -102,8 +101,6 @@ __all__ = [
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
     # experiments — resonator
     "ResonatorSpec", "Punchout", "ResonatorSpecFlux",
-    # experiments — twpa
-    "TWPAFlux", "TWPAGain", "TWPAGainPower", "TWPAPowerScan",
     # experiments — qubit ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     # experiments — coherence

@@ -1,7 +1,7 @@
 # QickworkspaceV2
 
 Self-contained QICK-based quantum calibration workspace for running resonator,
-qubit, coherence, single-shot, TWPA, and calibration pipeline experiments.
+qubit, coherence, single-shot, and calibration pipeline experiments.
 
 This repository is intended to replace the older `qick_workspace` codebase. All
 shared experiment, fitting, plotting, instrument, and calibration utilities live
@@ -12,7 +12,7 @@ inside this package.
 - Unified experiment wrapper built around `BaseExperiment`
 - QICK program helpers through `BaseProgram`
 - Notebook-friendly experiment results through `ExperimentData`
-- Resonator, qubit, coherence, setup, characterization, and TWPA experiments
+- Resonator, qubit, coherence, setup, and characterization experiments
 - Calibration store and automated ge-transition calibration pipeline
 - HDF5/Labber-style data saving helpers
 - FastAPI service for async experiment and calibration jobs

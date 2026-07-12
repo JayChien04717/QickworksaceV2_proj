@@ -150,7 +150,7 @@ class TOF(BaseExperiment):
         self.result = result
         return result
 
-    def plot(self, threshold=1.5):
+    def plot(self, threshold=1.5, *, plot_analysis=True):
         if self.iq_list is None:
             print("No data. Run the experiment first.")
             return
