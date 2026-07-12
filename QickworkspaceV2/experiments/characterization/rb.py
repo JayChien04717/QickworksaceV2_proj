@@ -148,12 +148,17 @@ class RandomizedBenchmarking(BaseExperiment):
             for idx in range(n_depths)
         ]
 
+        raw_iq = np.asarray(self.rb_result)
         _proc = np.real if iq_process == "real" else np.abs
-        avg = _proc(np.array(self.rb_result)).mean(axis=1)
+        avg = _proc(raw_iq).reshape(n_depths, -1).mean(axis=1)
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
+            raw_iq=raw_iq,
             x_axis=self.x.astype(float),
             y_axis=avg,
+            config=self._snapshot_config(),
+            metadata={"iq_process": iq_process, "number_sample": number_sample},
+            avg_count=py_avg,
             quality=QualityFlag.NO_INFORMATION,
         )
         if self.Analysis is not None:
@@ -161,13 +166,16 @@ class RandomizedBenchmarking(BaseExperiment):
         self.result = result
         return result
 
-    def plot(self, label: str, color=None, ax=None, marker="o", show_individual=False):
+    def plot(
+        self, label: str = "RB", color=None, ax=None, marker="o",
+        show_individual=False, *, plot_analysis=True,
+    ):
         if self.x is None or self.rb_result is None:
             raise RuntimeError("Call run() first.")
         _proc = np.real if self._iq_process == "real" else np.abs
         raw = np.array(self.rb_result)
         amp = _proc(raw)
-        avg = amp.mean(axis=1)
+        avg = amp.reshape(len(self.x), -1).mean(axis=1)
         pOpt, pCov = fitrb(self.x, avg)
         p_fit = pOpt[0]
         p_fit_err = float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
@@ -203,7 +211,8 @@ class RandomizedBenchmarking(BaseExperiment):
             expt_name = f"s015_RB_{qb_idx}_ref"
         save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        dict_val = config_all.to_yaml(q_id=qb_idx) if config_all is not None else config_to_yaml(self.cfg)
+        # Save the effective per-run config, including notebook overrides.
+        dict_val = config_to_yaml(self.cfg)
         hdf5_generator(
             filepath=file_path,
             x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
@@ -259,7 +268,7 @@ class AutoRB:
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
             self._rb_objects[label] = rb
 
-    def plot(self, show_individual=False):
+    def plot(self, show_individual=False, *, plot_analysis=True):
         fig, ax = plt.subplots(figsize=(8, 6))
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
         ref_rb = self._rb_objects.get("ref")
@@ -269,6 +278,7 @@ class AutoRB:
 
         ref_epc, ref_epc_err, p_ref, p_ref_err, ref_cov = ref_rb.plot(
             "Reference RB", color=colors[0], ax=ax, show_individual=show_individual,
+            plot_analysis=plot_analysis,
         )
         self.results["ref"] = dict(epc=ref_epc, epc_err=ref_epc_err, p=p_ref, p_err=p_ref_err)
 

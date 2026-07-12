@@ -1,8 +1,13 @@
-"""Shared experiment registry for GUI and service clients.
+"""Shared registry for stable, public experiments.
 
 This module is deliberately free of Qt/FastAPI imports. It is the stable
 contract layer that maps user-facing experiment ids to Python classes and
 known fit-result to config-update rules.
+
+Experimental classes do not need to be registered. They can be imported and
+run directly from notebooks while their API is being tested. Add them here
+only after their run method and ExperimentData result are stable enough for
+generic clients.
 """
 
 from __future__ import annotations
@@ -35,7 +40,7 @@ EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
     ExperimentSpec("time_rabi_ge", "Time Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.TimeRabi", "s004_time_rabi_ge.TimeRabi"),
     ExperimentSpec("power_rabi_ge", "Power Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.PowerRabi", "s005_power_rabi_ge.PowerRabi"),
     ExperimentSpec("drag", "DRAG", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.DragCalibration", "s005a_drag.DragCalibration", supports_liveplot=False),
-    ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.AAE", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
+    ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.aae.PowerRabiChevron", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
     ExperimentSpec("ramsey_ge", "Ramsey", "Coherence", "QickworkspaceV2.experiments.coherence.Ramsey", "s006_Ramsey_ge.Ramsey"),
     ExperimentSpec("spin_echo_ge", "Spin Echo", "Coherence", "QickworkspaceV2.experiments.coherence.SpinEcho", "s007_SpinEcho_ge.SpinEcho"),
     ExperimentSpec("t1_ge", "T1", "Coherence", "QickworkspaceV2.experiments.coherence.T1", "s008_T1_ge.T1"),
@@ -45,12 +50,9 @@ EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
     ExperimentSpec("ramsey_ef", "Ramsey EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.RamseyEf", "s012_Ramsey_ef.Ramsey_ef"),
     ExperimentSpec("t1_ef", "T1 EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.T1Ef", "s013_T1_ef.T1_ef"),
     ExperimentSpec("allxy", "AllXY", "Advanced", "QickworkspaceV2.experiments.characterization.AllXY", "s014_AllXY.AllXY", supports_liveplot=False),
-    ExperimentSpec("single_shot", "SingleShot", "Advanced", "QickworkspaceV2.experiments.setup.SingleShot_gef", "s000_SingleShot_prog.SingleShot_gef", supports_liveplot=False),
-    ExperimentSpec("single_shot_opt", "SingleShot Opt", "Advanced", "QickworkspaceV2.experiments.setup.SingleShot_ge_opt", "s000_SingleShot_opt.SingleShot_ge_opt", supports_liveplot=False),
     ExperimentSpec("qubit_temp", "Qubit Temp", "Advanced", "QickworkspaceV2.experiments.qubit_ef.rabi_ef.QubitTemp", "s013_qubit_temp.QubitTemperatureEf"),
     ExperimentSpec("ac_stark", "AC Stark", "Advanced", "QickworkspaceV2.experiments.coherence.ACStark", "s006_ac_stark.AcStarkCalib"),
     ExperimentSpec("rb", "Single Qubit RB", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarking", "s015_Single_qubit_RB.RandomizedBenchmarking", supports_liveplot=False),
-    ExperimentSpec("auto_rb", "Auto RB", "RB", "QickworkspaceV2.experiments.characterization.AutoRB", "s015_Auto_RB.AutoRB", supports_liveplot=False),
     ExperimentSpec("rb_asm", "RB ASM", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarkingAsm", "s015_RB_asm.RandomizedBenchmarkingAsm", supports_liveplot=False),
     ExperimentSpec("tomography", "State Tomography", "Tomography", "QickworkspaceV2.experiments.characterization.Tomography", "s016_state_tomography.Tomography", supports_liveplot=False),
 )

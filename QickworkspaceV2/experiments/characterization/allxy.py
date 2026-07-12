@@ -106,7 +106,7 @@ class AllXY(BaseExperiment):
         self.result = result
         return result
 
-    def plot(self):
+    def plot(self, *, plot_analysis=True):
         if self.allxy_lst is None:
             raise RuntimeError("Call run() first.")
         _proc = np.real if self._iq_process == "real" else np.abs

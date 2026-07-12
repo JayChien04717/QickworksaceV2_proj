@@ -108,7 +108,7 @@ class SingleShot_gef:
             self.data = {"Ig": Ig, "Qg": Qg, "Ie": Ie, "Qe": Qe}
         return self.data
 
-    def plot(self, fid_avg=False, verbose=True):
+    def plot(self, fid_avg=False, verbose=True, *, plot_analysis=True):
         return hist(self.data, plot=True, verbose=verbose, fid_avg=fid_avg)
 
     def saveLabber(self, qb_idx, yoko_value=None):

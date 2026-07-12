@@ -159,7 +159,7 @@ class Tomography(BaseExperiment):
         self.result = result
         return result
 
-    def plot(self, plot_type: str = "2d", qb_idx=None):
+    def plot(self, plot_type: str = "2d", qb_idx=None, *, plot_analysis=True):
         if self.rho_mle is None:
             print("No data. Run first.")
             return None, None

@@ -1,6 +1,12 @@
 from .experiment_data import ExperimentData, QualityFlag
 from .base_analysis import BaseAnalysis, IdentityAnalysis
 from .base_experiment import BaseExperiment
+from .experiment_components import (
+    AcquisitionRunner,
+    ExperimentRuntime,
+    ResultBuilder,
+    SweepDefinition,
+)
 from .composite import BatchExperiment, ParallelExperiment
 
 
@@ -26,6 +32,10 @@ __all__ = [
     "GATE_ALIAS",
     "resolve_gate",
     "BaseExperiment",
+    "ExperimentRuntime",
+    "AcquisitionRunner",
+    "SweepDefinition",
+    "ResultBuilder",
     "BatchExperiment",
     "ParallelExperiment",
 ]

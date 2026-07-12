@@ -423,6 +423,8 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         ax=None,
         marker: str = "o",
         show_individual: bool = False,
+        *,
+        plot_analysis: bool = True,
     ):
         """Fit and plot the RB decay curve.
 
@@ -526,11 +528,8 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
 
         save_dir  = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        dict_val  = (
-            config_all.to_yaml(q_id=qb_idx)
-            if config_all is not None
-            else config_to_yaml(self.cfg)
-        )
+        # Save the effective per-run config, including notebook overrides.
+        dict_val = config_to_yaml(self.cfg)
         hdf5_generator(
             filepath=file_path,
             x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
@@ -636,7 +635,7 @@ class AutoRBAsm:
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
             self._rb_objects[label] = rb
 
-    def plot(self, show_individual: bool = False):
+    def plot(self, show_individual: bool = False, *, plot_analysis: bool = True):
         """Plot all RB/IRB decay curves and print gate fidelities.
 
         Parameters
