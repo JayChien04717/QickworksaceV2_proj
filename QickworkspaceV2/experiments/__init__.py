@@ -1,5 +1,5 @@
 from .setup import SingleShot_gef, SingleShot_ge_opt, hist, TOF
-from .resonator import ResonatorSpec, Punchout, ResonatorSpecFlux
+from .resonator import Chi, ResonatorSpec, Punchout, ResonatorSpecFlux, DispersiveShift
 from .qubit_ge import QubitSpec, QubitSpecFlux, TimeRabi, PowerRabi, PowerRabiReset
 from .coherence import Ramsey, ACStark, SpinEcho, T1, RamseyEf, T1Ef
 from .qubit_ef import ResonatorSpec_ef, QubitSpecEf, PowerRabiEf, QubitTemp
@@ -13,7 +13,7 @@ __all__ = [
     # setup
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
     # resonator
-    "ResonatorSpec", "Punchout", "ResonatorSpecFlux",
+    "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     # qubit_ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     # coherence
