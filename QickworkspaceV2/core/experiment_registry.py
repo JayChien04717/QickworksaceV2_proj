@@ -39,6 +39,7 @@ EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
     ExperimentSpec("qubit_flux_spec_ge", "Qubit Flux Spec", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.QubitSpecFlux", "s003a_qubit_flux_spec_ge.QubitSpecFlux"),
     ExperimentSpec("time_rabi_ge", "Time Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.TimeRabi", "s004_time_rabi_ge.TimeRabi"),
     ExperimentSpec("power_rabi_ge", "Power Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.PowerRabi", "s005_power_rabi_ge.PowerRabi"),
+    ExperimentSpec("power_rabi_active_reset_ge", "Power Rabi Active Reset", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.ActiveResetRabi", "s005c_power_rabi_active_reset_ge.ActiveResetRabi", supports_liveplot=False),
     ExperimentSpec("drag", "DRAG", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.DragCalibration", "s005a_drag.DragCalibration", supports_liveplot=False),
     ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.aae.PowerRabiChevron", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
     ExperimentSpec("ramsey_ge", "Ramsey", "Coherence", "QickworkspaceV2.experiments.coherence.Ramsey", "s006_Ramsey_ge.Ramsey"),
