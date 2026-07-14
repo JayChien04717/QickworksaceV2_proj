@@ -6,6 +6,8 @@ __pycache__/
 *.h5
 !example/*.h5
 Data/
+!tutorial/read_tool/data/
+!tutorial/read_tool/data/**
 qick/
 *.log
 .DS_Store

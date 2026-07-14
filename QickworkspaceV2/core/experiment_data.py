@@ -10,14 +10,18 @@ Old code that unpacks ``(fit_params, error) = expt.run()`` still works via
 
 from __future__ import annotations
 
-import json
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
 import numpy as np
+
+
+def _new_experiment_id() -> str:
+    from ..tools.hdf5_store import generate_experiment_id
+
+    return generate_experiment_id()
 
 
 class QualityFlag(Enum):
@@ -50,13 +54,20 @@ class ExperimentData:
 
     # Identity
     experiment_type: str = ""
-    experiment_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    timestamp: datetime = field(default_factory=datetime.now)
+    experiment_id: str = field(default_factory=_new_experiment_id)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Raw data
-    raw_iq: Optional[np.ndarray] = None
+    raw_iq: Any = None
     x_axis: Optional[np.ndarray] = None
     y_axis: Optional[np.ndarray] = None
+
+    # Dimension-aware native HDF5 payload. Existing raw_iq/x_axis/y_axis remain
+    # the compatibility surface for ordinary 1D/2D experiments.
+    axes: dict = field(default_factory=dict)
+    raw_data: dict = field(default_factory=dict)
+    analysis_data: dict = field(default_factory=dict)
+    dataset_dims: dict = field(default_factory=dict)
 
     # Fit results (backward-compat arrays)
     fit_params: Optional[np.ndarray] = None
@@ -78,6 +89,14 @@ class ExperimentData:
     # Config snapshot
     config: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
+
+    # Native HDF5 discovery and presentation metadata
+    data_kind: str = ""
+    analysis_id: str = ""
+    plot_id: str = ""
+    comment: str = ""
+    tags: list = field(default_factory=list)
+    session_id: Optional[str] = None
 
     # Composite / lineage
     parent_id: Optional[str] = None
@@ -179,14 +198,21 @@ class ExperimentData:
             "y_scale": self.y_scale,
             "interrupted": self.interrupted,
             "avg_count": self.avg_count,
+            "data_kind": self.data_kind,
+            "analysis_id": self.analysis_id,
+            "plot_id": self.plot_id,
+            "comment": self.comment,
+            "tags": list(self.tags),
+            "session_id": self.session_id,
+            "dataset_dims": self.dataset_dims,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentData":
         obj = cls(
             experiment_type=d.get("experiment_type", ""),
-            experiment_id=d.get("experiment_id", str(uuid.uuid4())[:8]),
-            timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(),
+            experiment_id=d.get("experiment_id") or _new_experiment_id(),
+            timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(timezone.utc),
             fit_params=np.array(d["fit_params"]) if d.get("fit_params") is not None else None,
             fit_errors=np.array(d["fit_errors"]) if d.get("fit_errors") is not None else None,
             fit_result=d.get("fit_result", {}),
@@ -204,65 +230,43 @@ class ExperimentData:
             y_scale=d.get("y_scale", 1.0),
             interrupted=d.get("interrupted", False),
             avg_count=d.get("avg_count", 0),
+            data_kind=d.get("data_kind", ""),
+            analysis_id=d.get("analysis_id", ""),
+            plot_id=d.get("plot_id", ""),
+            comment=d.get("comment", ""),
+            tags=d.get("tags", []),
+            session_id=d.get("session_id"),
+            dataset_dims=d.get("dataset_dims", {}),
         )
         return obj
 
-    def save(self, filepath: str) -> str:
-        """Save ExperimentData to HDF5 (raw IQ + metadata)."""
-        import os
+    def save(
+        self,
+        filepath: Optional[str] = None,
+        *,
+        comment: str = "",
+        tags=(),
+        data_root: Optional[str] = None,
+        catalog: bool = True,
+    ):
+        """Save through the native HDF5 v1 writer and update its catalog."""
+        from ..tools.hdf5_store import save_result
 
-        import h5py
-
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        with h5py.File(filepath, "w") as f:
-            # Root attrs: JSON snapshot of everything except arrays
-            f.attrs["meta"] = json.dumps(self.to_dict())
-
-            if self.raw_iq is not None:
-                iq = np.asarray(self.raw_iq)
-                dg = f.create_group("data")
-                dg.create_dataset("avgi", data=np.real(iq).astype(np.float32))
-                dg.create_dataset("avgq", data=np.imag(iq).astype(np.float32))
-                dg.create_dataset("mag", data=np.abs(iq).astype(np.float32))
-                dg.create_dataset("phase", data=np.degrees(np.arctan2(np.imag(iq), np.real(iq))).astype(np.float32))
-
-            if self.x_axis is not None:
-                xg = f.create_group("x")
-                xg.create_dataset("values", data=(self.x_axis * self.x_scale))
-                xg.attrs["name"] = self.x_name
-                xg.attrs["unit"] = self.x_unit
-
-            if self.y_axis is not None:
-                yg = f.create_group("y")
-                yg.create_dataset("values", data=(self.y_axis * self.y_scale))
-                yg.attrs["name"] = self.y_name
-                yg.attrs["unit"] = self.y_unit
-
-        return filepath
+        return save_result(
+            self,
+            filepath,
+            comment=comment,
+            tags=tags,
+            data_root=data_root,
+            catalog=catalog,
+        )
 
     @classmethod
     def load(cls, filepath: str) -> "ExperimentData":
-        """Load ExperimentData from HDF5 file."""
-        import h5py
+        """Load native v1 or the previous local ExperimentData HDF5 format."""
+        from ..tools.hdf5_store import load_result
 
-        with h5py.File(filepath, "r") as f:
-            obj = cls.from_dict(json.loads(f.attrs["meta"]))
-
-            if "data" in f:
-                dg = f["data"]
-                obj.raw_iq = dg["avgi"][:] + 1j * dg["avgq"][:]
-
-            if "x" in f:
-                xg = f["x"]
-                scale = obj.x_scale if obj.x_scale != 0 else 1.0
-                obj.x_axis = xg["values"][:] / scale
-
-            if "y" in f:
-                yg = f["y"]
-                scale = obj.y_scale if obj.y_scale != 0 else 1.0
-                obj.y_axis = yg["values"][:] / scale
-
-        return obj
+        return load_result(filepath)
 
     def __repr__(self) -> str:
         status = "interrupted" if self.interrupted else "complete"
