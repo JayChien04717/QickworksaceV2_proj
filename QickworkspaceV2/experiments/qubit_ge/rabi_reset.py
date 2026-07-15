@@ -62,19 +62,36 @@ class ActiveResetRabiProgram(BaseProgram):
         # ground, so this is the logical complement of reset_excited_if.
         self.ground_test = "<" if excited_if == ">=" else ">="
 
+        threshold = cfg.get("threshold", cfg.get("reset_threshold"))
+        self.reset_threshold_normalized = (
+            None if threshold is None else float(threshold)
+        )
         if "reset_threshold_raw" in cfg:
             threshold_raw = int(cfg["reset_threshold_raw"])
         else:
-            threshold = cfg.get("reset_threshold", cfg.get("threshold"))
             if threshold is None:
                 raise KeyError(
-                    "active reset requires reset_threshold (normalized I/Q "
+                    "active reset requires threshold (normalized I/Q "
                     "units) or reset_threshold_raw (accumulator units)"
                 )
             # acquire() reports length-normalized I/Q, while read_input()
-            # exposes the raw accumulated integer from the readout buffer.
+            # exposes the raw accumulated integer from the readout buffer. Add
+            # back the readout offset that acquire(remove_offset=True) removes.
+            iq_offset = np.asarray(
+                self.soccfg["readouts"][ro_ch].get("iq_offset", [0.0, 0.0]),
+                dtype=float,
+            ).reshape(-1)
+            offset_index = 0 if component == "I" else 1
+            component_offset = (
+                float(iq_offset[offset_index])
+                if iq_offset.size > offset_index
+                else 0.0
+            )
             threshold_raw = int(
-                round(float(threshold) * self.ro_chs[ro_ch]["length"])
+                round(
+                    (float(threshold) + component_offset)
+                    * self.ro_chs[ro_ch]["length"]
+                )
             )
 
         # A register avoids the 24-bit immediate limit of cond_jump().
@@ -135,7 +152,7 @@ class ActiveResetRabi(BaseExperiment):
 
     Required active-reset configuration keys
     -----------------------------------------
-    reset_threshold : float
+    threshold : float
         Length-normalized I or Q threshold, in the same units returned by a
         non-thresholded QICK acquisition.  Alternatively provide
         ``reset_threshold_raw`` in raw accumulator units.
@@ -159,6 +176,8 @@ class ActiveResetRabi(BaseExperiment):
 
     def __init__(self, config):
         super().__init__(config)
+        self.pre_reset_population = None
+        self.post_reset_population = None
         self.reset_verification_iq = None
 
     def _create_program(self):
@@ -178,26 +197,51 @@ class ActiveResetRabi(BaseExperiment):
         return None
 
     def _acquire(self, prog, axes, ctx):
+        threshold = prog.reset_threshold_normalized
+        angle = 0.0 if prog.reset_component == "I" else np.pi / 2
         acquired = prog.acquire(
             self.soc,
             rounds=ctx.py_avg,
+            threshold=threshold,
+            angle=angle,
             progress=True,
         )
         channel_data = np.asarray(acquired[0])
-        if channel_data.ndim < 3 or channel_data.shape[0] < 2:
+        if channel_data.shape[0] < 2:
             raise RuntimeError(
                 "active-reset Rabi expected two readouts per shot, got "
                 f"shape {channel_data.shape}"
             )
 
-        rabi_iq = channel_data[0].dot([1, 1j])
-        self.reset_verification_iq = channel_data[1].dot([1, 1j])
-        self.iqdata = rabi_iq
+        if threshold is not None:
+            pre_reset = np.asarray(channel_data[0], dtype=float)
+            post_reset = np.asarray(channel_data[1], dtype=float)
+            # QICK threshold acquisition reports P(component >= threshold).
+            # Convert it when the configured excited cloud is below threshold.
+            if prog.ground_test == ">=":
+                pre_reset = 1.0 - pre_reset
+                post_reset = 1.0 - post_reset
+            self.pre_reset_population = pre_reset
+            self.post_reset_population = post_reset
+            self.reset_verification_iq = post_reset
+        else:
+            if channel_data.ndim < 3 or channel_data.shape[-1] != 2:
+                raise RuntimeError(
+                    "non-thresholded active-reset data must end in an I/Q axis, "
+                    f"got shape {channel_data.shape}"
+                )
+            pre_reset = channel_data[0].dot([1, 1j])
+            post_reset = channel_data[1].dot([1, 1j])
+            self.reset_verification_iq = post_reset
+
+        self.iqdata = pre_reset
         return AcquisitionResult(
-            raw_iq=rabi_iq,
+            raw_iq=pre_reset,
             avg_count=ctx.py_avg,
             metadata={
                 "active_reset": True,
+                "threshold_discrimination": threshold is not None,
+                "threshold": threshold,
                 "rabi_read_index": 0,
                 "feedback_read_index": 0,
                 "reset_verification_read_index": 1,
@@ -208,7 +252,17 @@ class ActiveResetRabi(BaseExperiment):
 
     def _finalize_result(self, acq, axes, ctx):
         result = super()._finalize_result(acq, axes, ctx)
-        if self.reset_verification_iq is not None:
+        if self.pre_reset_population is not None:
+            result.analysis_data["pre_reset_population"] = {
+                "values": np.asarray(self.pre_reset_population),
+                "dims": ["x"],
+            }
+        if self.post_reset_population is not None:
+            result.analysis_data["post_reset_population"] = {
+                "values": np.asarray(self.post_reset_population),
+                "dims": ["x"],
+            }
+        elif self.reset_verification_iq is not None:
             result.analysis_data["reset_verification_iq"] = {
                 "values": np.asarray(self.reset_verification_iq),
                 "dims": ["x"],
