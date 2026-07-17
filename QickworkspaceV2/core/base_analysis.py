@@ -172,6 +172,15 @@ class BaseAnalysis(ABC):
         score, channel, y, popt, pcov = best
         data.metadata["fit_channel"] = channel
         data.metadata["fit_channel_snr"] = float(score)
+        fit_y = np.asarray(simfunc(np.asarray(data.x_axis), *popt), dtype=float)
+        data.analysis_data.update({
+            "fit_input": {"values": np.asarray(y, dtype=float), "dims": ["x"]},
+            "fit_curve": {"values": fit_y, "dims": ["x"]},
+            "residual": {
+                "values": np.asarray(y, dtype=float) - fit_y,
+                "dims": ["x"],
+            },
+        })
         return y, popt, pcov, channel, float(score)
 
     @abstractmethod

@@ -377,15 +377,21 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             print(f"  Depth order: {self.x[depth_indices].tolist()}")
 
         rb_result: list = [None] * n_depths
+        seeds_matrix: list = [None] * n_depths
+        sequences_matrix: list = [None] * n_depths
         for idx in tqdm(depth_indices, desc=desc):
             depth  = self.x[idx]
             rblist = []
+            depth_seeds = []
+            depth_sequences = []
             for _ in tqdm(range(number_sample), desc="Samples", leave=False):
                 child_seed = int(rng.integers(0, 2**31))
                 seqs = single_qb_rb(
                     n_clifford=depth, n_sample=1,
                     interleave=interleaved_gate, seed=child_seed,
                 )
+                depth_seeds.append(child_seed)
+                depth_sequences.append(seqs[0])
                 self.cfg["gate_seq"] = seqs[0]
                 self.cfg["prefix"]   = prefix
                 prog = RBAsmProgram(
@@ -400,6 +406,8 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                 )
                 rblist.append(iq_data)
             rb_result[idx] = rblist
+            seeds_matrix[idx] = depth_seeds
+            sequences_matrix[idx] = depth_sequences
 
         self.rb_result = rb_result
 
@@ -407,8 +415,30 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         avg = _proc(np.array(self.rb_result)).mean(axis=1)
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
+            raw_iq=np.asarray(self.rb_result),
             x_axis=self.x.astype(float),
             y_axis=avg,
+            config=self._snapshot_config(),
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "iq_process": iq_process,
+                "number_sample": number_sample,
+                "interleaved_gate": interleaved_gate,
+                "prefix": prefix,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
+            },
+            axes={
+                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["depth", "sample"]},
+            analysis_data={"mean_signal": {"values": avg, "dims": ["depth"]}},
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
+            avg_count=py_avg,
             quality=QualityFlag.NO_INFORMATION,
         )
         if self.Analysis is not None:
@@ -620,6 +650,9 @@ class AutoRBAsm:
         iq_process : str, optional
             ``"abs"`` or ``"real"``.
         """
+        from ...tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         self._rb_kwargs = dict(
             max_circuit_depth=max_circuit_depth,
             delta_clifford=delta_clifford,
@@ -633,6 +666,8 @@ class AutoRBAsm:
             label = "ref" if gate is None else gate
             rb = RandomizedBenchmarkingAsm(self.cfg)
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
+            rb.result.parent_id = session_id
+            rb.result.session_id = session_id
             self._rb_objects[label] = rb
 
     def plot(self, show_individual: bool = False, *, plot_analysis: bool = True):

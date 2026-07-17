@@ -140,9 +140,16 @@ class Tomography(BaseExperiment):
         ], dtype=float)
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
-            raw_iq=expectation_values,
+            raw_iq={
+                "calibration_g": self.iq_g,
+                "calibration_e": self.iq_e,
+                "tomography": {
+                    "X": self.tomo_data_raw["X"],
+                    "Y": self.tomo_data_raw["Y"],
+                    "Z": self.tomo_data_raw["Z"],
+                },
+            },
             x_axis=expectation_axis,
-            y_axis=self.rho_mle,
             fit_result={
                 "expect_X": self.expect_values["X"],
                 "expect_Y": self.expect_values["Y"],
@@ -152,9 +159,26 @@ class Tomography(BaseExperiment):
             },
             x_name="Tomography axis",
             x_unit="X/Y/Z",
-            y_name="Expectation",
-            y_unit="",
+            axes={
+                "tomography_axis": {"values": ["X", "Y", "Z"]},
+                "ket": {"values": ["0", "1"]},
+                "bra": {"values": ["0", "1"]},
+            },
+            analysis_data={
+                "expectation": {"values": expectation_values, "dims": ["tomography_axis"]},
+                "density_matrix": {"values": self.rho_mle, "dims": ["bra", "ket"]},
+            },
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "axes": ["X", "Y", "Z"],
+                "prep_pulse": self.prep_pulse_name,
+            },
+            config=self._snapshot_config(),
+            data_kind="tomography",
+            analysis_id="tomography",
+            plot_id="density_matrix",
             quality=QualityFlag.GOOD if purity >= 0.8 else QualityFlag.WARNING,
+            avg_count=py_avg,
         )
         self.result = result
         return result

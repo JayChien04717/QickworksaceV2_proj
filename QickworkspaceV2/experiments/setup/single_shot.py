@@ -9,7 +9,9 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram
+from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
+from ...tools.system_tool import clean_config
 from .singleshot_utils import plot_hist, general_hist, hist, _fit_gmm
 
 
@@ -106,10 +108,55 @@ class SingleShot_gef:
             self.data = {"Ig": Ig, "Qg": Qg, "Ie": Ie, "Qe": Qe, "If": If, "Qf": Qf}
         else:
             self.data = {"Ig": Ig, "Qg": Qg, "Ie": Ie, "Qe": Qe}
+        states = ["g", "e", "f"] if shot_f else ["g", "e"]
+        iq_by_state = [Ig + 1j * Qg, Ie + 1j * Qe]
+        if shot_f:
+            iq_by_state.append(If + 1j * Qf)
+        self.result = ExperimentData(
+            experiment_type="s000_singleshot_gef" if shot_f else "s000_singleshot_ge",
+            raw_iq=np.stack(iq_by_state, axis=0),
+            config=clean_config(self.cfg),
+            metadata={"qubit": self.cfg.get("name"), "states": states, "shots": int(SHOTS)},
+            axes={
+                "state": {"values": states, "label": "Prepared state"},
+                "shot": {"values": np.arange(SHOTS), "label": "Shot", "unit": "#"},
+            },
+            dataset_dims={"iq": ["state", "shot"]},
+            data_kind="single_shot",
+            analysis_id="single_shot",
+            plot_id="single_shot_iq",
+            quality=QualityFlag.GOOD,
+            avg_count=1,
+        )
         return self.data
 
     def plot(self, fid_avg=False, verbose=True, *, plot_analysis=True):
-        return hist(self.data, plot=True, verbose=verbose, fid_avg=fid_avg)
+        analyzed = hist(self.data, plot=True, verbose=verbose, fid_avg=fid_avg)
+        if getattr(self, "result", None) is not None:
+            fidelity = float(analyzed[0][0])
+            thresholds = np.asarray(analyzed[1], dtype=float)
+            rotation_deg = float(analyzed[2])
+            confusion = np.asarray(analyzed[3], dtype=float)
+            self.result.fit_result.update({
+                "fidelity": (fidelity, None),
+                "rotation_deg": (rotation_deg, None),
+                "threshold": (float(thresholds[0]), None) if thresholds.size else (None, None),
+            })
+            self.result.analysis_data.update({
+                "thresholds": {"values": thresholds, "dims": ["threshold"]},
+                "confusion_matrix_pct": {
+                    "values": confusion,
+                    "dims": ["prepared_state", "declared_state"],
+                },
+            })
+            states = self.result.metadata.get("states", ["g", "e"])
+            self.result.axes.update({
+                "threshold": {"values": np.arange(thresholds.size)},
+                "prepared_state": {"values": states},
+                "declared_state": {"values": states},
+            })
+            self.result.quality = QualityFlag.GOOD if fidelity >= 0.85 else QualityFlag.WARNING
+        return analyzed
 
     def saveLabber(self, qb_idx, yoko_value=None):
         from ...core.base_experiment import BaseExperiment
@@ -414,6 +461,69 @@ class SingleShot_ge_opt:
                 for fid, leak, keep in zip(fid_flat, leak_flat, pareto_mask)
                 if keep
             ]
+            self._pareto_mask = pareto_mask.reshape(shape3)
+
+        states = ["g", "e", "f"] if shot_f else ["g", "e"]
+        iq_states = [
+            self.I_g_array + 1j * self.Q_g_array,
+            self.I_e_array + 1j * self.Q_e_array,
+        ]
+        if shot_f:
+            iq_states.append(self.I_f_array + 1j * self.Q_f_array)
+        raw_iq = np.stack(iq_states, axis=3)
+        best = {
+            "length": float(max_length) if max_length is not None else None,
+            "gain": float(max_gain) if max_gain is not None else None,
+            "frequency": float(max_freq) if max_freq is not None else None,
+            "fidelity": best_fid_grid,
+        }
+        self.result = ExperimentData(
+            experiment_type="s000_singleshot_ge_opt",
+            raw_iq=raw_iq,
+            config=clean_config(self.cfg),
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "states": states,
+                "shots": int(raw_iq.shape[-1]),
+                "best": best,
+                "leakage_threshold": float(leakage_threshold),
+                "thermal_threshold": float(thermal_threshold),
+                "bo_n_iter": int(bo_n_iter),
+                "bo_xi": float(bo_xi),
+            },
+            axes={
+                "length": {"values": np.asarray(self.length_sweep), "unit": "us"},
+                "gain": {"values": np.asarray(self.gain_sweep), "unit": "DAC unit"},
+                "frequency": {"values": np.asarray(self.freq_sweep), "unit": "MHz"},
+                "state": {"values": states},
+                "shot": {"values": np.arange(raw_iq.shape[-1]), "unit": "#"},
+            },
+            dataset_dims={"iq": ["length", "gain", "frequency", "state", "shot"]},
+            analysis_data={
+                "fidelity": {"values": fid_Array, "dims": ["length", "gain", "frequency"]},
+                "soft_fidelity": {"values": soft_fid_array, "dims": ["length", "gain", "frequency"]},
+                "snr": {"values": snr_array, "dims": ["length", "gain", "frequency"]},
+                "separation": {"values": sep_array, "dims": ["length", "gain", "frequency"]},
+                "leakage": {"values": leakage_array, "dims": ["length", "gain", "frequency"]},
+                "thermal": {"values": thermal_array, "dims": ["length", "gain", "frequency"]},
+                "feasible_mask": {"values": feasible_mask, "dims": ["length", "gain", "frequency"]},
+                "pareto_mask": {
+                    "values": getattr(self, "_pareto_mask", np.zeros(shape3, dtype=bool)),
+                    "dims": ["length", "gain", "frequency"],
+                },
+            },
+            fit_result={
+                "best_length": (best["length"], None),
+                "best_gain": (best["gain"], None),
+                "best_frequency": (best["frequency"], None),
+                "best_fidelity": (best["fidelity"], None),
+            },
+            data_kind="single_shot_optimization",
+            analysis_id="single_shot_optimization",
+            plot_id="single_shot_optimization",
+            quality=QualityFlag.GOOD,
+            avg_count=1,
+        )
 
         return_L = round(float(max_length), 3) if max_length is not None else None
         return_G = round(float(max_gain), 6) if max_gain is not None else None

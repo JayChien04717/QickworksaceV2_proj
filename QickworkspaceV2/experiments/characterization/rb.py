@@ -118,6 +118,7 @@ class RandomizedBenchmarking(BaseExperiment):
             [int(rng.integers(0, 2**31)) for _ in range(number_sample)]
             for _ in range(n_depths)
         ]
+        sequences_matrix = [[None] * number_sample for _ in range(n_depths)]
         depth_indices = np.arange(n_depths)
         if randomize_depth_order:
             rng.shuffle(depth_indices)
@@ -131,6 +132,7 @@ class RandomizedBenchmarking(BaseExperiment):
                         n_clifford=depth, n_sample=1,
                         interleave=interleaved_gate, seed=seeds_matrix[idx][s_i],
                     )
+                    sequences_matrix[idx][s_i] = seqs[0]
                     self.cfg["gate_seq"] = seqs[0]
                     self.cfg["prefix"] = prefix
                     prog = RBProgram(
@@ -157,7 +159,27 @@ class RandomizedBenchmarking(BaseExperiment):
             x_axis=self.x.astype(float),
             y_axis=avg,
             config=self._snapshot_config(),
-            metadata={"iq_process": iq_process, "number_sample": number_sample},
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "iq_process": iq_process,
+                "number_sample": number_sample,
+                "interleaved_gate": interleaved_gate,
+                "prefix": prefix,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
+            },
+            axes={
+                "depth": {"values": self.x.astype(float), "label": "Circuit depth", "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["depth", "sample"]},
+            analysis_data={
+                "mean_signal": {"values": avg, "dims": ["depth"]},
+            },
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
             avg_count=py_avg,
             quality=QualityFlag.NO_INFORMATION,
         )
@@ -255,6 +277,9 @@ class AutoRB:
         prefix: str = "ge",
         iq_process: str = "abs",
     ):
+        from ...tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         self._rb_kwargs = dict(
             max_circuit_depth=max_circuit_depth,
             delta_clifford=delta_clifford,
@@ -266,6 +291,8 @@ class AutoRB:
             label = "ref" if gate is None else gate
             rb = RandomizedBenchmarking(self.cfg)
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
+            rb.result.parent_id = session_id
+            rb.result.session_id = session_id
             self._rb_objects[label] = rb
 
     def plot(self, show_individual=False, *, plot_analysis=True):

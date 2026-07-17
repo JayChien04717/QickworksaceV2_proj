@@ -284,12 +284,14 @@ class MuxTomography(BaseExperiment):
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq={
-                "g": self.iq_g,
-                "e": self.iq_e,
-                "axes": self.tomo_data_raw,
+                "calibration_g": {"values": self.iq_g, "dims": ["qubit"]},
+                "calibration_e": {"values": self.iq_e, "dims": ["qubit"]},
+                "tomography": {
+                    axis: {"values": values, "dims": ["qubit"]}
+                    for axis, values in self.tomo_data_raw.items()
+                },
             },
             x_axis=np.array([0.0, 1.0, 2.0]),
-            y_axis=y_axis,
             fit_result=fit_result,
             config=clean_config(cfg),
             metadata={
@@ -298,6 +300,27 @@ class MuxTomography(BaseExperiment):
                 "prep_pulse": self.prep_pulse_name,
                 "purities": purities,
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "tomography_axis": {"values": ["X", "Y", "Z"]},
+                "ket": {"values": ["0", "1"]},
+                "bra": {"values": ["0", "1"]},
+            },
+            analysis_data={
+                "expectation": {
+                    "values": y_axis if y_axis is not None else np.empty((0, 3)),
+                    "dims": ["qubit", "tomography_axis"],
+                },
+                "density_matrix": {
+                    "values": np.asarray([self.rho_mle[name] for name in qubit_names])
+                    if self.rho_mle else np.empty((0, 2, 2), dtype=complex),
+                    "dims": ["qubit", "bra", "ket"],
+                },
+                "purity": {"values": np.asarray(purities), "dims": ["qubit"]},
+            },
+            data_kind="tomography",
+            analysis_id="tomography",
+            plot_id="density_matrix",
             figures=figures,
             quality=QualityFlag.GOOD if self.rho_mle else QualityFlag.BAD,
             interrupted=interrupted,
