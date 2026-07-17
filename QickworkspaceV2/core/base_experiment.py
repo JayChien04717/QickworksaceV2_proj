@@ -639,32 +639,6 @@ class BaseExperiment:
             return None
         return self.cfg.get("threshold")
 
-    @staticmethod
-    def _threshold_to_real_values(acquired):
-        """
-        Convert QICK threshold-acquire output to real-valued population data.
-
-        Non-threshold acquisition returns I/Q pairs, which older code combines
-        into complex values with ``dot([1, 1j])``. Threshold acquisition is
-        already discriminated, so downstream code should see real values only.
-        """
-        try:
-            data = acquired[0][0]
-        except (IndexError, TypeError):
-            data = acquired
-
-        arr = np.asarray(data)
-        if np.iscomplexobj(arr):
-            return np.real(arr).squeeze()
-
-        if arr.ndim > 0 and arr.shape[-1] == 2:
-            try:
-                return np.real(arr.dot([1, 1j])).squeeze()
-            except (TypeError, ValueError):
-                pass
-
-        return arr.astype(float, copy=False).squeeze()
-
     # ══════════════════════════════════════════════════════════════════════════
     # Subclass MUST override
     # ══════════════════════════════════════════════════════════════════════════

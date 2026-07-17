@@ -20,7 +20,7 @@ class DragProgram(BaseProgram):
 
     def _initialize(self, cfg):
         self.setup_resonator(cfg)
-        self.declare_gen_auto(cfg["qb_ch"], cfg["nqz_qb"], "qb_mixer", cfg)
+        self.setup_qubit_gen(cfg, "ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="x180_ge",
                             phase=0, gain_key="pi_gain_ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="mx180_ge",

@@ -5,19 +5,23 @@ from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython.display import display, clear_output, update_display
 from tqdm.auto import tqdm
 import math
 
-from ..tools.system_tool import auto_unit
+from ..core.acquisition import acquire_values
+from ..tools.units import auto_unit
 
+try:
+    from IPython.display import clear_output, display, update_display
+except ImportError:
+    def display(*args, **kwargs):
+        return None
 
-def _iq_to_complex(iq_list):
-    """Convert QICK acquire output into a complex numpy array."""
-    arr = np.asarray(iq_list[0][0])
-    if arr.ndim > 0 and arr.shape[-1] == 2:
-        return arr.dot([1, 1j])
-    return arr.astype(complex, copy=False)
+    def clear_output(*args, **kwargs):
+        return None
+
+    def update_display(*args, **kwargs):
+        return None
 
 
 def _process_iq(iqdata, iq_process):
@@ -237,12 +241,15 @@ class MeshRenderer:
 class SoftwareAverageRunner:
     """Acquire repeated QICK averages and emit processed plot data."""
 
-    def __init__(self, prog, soc, py_avg, y_axis_vals=None, iq_process="all"):
+    def __init__(
+        self, prog, soc, py_avg, y_axis_vals=None, iq_process="all", threshold=None
+    ):
         self.prog = prog
         self.soc = soc
         self.py_avg = py_avg
         self.y_axis_vals = y_axis_vals
         self.iq_process = iq_process
+        self.threshold = threshold
 
     def run(self, on_update: Callable[[int, Any], None]):
         iq = 0
@@ -253,8 +260,10 @@ class SoftwareAverageRunner:
         try:
             for i in tqdm(range(self.py_avg), desc="Software Average Count", mininterval=0.1):
                 last_i = i
-                iq_list = self.prog.acquire(self.soc, rounds=1, progress=False)
-                iq_data = _iq_to_complex(iq_list)
+                iq_data = acquire_values(
+                    self.prog, self.soc, rounds=1,
+                    progress=False, threshold=self.threshold,
+                )
                 iq = iq_data if i == 0 else iq + iq_data
                 iqdata = iq / (i + 1)
                 plot_data = _process_iq(iqdata, self.iq_process)
@@ -278,8 +287,11 @@ def run_software_average_liveplot(
     title_prefix="Experiment",
     show_final_plot=False,
     iq_process="all",
+    threshold=None,
 ):
     """Composable implementation for the software-average liveplot path."""
+    if threshold is not None and _is_all_iq(iq_process):
+        iq_process = "real"
     if _is_all_iq(iq_process) and y_axis_vals is None:
         return _liveplot_sw_avg(
             prog=prog,
@@ -292,6 +304,7 @@ def run_software_average_liveplot(
             title_prefix=title_prefix,
             show_final_plot=show_final_plot,
             iq_process=iq_process,
+            threshold=threshold,
         )
 
     iq_process = _single_channel_iq_process(iq_process)
@@ -345,6 +358,7 @@ def run_software_average_liveplot(
         py_avg=py_avg,
         y_axis_vals=y_axis_vals,
         iq_process=iq_process,
+        threshold=threshold,
     )
     try:
         iqdata, interrupted, avg_count = runner.run(on_update=on_update)
@@ -391,7 +405,7 @@ def liveplotfun(
     get_prog_callback=None,
     show_final_plot=True,
     iq_process="all",
-    liveplot=True,
+    threshold=None,
 ):
     """
     General-purpose live plotter (Facade pattern).
@@ -415,49 +429,8 @@ def liveplotfun(
     interrupted : bool
     n_done : int
     """
-    if not liveplot:
-        # Bypasses Matplotlib/IPython completely.
-        
-        # 1. Yoko Sweep
-        if instrument_manager is not None and yoko_name is not None:
-            if y_axis_vals is None:
-                raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
-            iqdata_full = np.zeros((len(y_axis_vals), len(x_axis_vals)), dtype=complex)
-            for idx, val in enumerate(tqdm(y_axis_vals, desc=f"Sweeping Yoko {yoko_name}")):
-                instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
-                iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-                iqdata_full[idx, :] = _iq_to_complex(iq_list)
-            return iqdata_full, False, len(y_axis_vals)
-            
-        # 2. 2D Scan
-        elif scan_x_axis is not None and scan_y_axis is not None:
-            if get_prog_callback is None:
-                raise ValueError("get_prog_callback must be provided for 2D scan.")
-            iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)
-            for y_idx, y_val in enumerate(tqdm(scan_y_axis, desc="2D Outer Scan")):
-                for x_idx, x_val in enumerate(scan_x_axis):
-                    prog_instance = get_prog_callback(x_val, y_val)
-                    iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
-                    iqdata_full[y_idx, x_idx] = _iq_to_complex(iq_list)
-            return iqdata_full, False, len(scan_y_axis)
-            
-        # 3. 1D Scan
-        elif scan_x_axis is not None:
-            if get_prog_callback is None:
-                raise ValueError("get_prog_callback must be provided for 1D scan.")
-            iqlst = []
-            for val in tqdm(scan_x_axis, desc="1D Scan"):
-                prog_instance = get_prog_callback(val)
-                iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
-                iqlst.append(_iq_to_complex(iq_list))
-            return np.array(iqlst), False, len(scan_x_axis)
-            
-        # 4. Standard Software Averaging
-        else:
-            # Directly use acquire(rounds=py_avg)
-            iq_list = prog.acquire(soc, rounds=py_avg, progress=True)
-            iqdata = _iq_to_complex(iq_list)
-            return iqdata, False, py_avg
+    if threshold is not None and _is_all_iq(iq_process):
+        iq_process = "real"
 
     if instrument_manager is not None and yoko_name is not None:
         if y_axis_vals is None:
@@ -478,6 +451,7 @@ def liveplotfun(
             y_label=y_label,
             title_prefix=title_prefix,
             iq_process=iq_process,
+            threshold=threshold,
         )
 
     elif scan_x_axis is not None:
@@ -496,6 +470,7 @@ def liveplotfun(
                 title_prefix=title_prefix,
                 show_final_plot=show_final_plot,
                 iq_process=iq_process,
+                threshold=threshold,
             )
         else:
             return _liveplot_1d_scan(
@@ -507,6 +482,7 @@ def liveplotfun(
                 title_prefix=title_prefix,
                 show_final_plot=show_final_plot,
                 iq_process=iq_process,
+                threshold=threshold,
             )
 
     else:
@@ -521,6 +497,7 @@ def liveplotfun(
             title_prefix=title_prefix,
             show_final_plot=show_final_plot,
             iq_process=iq_process,
+            threshold=threshold,
         )
 
 
@@ -535,6 +512,7 @@ def _liveplot_sw_avg(
     title_prefix="Experiment",
     show_final_plot=False,
     iq_process="all",
+    threshold=None,
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
@@ -593,8 +571,9 @@ def _liveplot_sw_avg(
     try:
         for i in tqdm(range(py_avg), desc="Software Average Count", mininterval=0.1):
             last_i = i
-            iq_list = prog.acquire(soc, rounds=1, progress=False)
-            iq_data = _iq_to_complex(iq_list)
+            iq_data = acquire_values(
+                prog, soc, rounds=1, progress=False, threshold=threshold
+            )
             iq = iq_data if i == 0 else iq + iq_data
             iqdata = iq / (i + 1)
 
@@ -690,6 +669,7 @@ def _liveplot_sweep_yoko(
     y_label="Y Axis",
     title_prefix="Experiment",
     iq_process="all",
+    threshold=None,
 ):
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
@@ -705,7 +685,10 @@ def _liveplot_sweep_yoko(
     current_step_text = f"{current_step:.2e}" if current_step is not None else "unknown"
     interval_text = f"{interval * 1e3:.1f}" if interval is not None else "unknown"
 
-    iqdata_full = np.zeros((len(y_axis_vals_yoko), len(x_axis_vals)), dtype=complex)
+    result_dtype = float if threshold is not None else complex
+    iqdata_full = np.zeros(
+        (len(y_axis_vals_yoko), len(x_axis_vals)), dtype=result_dtype
+    )
     data_to_plot = np.zeros((len(y_axis_vals_yoko), len(x_axis_vals)))
     interrupted = False
     last_idx = 0
@@ -755,8 +738,9 @@ def _liveplot_sweep_yoko(
             suffix = "A" if yoko_mode == "current" else "V"
             ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}")
 
-            iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-            iq_data_row = _iq_to_complex(iq_list)
+            iq_data_row = acquire_values(
+                prog, soc, rounds=py_avg, progress=False, threshold=threshold
+            )
 
             iqdata_full[idx, :] = iq_data_row
             data_to_plot = _process_iq(iqdata_full, iq_process)
@@ -829,6 +813,7 @@ def _liveplot_1d_scan(
     title_prefix="1D Scan",
     show_final_plot=True,
     iq_process="all",
+    threshold=None,
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
@@ -870,8 +855,12 @@ def _liveplot_1d_scan(
             iqlst = []
             for val in scan_x_axis:
                 prog = get_prog_callback(val)
-                iq_list = prog.acquire(soc, rounds=1, progress=False)
-                iqlst.append(_iq_to_complex(iq_list))
+                iqlst.append(
+                    acquire_values(
+                        prog, soc, rounds=1,
+                        progress=False, threshold=threshold,
+                    )
+                )
 
             current_iq_data = np.array(iqlst)
             iq_sum = current_iq_data if avg == 0 else iq_sum + current_iq_data
@@ -958,11 +947,15 @@ def _liveplot_2d_scan(
     title_prefix="2D Scan",
     show_final_plot=True,
     iq_process="all",
+    threshold=None,
 ):
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 
-    iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)
+    result_dtype = float if threshold is not None else complex
+    iqdata_full = np.zeros(
+        (len(scan_y_axis), len(scan_x_axis)), dtype=result_dtype
+    )
     data_to_plot = np.zeros((len(scan_y_axis), len(scan_x_axis)))
     interrupted = False
     last_y_idx, last_x_idx = 0, 0
@@ -995,8 +988,10 @@ def _liveplot_2d_scan(
                 last_x_idx = x_idx
 
                 prog = get_prog_callback(x_val, y_val)
-                iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-                iq_data_pt = _iq_to_complex(iq_list)
+                iq_data_pt = acquire_values(
+                    prog, soc, rounds=py_avg,
+                    progress=False, threshold=threshold,
+                )
 
                 iqdata_full[y_idx, x_idx] = iq_data_pt
                 data_to_plot = _process_iq(iqdata_full, iq_process)

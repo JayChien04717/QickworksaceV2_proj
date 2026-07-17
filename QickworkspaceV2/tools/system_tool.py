@@ -1,5 +1,4 @@
 import datetime
-import math
 import os
 import pprint
 import re
@@ -10,6 +9,8 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import yaml
 from addict import Dict as AddictDict
+
+from .units import auto_unit
 
 
 def get_next_filename_labber(
@@ -662,27 +663,3 @@ class ExperimentConfig:
         if isinstance(item, int):
             return self.get_qubit(item)
         raise TypeError("Index must be int or str")
-
-
-def auto_unit(value, base_unit=""):
-    """Scale a numeric value to the most appropriate SI metric prefix."""
-    prefixes = {
-        -12: "p",
-        -9: "n",
-        -6: "u",
-        -3: "m",
-        0: "",
-        3: "k",
-        6: "M",
-        9: "G",
-    }
-    arr = np.array(value, dtype=float)
-    maxval = np.max(np.abs(arr))
-    if maxval == 0:
-        exp = 0
-    else:
-        exp = int(math.floor(math.log10(maxval) / 3) * 3)
-        exp = max(min(exp, 9), -12)
-    scaled_value = arr / (10**exp)
-    prefix = prefixes[exp]
-    return {"unit": f"{prefix}{base_unit}", "value": scaled_value}
