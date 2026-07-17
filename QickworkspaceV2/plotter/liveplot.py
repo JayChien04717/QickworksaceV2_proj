@@ -10,6 +10,7 @@ import math
 
 from ..core.acquisition import acquire_values
 from ..tools.units import auto_unit
+from .theme import COLORS, style_axes, style_figure
 
 try:
     from IPython.display import clear_output, display, update_display
@@ -101,6 +102,13 @@ def _normalize_rows(data):
     return (data - row_mins) / ranges
 
 
+def _style_live_axes(fig, axes) -> None:
+    """Style a live-plot canvas while leaving its data artists untouched."""
+    style_figure(fig)
+    for axis in np.asarray(axes, dtype=object).reshape(-1):
+        style_axes(axis)
+
+
 @dataclass
 class LivePlotState:
     current_avg: int = 0
@@ -127,6 +135,7 @@ class LivePlotSession:
             self.owns_figure = False
         self.fig = fig
         self.ax = ax
+        _style_live_axes(fig, [ax])
         self.display_id = display_id or f"live-plot-v2-{np.random.randint(1e9)}"
         self.clear_output_on_finish = clear_output_on_finish
         self.close_on_finish = close_on_finish
@@ -160,7 +169,10 @@ class LineRenderer:
             np.zeros_like(self.x_axis_vals),
             "o-",
             markersize=5,
-            alpha=0.7,
+            alpha=0.82,
+            color=COLORS["blue"],
+            markeredgewidth=0,
+            linewidth=1.35,
         )
         ax.set_xlabel(self.x_label)
         ax.set_ylabel(self.y_label)
@@ -179,7 +191,10 @@ class LineRenderer:
         ax.set_xlabel(self.x_label)
         ax.set_ylabel(self.y_label)
         if data is not None:
-            ax.plot(self.x_axis_vals, data, "o-", markersize=5, alpha=0.7)
+            ax.plot(
+                self.x_axis_vals, data, "o-", markersize=5, alpha=0.82,
+                color=COLORS["blue"], markeredgewidth=0, linewidth=1.35,
+            )
         else:
             ax.text(
                 0.5, 0.5, "No data acquired",
@@ -524,10 +539,12 @@ def _liveplot_sw_avg(
 
     if plot_all_iq and y_axis_vals is None:
         fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        _style_live_axes(fig, axes)
         axes_flat = axes.ravel()
         ax = axes_flat[0]
     else:
         fig, ax = plt.subplots(figsize=(6, 4))
+        _style_live_axes(fig, [ax])
         axes_flat = None
     plot_display_id = f"live-plot-{np.random.randint(1e9)}"
 
@@ -608,9 +625,11 @@ def _liveplot_sw_avg(
     if show_final_plot:
         if plot_all_iq and not is_2d:
             final_fig, final_axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            _style_live_axes(final_fig, final_axes)
             final_ax = final_axes.ravel()[0]
         else:
             final_fig, final_ax = plt.subplots(figsize=(6, 4))
+            _style_live_axes(final_fig, [final_ax])
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq and not is_2d:
             final_fig.suptitle(f"{title_prefix} ({title_status} at avg {last_i + 1})")
@@ -694,6 +713,7 @@ def _liveplot_sweep_yoko(
     last_idx = 0
 
     fig, ax = plt.subplots(figsize=(6, 4))
+    _style_live_axes(fig, [ax])
 
     try:
         yoko_unit = "A" if yoko_mode == "current" else "V"
@@ -825,6 +845,7 @@ def _liveplot_1d_scan(
 
     if plot_all_iq:
         fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        _style_live_axes(fig, axes)
         axes_flat = axes.ravel()
         line = {}
         for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
@@ -839,6 +860,7 @@ def _liveplot_1d_scan(
         title = fig.suptitle(f"{title_prefix} (Initializing...)")
     else:
         fig, ax = plt.subplots(figsize=(6, 4))
+        _style_live_axes(fig, [ax])
         (line,) = ax.plot(
             scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=5, alpha=0.7
         )
@@ -895,9 +917,11 @@ def _liveplot_1d_scan(
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq:
             fig_final, axes_final = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            _style_live_axes(fig_final, axes_final)
             fig_final.suptitle(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
         else:
             fig_final, ax_final = plt.subplots(figsize=(6, 4))
+            _style_live_axes(fig_final, [ax_final])
             ax_final.set_title(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
             ax_final.set_xlabel(x_label)
             ax_final.set_ylabel(_y_label_proc)
@@ -961,6 +985,7 @@ def _liveplot_2d_scan(
     last_y_idx, last_x_idx = 0, 0
 
     fig, ax = plt.subplots(figsize=(6, 4))
+    _style_live_axes(fig, [ax])
 
     mesh = ax.pcolormesh(
         scan_x_axis,

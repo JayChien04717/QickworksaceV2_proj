@@ -335,6 +335,7 @@ class BaseExperiment:
     def _plot_raw_result(self, result: ExperimentData) -> None:
         """Plot stored data without fitting or rendering a fit curve."""
         import matplotlib.pyplot as plt
+        from ..plotter.theme import COLORS, style_axes, style_figure
 
         if result.raw_iq is None:
             raise RuntimeError("No raw data to plot. Call run() first.")
@@ -350,23 +351,36 @@ class BaseExperiment:
         else:
             values, ylabel = np.abs(raw), "|IQ| (ADC unit)"
 
+        fig, ax = plt.subplots(figsize=(8.2, 5.1), layout="constrained")
+        style_figure(fig)
         x = result.x_axis
         if values.ndim == 1:
             x = np.arange(values.size) if x is None else x
-            plt.plot(x, values, "o-", markersize=3)
+            ax.plot(
+                x, values, "o-", markersize=4, markeredgewidth=0,
+                linewidth=1.35, color=COLORS["blue"], alpha=0.82,
+            )
         elif values.ndim == 2 and x is not None and values.shape[-1] == len(x):
             for index, trace in enumerate(values):
-                plt.plot(x, trace, label=f"Trace {index}")
-            plt.legend()
+                ax.plot(x, trace, linewidth=1.3, label=f"Trace {index}")
+            ax.legend(frameon=False, ncols=min(values.shape[0], 4))
         else:
-            plt.imshow(values, aspect="auto", origin="lower")
-            plt.colorbar(label=ylabel)
+            image = ax.imshow(
+                values, aspect="auto", origin="lower",
+                cmap="viridis", interpolation="nearest",
+            )
+            colorbar = fig.colorbar(image, ax=ax, label=ylabel, pad=0.025)
+            colorbar.outline.set_visible(False)
 
-        plt.xlabel(result.x_name or self.X_LABEL or "Sweep")
-        plt.ylabel(ylabel)
-        plt.title(self.TITLE_PREFIX or result.experiment_type)
-        plt.grid(alpha=0.25)
-        plt.tight_layout()
+        ax.set_xlabel(result.x_name or self.X_LABEL or "Sweep")
+        ax.set_ylabel(ylabel)
+        ax.set_title(
+            self.TITLE_PREFIX or result.experiment_type,
+            loc="left",
+            fontsize=13,
+            pad=12,
+        )
+        style_axes(ax, grid=values.ndim < 2)
         plt.show()
 
     def _prepare_run_options(

@@ -82,7 +82,7 @@ class BaseAnalysis(ABC):
         result_text: str = "",
         extra_lines=None,
     ) -> None:
-        """Render the professional 2×3 fit-result figure via plot_utils."""
+        """Render the shared fit dashboard via plot_utils."""
         from ..plotter.plot_utils import plot_fit_result
 
         if data.x_axis is None or data.raw_iq is None:
