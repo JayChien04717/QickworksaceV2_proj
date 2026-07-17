@@ -10,7 +10,6 @@ from qick.asm_v2 import AveragerProgramV2, QickSweep1D
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxRamseyProgram(AveragerProgramV2):
@@ -264,7 +263,6 @@ class MuxRamsey(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=self.wait_axis,
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,

@@ -11,7 +11,6 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxSingleShotGEProgram(AveragerProgramV2):
@@ -271,7 +270,6 @@ class MuxSingleShotGE(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=np.arange(int(cfg["shots"])),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -584,7 +582,6 @@ class MuxSingleShotGEOpt(BaseExperiment):
             x_axis=self.freq_offsets,
             y_axis=self.gain_axis,
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,

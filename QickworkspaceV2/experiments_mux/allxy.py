@@ -12,7 +12,6 @@ from tqdm.auto import tqdm
 from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 ALLXY_SEQUENCE = [
@@ -259,7 +258,6 @@ class MuxAllXY(BaseExperiment):
             x_axis=np.arange(len(ALLXY_SEQUENCE), dtype=float),
             y_axis=self._process_plot_data(self.iqdata, iq_process) if self.iqdata is not None else None,
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={"qubit_names": qubit_names, "sequence": ALLXY_SEQUENCE},
             figures=figures,
             quality=QualityFlag.GOOD if self.iqdata is not None else QualityFlag.BAD,

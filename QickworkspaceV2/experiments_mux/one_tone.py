@@ -12,7 +12,6 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxOneToneProgram(AveragerProgramV2):
@@ -270,7 +269,6 @@ class MuxOneTone(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=self.freq_offsets,
             fit_result=fit_result,
-            config=clean_config(cfg0),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,

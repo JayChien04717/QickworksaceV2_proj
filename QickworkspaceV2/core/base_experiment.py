@@ -74,6 +74,8 @@ class BaseExperiment:
     5. Optionally override :meth:`_post_fit` — perform fitting; populate
        ``self.fit_params``, ``self.fit_errors``, and return the old-style
        value (tuple or scalar) for backward compat.
+    6. Only for specialised multi-readout acquisition, override
+       :meth:`_acquire` and return an ``AcquisitionResult``.
     """
 
     # ── Legacy session state ─────────────────────────────────────────────────
@@ -262,11 +264,26 @@ class BaseExperiment:
             plot_analysis=plot_analysis,
             kwargs=kwargs,
         )
-        prog = self._build_program()
-        axes = self._resolve_axes(prog, ctx)
+
+        prog = self._create_program()
+        self._last_prog = prog
+
+        axes = self._sweep_definition.resolve(self, prog, ctx)
+        self._sweep_vals_x = axes.x
+        self._sweep_vals_y = axes.y
+
         acq = self._acquire(prog, axes, ctx)
-        result = self._finalize_result(acq, axes, ctx)
-        return self._run_analysis(result, ctx)
+        result = self._result_builder.build(self, acq, axes, ctx)
+        self.result = result
+
+        if self.Analysis is not None:
+            analysis_inst = self.Analysis()
+            result = analysis_inst.run(result)
+            if ctx.plot_analysis:
+                analysis_inst.plot(result)
+            self.result = result
+
+        return result
 
     def plot(
         self,
@@ -368,7 +385,6 @@ class BaseExperiment:
         self.iqdata = None
         self.fit_params = None
         self.fit_errors = None
-        config_snapshot = self._snapshot_config()
         return _RunContext(
             py_avg=py_avg,
             iq_process=resolved_iq_process,
@@ -376,19 +392,7 @@ class BaseExperiment:
             liveplot=resolved_liveplot,
             plot_analysis=plot_analysis,
             kwargs=dict(kwargs),
-            config_snapshot=config_snapshot,
         )
-
-    def _build_program(self):
-        prog = self._create_program()
-        self._last_prog = prog
-        return prog
-
-    def _resolve_axes(self, prog, ctx: _RunContext) -> _SweepAxes:
-        axes = self._sweep_definition.resolve(self, prog, ctx)
-        self._sweep_vals_x = axes.x
-        self._sweep_vals_y = axes.y
-        return axes
 
     def _acquire(self, prog, axes: _SweepAxes, ctx: _RunContext) -> _AcquisitionResult:
         result = self._acquisition_runner.acquire(self, prog, axes, ctx)
@@ -402,22 +406,6 @@ class BaseExperiment:
             )
         return result
 
-    def _finalize_result(
-        self, acq: _AcquisitionResult, axes: _SweepAxes, ctx: _RunContext
-    ) -> ExperimentData:
-        result = self._result_builder.build(self, acq, axes, ctx)
-        self.result = result
-        return result
-
-    def _run_analysis(self, result: ExperimentData, ctx: _RunContext) -> ExperimentData:
-        if self.Analysis is not None:
-            analysis_inst = self.Analysis()
-            result = analysis_inst.run(result)
-            if ctx.plot_analysis:
-                analysis_inst.plot(result)
-        self.result = result
-        return result
-
     def _apply_old_result(self, result: ExperimentData, old_result) -> None:
         if old_result is None:
             return
@@ -427,51 +415,6 @@ class BaseExperiment:
             pass
         elif isinstance(old_result, dict):
             result.fit_result = {k: (v, None) for k, v in old_result.items()}
-
-    def _snapshot_config(self) -> dict:
-        try:
-            snapshot = dict(self.cfg)
-        except Exception:
-            return {}
-        try:
-            from ..tools.system_tool import clean_config
-
-            snapshot = clean_config(snapshot)
-        except Exception:
-            pass
-        return self._to_serializable(snapshot)
-
-    @staticmethod
-    def _to_serializable(obj):
-        if isinstance(obj, dict):
-            return {str(k): BaseExperiment._to_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
-            return [BaseExperiment._to_serializable(v) for v in obj]
-        if isinstance(obj, set):
-            return [BaseExperiment._to_serializable(v) for v in obj]
-        if isinstance(obj, np.ndarray):
-            return BaseExperiment._to_serializable(obj.tolist())
-        if isinstance(obj, np.generic):
-            return obj.item()
-        if isinstance(obj, complex):
-            return {"real": obj.real, "imag": obj.imag}
-        if obj is None or isinstance(obj, (str, int, float, bool)):
-            return obj
-
-        sweep_info = {}
-        for attr in ("loop", "name", "start", "stop", "step", "expts", "steps"):
-            if hasattr(obj, attr):
-                try:
-                    sweep_info[attr] = BaseExperiment._to_serializable(
-                        getattr(obj, attr)
-                    )
-                except Exception:
-                    pass
-        if sweep_info:
-            sweep_info["type"] = type(obj).__name__
-            return sweep_info
-
-        return repr(obj)
 
     # =========================================================================
     # Save
@@ -492,12 +435,11 @@ class BaseExperiment:
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
 
-        # self.cfg is the effective configuration used by the program.  In
-        # notebooks this is normally ``run_cfg``: a per-qubit copy containing
-        # experiment-specific overrides.  ``config_all`` is retained in the
-        # signature for notebook compatibility, but must not replace the
-        # effective run configuration in the saved file.
-        dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
 
         comment = self._save_comment(dict_val)
 

@@ -132,7 +132,6 @@ class DragCalibration(BaseExperiment):
             fit_result={k: (v, None) for k, v in fit_result.items()},
             scalar_result=float(optimal_alpha) if optimal_alpha is not None else None,
             quality=QualityFlag.NO_INFORMATION,
-            config=dict(self.cfg) if hasattr(self.cfg, "__iter__") else {},
             interrupted=interrupted,
             avg_count=avg_count,
             x_name=self.X_SAVE_NAME,

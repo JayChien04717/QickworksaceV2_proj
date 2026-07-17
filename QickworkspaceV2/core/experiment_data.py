@@ -86,7 +86,8 @@ class ExperimentData:
     quality: QualityFlag = QualityFlag.NO_INFORMATION
     quality_message: str = ""
 
-    # Config snapshot
+    # Legacy config metadata. New experiment runs leave this empty; config
+    # management and presentation remain owned by ExperimentConfig.
     config: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
 

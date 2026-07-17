@@ -13,7 +13,6 @@ from tqdm.auto import tqdm
 from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxTomographyProgram(AveragerProgramV2):
@@ -293,7 +292,6 @@ class MuxTomography(BaseExperiment):
             },
             x_axis=np.array([0.0, 1.0, 2.0]),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "axes": ["X", "Y", "Z"],

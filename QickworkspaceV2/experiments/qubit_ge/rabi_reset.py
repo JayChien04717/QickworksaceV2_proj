@@ -197,6 +197,10 @@ class ActiveResetRabi(BaseExperiment):
         return None
 
     def _acquire(self, prog, axes, ctx):
+        self.pre_reset_population = None
+        self.post_reset_population = None
+        self.reset_verification_iq = None
+
         threshold = prog.reset_threshold_normalized
         angle = 0.0 if prog.reset_component == "I" else np.pi / 2
         acquired = prog.acquire(
@@ -235,8 +239,28 @@ class ActiveResetRabi(BaseExperiment):
             self.reset_verification_iq = post_reset
 
         self.iqdata = pre_reset
+        if threshold is not None:
+            analysis_data = {
+                "pre_reset_population": {
+                    "values": pre_reset,
+                    "dims": ["x"],
+                },
+                "post_reset_population": {
+                    "values": post_reset,
+                    "dims": ["x"],
+                },
+            }
+        else:
+            analysis_data = {
+                "reset_verification_iq": {
+                    "values": np.asarray(self.reset_verification_iq),
+                    "dims": ["x"],
+                }
+            }
+
         return AcquisitionResult(
             raw_iq=pre_reset,
+            analysis_data=analysis_data,
             avg_count=ctx.py_avg,
             metadata={
                 "active_reset": True,
@@ -249,25 +273,6 @@ class ActiveResetRabi(BaseExperiment):
                 "reset_component": prog.reset_component,
             },
         )
-
-    def _finalize_result(self, acq, axes, ctx):
-        result = super()._finalize_result(acq, axes, ctx)
-        if self.pre_reset_population is not None:
-            result.analysis_data["pre_reset_population"] = {
-                "values": np.asarray(self.pre_reset_population),
-                "dims": ["x"],
-            }
-        if self.post_reset_population is not None:
-            result.analysis_data["post_reset_population"] = {
-                "values": np.asarray(self.post_reset_population),
-                "dims": ["x"],
-            }
-        elif self.reset_verification_iq is not None:
-            result.analysis_data["reset_verification_iq"] = {
-                "values": np.asarray(self.reset_verification_iq),
-                "dims": ["x"],
-            }
-        return result
 
 
 __all__ = ["ActiveResetRabiProgram", "ActiveResetRabi"]

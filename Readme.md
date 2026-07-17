@@ -173,8 +173,10 @@ frequency = float(result)       # only when a scalar result is available
 ## Native HDF5 storage and catalog
 
 `ExperimentData.save()` writes the native `qickworkspace.experiment` v1 format
-with raw complex IQ, dimension-aware axes, fit/analysis results, config,
-comments, and tags. When no filename is supplied it creates a UTC-based unique
+with raw complex IQ, dimension-aware axes, fit/analysis results, comments, and
+tags. Configuration remains managed by `ExperimentConfig`; use
+`cfg_all.to_yaml(q_id=...)` when a formatted configuration is needed. When no
+filename is supplied it creates a UTC-based unique
 experiment ID, a date-organized filename, and a rebuildable SQLite catalog:
 
 ```python

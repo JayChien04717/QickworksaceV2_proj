@@ -98,14 +98,11 @@ class DispersiveShift(BaseExperiment):
         self.iqdata = np.stack(
             [np.squeeze(ground.raw_iq), np.squeeze(excited.raw_iq)]
         )
-        config_snapshot = self._snapshot_config()
-        config_snapshot["_solve_type"] = solve_type
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
             x_axis=self._sweep_vals_x,
             y_axis=self._sweep_vals_y,
-            config=config_snapshot,
             metadata={
                 "states": ["g", "e"],
                 "solve_type": solve_type,

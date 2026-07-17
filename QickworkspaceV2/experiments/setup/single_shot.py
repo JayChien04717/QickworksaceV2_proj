@@ -11,7 +11,6 @@ from tqdm.auto import tqdm
 from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
-from ...tools.system_tool import clean_config
 from .singleshot_utils import plot_hist, general_hist, hist, _fit_gmm
 
 
@@ -115,7 +114,6 @@ class SingleShot_gef:
         self.result = ExperimentData(
             experiment_type="s000_singleshot_gef" if shot_f else "s000_singleshot_ge",
             raw_iq=np.stack(iq_by_state, axis=0),
-            config=clean_config(self.cfg),
             metadata={"qubit": self.cfg.get("name"), "states": states, "shots": int(SHOTS)},
             axes={
                 "state": {"values": states, "label": "Prepared state"},
@@ -158,14 +156,18 @@ class SingleShot_gef:
             self.result.quality = QualityFlag.GOOD if fidelity >= 0.85 else QualityFlag.WARNING
         return analyzed
 
-    def saveLabber(self, qb_idx, yoko_value=None):
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
         from ...core.base_experiment import BaseExperiment
         has_f = "If" in self.data
         expt_name = ("s000_singleshot_gef" if has_f else "s000_singleshot_ge") + f"_{qb_idx}"
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         print("Current data file: " + file_path)
-        dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
         shotdata = np.array([
             self.data["Ig"] + 1j * self.data["Qg"],
             self.data["Ie"] + 1j * self.data["Qe"],
@@ -480,7 +482,6 @@ class SingleShot_ge_opt:
         self.result = ExperimentData(
             experiment_type="s000_singleshot_ge_opt",
             raw_iq=raw_iq,
-            config=clean_config(self.cfg),
             metadata={
                 "qubit": self.cfg.get("name"),
                 "states": states,

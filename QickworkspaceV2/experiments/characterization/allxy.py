@@ -127,15 +127,20 @@ class AllXY(BaseExperiment):
         plt.grid(True)
         plt.show()
 
-    def saveLabber(self, qb_idx, yoko_value=None):
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
         from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
         save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, f"{self.EXPT_NAME}_{qb_idx}", yoko_value)
+        config_yaml = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
         hdf5_generator(
             filepath=file_path,
             x_info={"name": "Sequence", "unit": "None", "values": np.arange(len(ALLXY_SEQUENCE))},
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
-            comment=str(config_to_yaml(self.cfg)),
+            comment=str(config_yaml),
             tag="ALLXY",
         )
         print(f"Data saved to {file_path}")

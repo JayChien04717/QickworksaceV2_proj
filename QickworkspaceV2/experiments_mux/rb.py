@@ -13,7 +13,6 @@ from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
 from ..tools.fitting import error_fit_err, fitrb, rb_error, rb_func
-from ..tools.system_tool import clean_config
 
 
 class MuxRBProgram(AveragerProgramV2):
@@ -293,7 +292,6 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             x_axis=self.x.astype(float),
             y_axis=plot_data.mean(axis=2),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "number_sample": number_sample,

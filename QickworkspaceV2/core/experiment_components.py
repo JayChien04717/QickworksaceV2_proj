@@ -23,7 +23,6 @@ class RunContext:
     liveplot: bool
     plot_analysis: bool
     kwargs: dict[str, Any]
-    config_snapshot: dict
 
 
 @dataclass
@@ -44,6 +43,7 @@ class AcquisitionResult:
     fit_result: dict = field(default_factory=dict)
     scalar_result: Optional[float] = None
     metadata: dict = field(default_factory=dict)
+    analysis_data: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -116,9 +116,7 @@ class AcquisitionRunner:
             show_final_plot=ctx.show_final_plot, iq_process=ctx.iq_process,
             threshold=threshold,
         )
-        return self._result(
-            experiment, iqdata, interrupted, avg_count, threshold
-        )
+        return self._result(iqdata, interrupted, avg_count, threshold)
 
     def _direct(self, experiment, prog, axes, ctx, threshold) -> AcquisitionResult:
         """Acquire without importing or entering the live-plot subsystem."""
@@ -138,16 +136,14 @@ class AcquisitionRunner:
                     )
                 )
             return self._result(
-                experiment, np.asarray(rows), False, len(axes.y), threshold
+                np.asarray(rows), False, len(axes.y), threshold
             )
 
         values = acquire_values(
             prog, experiment.soc, rounds=ctx.py_avg,
             progress=True, threshold=threshold,
         )
-        return self._result(
-            experiment, values, False, ctx.py_avg, threshold
-        )
+        return self._result(values, False, ctx.py_avg, threshold)
 
     @staticmethod
     def _resolve_yoko(ctx: RunContext) -> tuple[Any, Any]:
@@ -171,7 +167,7 @@ class AcquisitionRunner:
 
     @staticmethod
     def _result(
-        experiment, iqdata, interrupted: bool, avg_count: int, threshold
+        iqdata, interrupted: bool, avg_count: int, threshold
     ) -> AcquisitionResult:
         if iqdata is None:
             return AcquisitionResult(
@@ -183,15 +179,19 @@ class AcquisitionRunner:
             raw_iq=iqdata, interrupted=interrupted, avg_count=avg_count
         )
         if threshold is not None:
+            population = np.asarray(iqdata)
+            population_value = (
+                population.item() if population.ndim == 0 else population.tolist()
+            )
             scalar = (
-                float(np.asarray(iqdata).reshape(-1)[0])
+                float(population.reshape(-1)[0])
                 if np.size(iqdata) == 1 else None
             )
             result.fit_params = (
                 np.array([scalar]) if scalar is not None else None
             )
             result.fit_result["population"] = (
-                experiment._to_serializable(iqdata), None
+                population_value, None
             )
             result.scalar_result = scalar
             result.metadata = {
@@ -208,8 +208,8 @@ class ResultBuilder:
         metadata = {"iq_process": ctx.iq_process, **acq.metadata}
         common = dict(
             experiment_type=experiment.EXPT_NAME, quality=acq.quality,
-            quality_message=acq.quality_message, config=ctx.config_snapshot,
-            metadata=metadata, interrupted=acq.interrupted, avg_count=acq.avg_count,
+            quality_message=acq.quality_message, metadata=metadata,
+            interrupted=acq.interrupted, avg_count=acq.avg_count,
         )
         if acq.raw_iq is None:
             return ExperimentData(**common)
@@ -217,6 +217,7 @@ class ResultBuilder:
         old_result = experiment._post_fit(axes.x)
         result = ExperimentData(
             **common, raw_iq=acq.raw_iq, x_axis=axes.x, y_axis=axes.y,
+            analysis_data=dict(acq.analysis_data),
             fit_params=experiment.fit_params if experiment.fit_params is not None else acq.fit_params,
             fit_errors=experiment.fit_errors if experiment.fit_errors is not None else acq.fit_errors,
             fit_result=dict(acq.fit_result), scalar_result=acq.scalar_result,

@@ -12,7 +12,6 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxTOFProgram(AveragerProgramV2):
@@ -200,7 +199,6 @@ class MuxTOF(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=self.t,
             fit_result={name: (tof, None) for name, tof in trig_times.items()},
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,

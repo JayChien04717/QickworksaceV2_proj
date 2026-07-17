@@ -31,10 +31,6 @@ class _ThresholdExperiment(_Experiment):
     def _get_readout_threshold():
         return 0.25
 
-    @staticmethod
-    def _to_serializable(value):
-        return np.asarray(value).tolist()
-
 
 def _context(*, liveplot, py_avg=4, kwargs=None):
     return RunContext(
@@ -44,7 +40,6 @@ def _context(*, liveplot, py_avg=4, kwargs=None):
         liveplot=liveplot,
         plot_analysis=False,
         kwargs=kwargs or {},
-        config_snapshot={},
     )
 
 

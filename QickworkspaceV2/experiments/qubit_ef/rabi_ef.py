@@ -187,7 +187,6 @@ class QubitTemp(BaseExperiment):
             scalar_result=scalar,
             quality=quality,
             quality_message=quality_message,
-            config=dict(self.cfg) if hasattr(self.cfg, "__iter__") else {},
             metadata={
                 "state_labels": ["meas_ef_only", "ref_ge_pi_ef"],
                 "full_model": full_model,
@@ -419,8 +418,11 @@ class QubitTemp(BaseExperiment):
         expt_name = f"{self.EXPT_NAME}_{qb_idx}" if title is None else f"{self.EXPT_NAME}_{qb_idx}_{title}"
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        # Save the effective per-run config, including notebook overrides.
-        dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
 
         hdf5_generator(
             filepath=file_path,

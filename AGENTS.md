@@ -80,7 +80,7 @@ Raw hardware data remains complex in `ExperimentData.raw_iq`. `iq_process` contr
 
 ### Native HDF5 Storage
 
-`ExperimentData.save()` delegates to `tools/hdf5_store.py`. The native v1 file is one experiment per HDF5 and preserves raw complex IQ, named axes/dimensions, analysis arrays, fit results, config, comments, tags, and lineage. Automatic saves use a UTC timestamp + random experiment ID and update a rebuildable `catalog.sqlite`. Existing paths are never overwritten. Keep `saveLabber()` for legacy notebooks; new storage code must not depend on Labber.
+`ExperimentData.save()` delegates to `tools/hdf5_store.py`. The native v1 file is one experiment per HDF5 and preserves raw complex IQ, named axes/dimensions, analysis arrays, fit results, comments, tags, and lineage. New experiment runs do not copy `self.cfg` into `ExperimentData.config`; use `ExperimentConfig.to_yaml()` when configuration display is needed. Automatic saves use a UTC timestamp + random experiment ID and update a rebuildable `catalog.sqlite`. Existing paths are never overwritten. Keep `saveLabber()` for legacy notebooks; new storage code must not depend on Labber.
 
 ### Import Paths Inside `QickworkspaceV2/`
 

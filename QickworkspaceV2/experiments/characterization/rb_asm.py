@@ -418,7 +418,6 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             raw_iq=np.asarray(self.rb_result),
             x_axis=self.x.astype(float),
             y_axis=avg,
-            config=self._snapshot_config(),
             metadata={
                 "qubit": self.cfg.get("name"),
                 "iq_process": iq_process,
@@ -558,8 +557,11 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
 
         save_dir  = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        # Save the effective per-run config, including notebook overrides.
-        dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
         hdf5_generator(
             filepath=file_path,
             x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
