@@ -117,7 +117,7 @@ write_h5("s006_Ramsey_q2_001.h5",
          timestamp="2024-01-15T11:45:00",
          x_vals=t2_time, x_name="Wait Time", x_unit="us",
          iq=iq_ram,
-         config={"T2": T2, "ramsey_freq": f_det, "reps": 1000, "py_avg": 30})
+         config={"T2": T2, "virtual_detune": f_det, "reps": 1000, "py_avg": 30})
 
 # ── 6. Resonator Punchout (2D: power × freq) ─────────────────────────────────
 freq_2d = np.linspace(6490, 6510, 51)

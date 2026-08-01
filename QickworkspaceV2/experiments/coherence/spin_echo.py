@@ -19,7 +19,7 @@ class SpinEchoProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse_pi", gain_key="pi_gain_ge")
         ramsey_phase = (
-            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
             cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase

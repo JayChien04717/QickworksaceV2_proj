@@ -54,9 +54,9 @@ class MuxRamseyProgram(AveragerProgramV2):
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             qb_ch = cfg["qb_ch"][idx]
             pulse_type = cfg["pulse_type"][idx]
-            ramsey_freq = cfg["ramsey_freq"][idx]
+            virtual_detune = cfg["virtual_detune"][idx]
             phase1 = cfg["qb_phase"][idx]
-            phase2 = phase1 + self.wait_time * 360 * ramsey_freq
+            phase2 = phase1 + self.wait_time * 360 * virtual_detune
 
             self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse1", pulse_type, phase1)
             self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse2", pulse_type, phase2)
@@ -199,7 +199,7 @@ class MuxRamsey(BaseExperiment):
                 fit = self._fit_ramsey(
                     self.wait_axis[finite],
                     trace[finite],
-                    cfg["ramsey_freq"][slot],
+                    cfg["virtual_detune"][slot],
                     cfg["qb_freq_ge"][slot],
                 )
                 if fit is None:
@@ -300,8 +300,8 @@ class MuxRamsey(BaseExperiment):
                 print(f"{name}: fitted Ramsey frequency not available.")
                 continue
 
-            ramsey_freq = float(cfg["ramsey_freq"][slot])
-            detune = float(fit_freq) - ramsey_freq
+            virtual_detune = float(cfg["virtual_detune"][slot])
+            detune = float(fit_freq) - virtual_detune
             old_freq = float(qb_freqs[slot])
             delta = round(detune, 2)
             if abs(detune) > 0.005:
@@ -318,7 +318,7 @@ class MuxRamsey(BaseExperiment):
                 "old_qb_freq_ge": old_freq,
                 "new_qb_freq_ge": new_freq,
                 "fit_freq_MHz": float(fit_freq),
-                "ramsey_freq_MHz": ramsey_freq,
+                "virtual_detune_MHz": virtual_detune,
                 "detune_MHz": detune,
                 "detune_error_MHz": delta,
                 "status": status,
@@ -328,16 +328,16 @@ class MuxRamsey(BaseExperiment):
         return corrections
 
     @staticmethod
-    def _fit_ramsey(wait_axis, trace, ramsey_freq, qb_freq):
+    def _fit_ramsey(wait_axis, trace, virtual_detune, qb_freq):
         try:
-            if ramsey_freq:
+            if virtual_detune:
                 from ..tools.fitting import fitdecaysin
 
                 popt, pcov, _ = fitdecaysin(wait_axis, trace)
                 perr = np.sqrt(np.abs(np.diag(pcov)))
                 t2r = abs(float(popt[3]))
                 fit_freq = float(popt[1])
-                detune = fit_freq - float(ramsey_freq)
+                detune = fit_freq - float(virtual_detune)
                 corrected = float(qb_freq) - round(detune, 2)
                 return t2r, fit_freq, detune, corrected, popt, perr, "decaysin"
 

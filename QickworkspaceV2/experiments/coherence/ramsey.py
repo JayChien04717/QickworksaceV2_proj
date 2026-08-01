@@ -18,7 +18,7 @@ class RamseyProgram(BaseProgram):
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
         ramsey_phase = (
-            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
             cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
@@ -40,7 +40,7 @@ class Ramsey(BaseExperiment):
     """
     Ramsey (ge): two π/2 pulses with swept delay.
 
-    Fits decaying sinusoid (ramsey_freq≠0) or exponential (ramsey_freq=0)
+    Fits decaying sinusoid (virtual_detune≠0) or exponential (virtual_detune=0)
     to extract T2* and frequency detuning.
     """
 
@@ -73,13 +73,13 @@ class Ramsey(BaseExperiment):
             raise RuntimeError("Run the experiment first.")
         detune = self.result.fit_result.get("detune_MHz", (None,))[0]
         if detune is None:
-            print("Detune not available (ramsey_freq=0 or fit failed).")
+            print("Detune not available (virtual_detune=0 or fit failed).")
             return self.cfg["qb_freq_ge"]
-        if abs(detune - self.cfg["ramsey_freq"]) > 0.005:
+        if abs(detune - self.cfg["virtual_detune"]) > 0.005:
             self.cfg["qb_freq_ge"] = self.cfg["qb_freq_ge"] - round(
-                (detune - self.cfg["ramsey_freq"]), 2
+                (detune - self.cfg["virtual_detune"]), 2
             )
-            print(f"over detune {round((detune - self.cfg['ramsey_freq']), 5)}MHz")
+            print(f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz")
             return round(self.cfg["qb_freq_ge"], 5)
         else:
             print("Detune < 5kHz")
@@ -102,7 +102,7 @@ class ACStarkProgram(BaseProgram):
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
         ramsey_phase = (
-            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
             cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
