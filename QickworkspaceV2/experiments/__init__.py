@@ -11,6 +11,11 @@ from .characterization import (
     RandomizedBenchmarkingAsm, AutoRBAsm,
     Tomography,
 )
+from .cryoscope import (
+    CryoscopeConst,
+    CryoscopeZeroPadding,
+    PredistortedCryoscope,
+)
 
 __all__ = [
     # setup
@@ -29,4 +34,6 @@ __all__ = [
     "RandomizedBenchmarking", "AutoRB",
     "RandomizedBenchmarkingAsm", "AutoRBAsm",
     "Tomography",
+    # cryoscope
+    "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
 ]

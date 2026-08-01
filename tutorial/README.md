@@ -46,3 +46,9 @@ offline; experiment construction and acquisition require the shared
 
 The connection examples in these notebooks use the same required `data_path`
 contract.
+
+## Additional Notes
+
+| Note | Topic |
+| --- | --- |
+| [T1_nonuniform_sweep.md](T1_nonuniform_sweep.md) | QICK Macro, DMEM/register concepts, and a non-uniform T1 time sweep implementation |

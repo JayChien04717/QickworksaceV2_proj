@@ -72,6 +72,9 @@ _LAZY_EXPORTS = {
     "RandomizedBenchmarking": ".experiments.characterization",
     "AutoRB": ".experiments.characterization",
     "Tomography": ".experiments.characterization",
+    "CryoscopeConst": ".experiments.cryoscope",
+    "CryoscopeZeroPadding": ".experiments.cryoscope",
+    "PredistortedCryoscope": ".experiments.cryoscope",
     "BaseInstrumentManager": ".instruments",
     "InstrumentManager": ".instruments",
 }
@@ -113,6 +116,8 @@ __all__ = [
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "QubitTemp",
     # experiments — characterization
     "AllXY", "RandomizedBenchmarking", "AutoRB", "Tomography",
+    # experiments — cryoscope
+    "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
     # instruments
     "BaseInstrumentManager", "InstrumentManager",
 ]
