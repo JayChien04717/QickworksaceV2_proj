@@ -119,31 +119,45 @@ class RandomizedBenchmarking(BaseExperiment):
             for _ in range(n_depths)
         ]
         sequences_matrix = [[None] * number_sample for _ in range(n_depths)]
+        programs_matrix = [[None] * number_sample for _ in range(n_depths)]
         depth_indices = np.arange(n_depths)
         if randomize_depth_order:
             rng.shuffle(depth_indices)
 
+        for idx in tqdm(depth_indices, desc=f"Compile {desc}", leave=False):
+            depth = self.x[idx]
+            for sample_idx in range(number_sample):
+                sequence = single_qb_rb(
+                    n_clifford=depth,
+                    n_sample=1,
+                    interleave=interleaved_gate,
+                    seed=seeds_matrix[idx][sample_idx],
+                )[0]
+                sequences_matrix[idx][sample_idx] = sequence
+                program_cfg = dict(self.cfg)
+                program_cfg["gate_seq"] = sequence
+                program_cfg["prefix"] = prefix
+                programs_matrix[idx][sample_idx] = RBProgram(
+                    self.soccfg,
+                    reps=program_cfg["reps"],
+                    final_delay=program_cfg["relax_delay"],
+                    cfg=program_cfg,
+                )
+
         rb_accum = [[None] * number_sample for _ in range(n_depths)]
-        for avg_i in tqdm(range(py_avg), desc="Software Average"):
+        for _ in tqdm(range(py_avg), desc="Software Average"):
             for idx in tqdm(depth_indices, desc=desc, leave=False):
-                depth = self.x[idx]
-                for s_i in tqdm(range(number_sample), desc="Samples", leave=False):
-                    seqs = single_qb_rb(
-                        n_clifford=depth, n_sample=1,
-                        interleave=interleaved_gate, seed=seeds_matrix[idx][s_i],
+                for sample_idx in tqdm(
+                    range(number_sample), desc="Samples", leave=False
+                ):
+                    acquired = programs_matrix[idx][sample_idx].acquire(
+                        self.soc, rounds=1, progress=False
                     )
-                    sequences_matrix[idx][s_i] = seqs[0]
-                    self.cfg["gate_seq"] = seqs[0]
-                    self.cfg["prefix"] = prefix
-                    prog = RBProgram(
-                        self.soccfg, reps=self.cfg["reps"],
-                        final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+                    iq_data = acquired[0][0].dot([1, 1j])
+                    previous = rb_accum[idx][sample_idx]
+                    rb_accum[idx][sample_idx] = (
+                        iq_data if previous is None else previous + iq_data
                     )
-                    iq_data = prog.acquire(self.soc, rounds=1, progress=False)[0][0].dot([1, 1j])
-                    if avg_i == 0:
-                        rb_accum[idx][s_i] = iq_data
-                    else:
-                        rb_accum[idx][s_i] = rb_accum[idx][s_i] + iq_data
 
         self.rb_result = [
             [rb_accum[idx][s_i] / py_avg for s_i in range(number_sample)]

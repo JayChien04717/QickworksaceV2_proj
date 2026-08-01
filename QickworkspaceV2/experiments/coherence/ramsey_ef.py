@@ -4,7 +4,7 @@ Ramsey EF (s012) — T2* and detuning for the ef transition.
 
 from __future__ import annotations
 
-from ...analysis.qubit import RamseyAnalysis
+from ...analysis.qubit import RamseyEfAnalysis
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
 
@@ -55,7 +55,7 @@ class RamseyEf(BaseExperiment):
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
-    Analysis = RamseyAnalysis
+    Analysis = RamseyEfAnalysis
 
     def _create_program(self):
         return RamseyEfProgram(

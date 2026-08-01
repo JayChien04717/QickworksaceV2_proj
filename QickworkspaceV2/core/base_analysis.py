@@ -43,6 +43,7 @@ class BaseAnalysis(ABC):
     """
 
     thresholds: dict = {}
+    REQUIRED_CONFIG_KEYS: tuple[str, ...] = ()
 
     def run(self, data: "ExperimentData") -> "ExperimentData":
         """
@@ -70,6 +71,14 @@ class BaseAnalysis(ABC):
         pass
 
     # ── Helper ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _config_value(data: "ExperimentData", key: str, default=None):
+        """Read persisted analysis context with legacy config fallback."""
+        context = data.metadata.get("analysis_context") or {}
+        if key in context:
+            return context[key]
+        return data.config.get(key, default)
 
     def _show_fit(
         self,

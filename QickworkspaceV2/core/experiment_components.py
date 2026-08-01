@@ -206,6 +206,17 @@ class ResultBuilder:
 
     def build(self, experiment, acq: AcquisitionResult, axes: SweepAxes, ctx: RunContext) -> ExperimentData:
         metadata = {"iq_process": ctx.iq_process, **acq.metadata}
+        required_keys = getattr(experiment.Analysis, "REQUIRED_CONFIG_KEYS", ())
+        if required_keys:
+            analysis_context = dict(metadata.get("analysis_context", {}))
+            for key in required_keys:
+                try:
+                    value = experiment.cfg[key]
+                except (KeyError, IndexError, TypeError):
+                    continue
+                if value is not None:
+                    analysis_context[key] = value
+            metadata["analysis_context"] = analysis_context
         common = dict(
             experiment_type=experiment.EXPT_NAME, quality=acq.quality,
             quality_message=acq.quality_message, metadata=metadata,

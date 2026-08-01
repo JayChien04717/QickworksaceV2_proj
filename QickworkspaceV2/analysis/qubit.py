@@ -67,6 +67,9 @@ class T1Analysis(BaseAnalysis):
 class RamseyAnalysis(BaseAnalysis):
     """Damped sinusoid fit → T2*, frequency detuning."""
 
+    FREQUENCY_KEY = "qb_freq_ge"
+    REQUIRED_CONFIG_KEYS = ("virtual_detune", FREQUENCY_KEY)
+
     thresholds = {
         "T2r_us": {"min": 0.1, "max": 1000.0},
     }
@@ -75,7 +78,7 @@ class RamseyAnalysis(BaseAnalysis):
         if data.x_axis is None or data.raw_iq is None:
             return
 
-        virtual_detune = data.config.get("virtual_detune", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
 
         if virtual_detune != 0:
             self._fit_decaysin(data)
@@ -94,8 +97,8 @@ class RamseyAnalysis(BaseAnalysis):
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[3]))
             detune = float(popt[1])
-            virtual_detune = data.config.get("virtual_detune", 0.0)
-            qb_freq = data.config.get("qb_freq_ge", 0.0)
+            virtual_detune = self._config_value(data, "virtual_detune", 0.0)
+            qb_freq = self._config_value(data, self.FREQUENCY_KEY, 0.0)
             corrected_freq = qb_freq - round(detune - virtual_detune, 2)
 
             data.fit_params = np.array(popt)
@@ -137,7 +140,7 @@ class RamseyAnalysis(BaseAnalysis):
     def plot(self, data: ExperimentData) -> None:
         if data.fit_params is None:
             return
-        virtual_detune = data.config.get("virtual_detune", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
         if virtual_detune != 0:
             from ..tools.fitting import decaysin as simfunc
         else:
@@ -173,6 +176,8 @@ class RamseyAnalysis(BaseAnalysis):
 class SpinEchoAnalysis(BaseAnalysis):
     """Hahn echo fit -- T2E."""
 
+    REQUIRED_CONFIG_KEYS = ("virtual_detune",)
+
     thresholds = {
         "T2e_us": {"min": 0.1, "max": 5000.0},
     }
@@ -181,7 +186,7 @@ class SpinEchoAnalysis(BaseAnalysis):
         if data.x_axis is None or data.raw_iq is None:
             return
 
-        virtual_detune = data.config.get("virtual_detune", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
         x = data.x_axis
         detune = None
         detune_err = None
@@ -223,7 +228,7 @@ class SpinEchoAnalysis(BaseAnalysis):
     def plot(self, data: ExperimentData) -> None:
         if data.fit_params is None:
             return
-        virtual_detune = data.config.get("virtual_detune", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
         if virtual_detune != 0:
             from ..tools.fitting import decaysin as simfunc
         else:
@@ -249,6 +254,13 @@ class SpinEchoAnalysis(BaseAnalysis):
             title=title,
             result_text="\n".join(lines),
         )
+
+
+class RamseyEfAnalysis(RamseyAnalysis):
+    """Ramsey analysis using the ef transition frequency for correction."""
+
+    FREQUENCY_KEY = "qb_freq_ef"
+    REQUIRED_CONFIG_KEYS = ("virtual_detune", FREQUENCY_KEY)
 
 
 class PowerRabiAnalysis(BaseAnalysis):

@@ -1,9 +1,12 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 
-from QickworkspaceV2.plotter.liveplot import SoftwareAverageRunner
+from QickworkspaceV2.plotter.liveplot import (
+    SoftwareAverageRunner,
+    run_software_average_liveplot,
+)
 
 
 class LiveplotThresholdTests(unittest.TestCase):
@@ -57,6 +60,32 @@ class LiveplotThresholdTests(unittest.TestCase):
         self.assertFalse(interrupted)
         self.assertEqual(avg_count, 2)
         self.assertEqual([index for index, _ in updates], [0, 1])
+
+    def test_interrupt_before_first_average_reports_zero_completed(self):
+        prog = Mock()
+        prog.acquire.side_effect = KeyboardInterrupt
+        runner = SoftwareAverageRunner(
+            prog=prog, soc="soc", py_avg=2, iq_process="real"
+        )
+
+        values, interrupted, avg_count = runner.run(lambda *_: None)
+
+        self.assertIsNone(values)
+        self.assertTrue(interrupted)
+        self.assertEqual(avg_count, 0)
+
+    def test_public_wrapper_uses_single_software_average_implementation(self):
+        expected = (np.array([1 + 2j]), False, 3)
+        with patch(
+            "QickworkspaceV2.plotter.liveplot._liveplot_sw_avg",
+            return_value=expected,
+        ) as implementation:
+            result = run_software_average_liveplot(
+                prog="prog", soc="soc", py_avg=3, x_axis_vals=np.array([0.0])
+            )
+
+        self.assertIs(result, expected)
+        implementation.assert_called_once()
 
 
 if __name__ == "__main__":

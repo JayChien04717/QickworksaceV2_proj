@@ -5,9 +5,11 @@ Fitting:  Gaussian Mixture Model (GMM) via scikit-learn.
 Fidelity: mean of the confusion-matrix diagonal.
 """
 
+from dataclasses import dataclass
+from itertools import cycle
+
 import matplotlib.pyplot as plt
 import numpy as np
-from itertools import cycle
 from scipy.stats import norm as _norm
 
 try:
@@ -19,6 +21,56 @@ except ImportError:
 default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 linestyle_cycle = ["solid", "dashed", "dotted", "dashdot"]
 marker_cycle    = ["o", "*", "s", "^"]
+
+
+@dataclass(frozen=True)
+class HistogramAnalysis:
+    """Detailed single-shot analysis while preserving the legacy tuple API."""
+
+    legacy_result: list
+    fidelity: float
+    thresholds: np.ndarray
+    rotation_deg: float
+    confusion_matrix_pct: np.ndarray
+    state_gmms: tuple
+    projections: tuple[np.ndarray, ...]
+    primary_weights: np.ndarray
+
+
+def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
+    """Derive optimizer metrics from an existing GMM fit without refitting."""
+    if len(details.projections) < 2 or len(details.state_gmms) < 2:
+        raise ValueError("At least g and e states are required")
+
+    projections = details.projections[:2]
+    gmms = details.state_gmms[:2]
+    means = [float(np.mean(values)) for values in projections]
+    separation = abs(means[1] - means[0])
+    snr = separation**2 / (
+        float(np.var(projections[0])) + float(np.var(projections[1])) + 1e-30
+    )
+
+    soft_accuracies = []
+    for state_index, values in enumerate(projections):
+        samples = values.reshape(-1, 1)
+        log_likelihoods = np.array([gmm.score_samples(samples) for gmm in gmms])
+        shifted = log_likelihoods - log_likelihoods.max(axis=0)
+        posteriors = np.exp(shifted)
+        posteriors /= posteriors.sum(axis=0)
+        soft_accuracies.append(float(posteriors[state_index].mean()))
+
+    secondary_weights = [
+        1.0 - float(np.max(gmm.weights_)) if gmm.n_components > 1 else 0.0
+        for gmm in gmms
+    ]
+    return {
+        "fid": details.fidelity,
+        "soft_fid": float(np.mean(soft_accuracies)),
+        "snr": snr,
+        "sep": separation,
+        "leakage": secondary_weights[1],
+        "thermal": secondary_weights[0],
+    }
 
 
 def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
@@ -136,7 +188,8 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
 def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
                  check_qubit_label=None, numbins=200, amplitude_mode=False,
                  ps_threshold=None, theta=None, plot=True, verbose=True,
-                 fid_avg=False, normalize=True, title=None, export=False):
+                 fid_avg=False, normalize=True, title=None, export=False,
+                 return_details=False):
     if not _HAS_SKLEARN:
         raise ImportError(
             "scikit-learn is required for GMM fitting. "
@@ -330,12 +383,24 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         print(f"Thresholds     : {[f'{t:.3f}' for t in thresholds]}")
         print("Confusion Matrix (%):\n", np.round(conf_matrix_pct, 1))
 
-    return [fids, thresholds, theta_rad * 180 / np.pi, conf_matrix_pct]
+    rotation_deg = theta_rad * 180 / np.pi
+    legacy_result = [fids, thresholds, rotation_deg, conf_matrix_pct]
+    details = HistogramAnalysis(
+        legacy_result=legacy_result,
+        fidelity=fid,
+        thresholds=np.asarray(thresholds, dtype=float),
+        rotation_deg=float(rotation_deg),
+        confusion_matrix_pct=np.asarray(conf_matrix_pct, dtype=float),
+        state_gmms=tuple(state_gmms),
+        projections=tuple(np.asarray(values) for values in I_projs),
+        primary_weights=np.asarray(gmm_weights, dtype=float),
+    )
+    return details if return_details else legacy_result
 
 
 def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
          plot=True, verbose=True, fid_avg=False,
-         normalize=True, title=None, export=False):
+         normalize=True, title=None, export=False, return_details=False):
     iqshots      = [(data["Ig"], data["Qg"]), (data["Ie"], data["Qe"])]
     state_labels = ["g", "e"]
     g_states     = [0]
@@ -352,8 +417,11 @@ def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
         amplitude_mode=amplitude_mode, ps_threshold=ps_threshold,
         theta=theta, plot=plot, verbose=verbose,
         fid_avg=fid_avg, normalize=normalize,
-        title=title, export=export,
+        title=title, export=export, return_details=return_details,
     )
 
 
-__all__ = ["plot_hist", "general_hist", "hist", "_fit_gmm", "_bic_gmm"]
+__all__ = [
+    "HistogramAnalysis", "histogram_metrics", "plot_hist", "general_hist",
+    "hist", "_fit_gmm", "_bic_gmm",
+]

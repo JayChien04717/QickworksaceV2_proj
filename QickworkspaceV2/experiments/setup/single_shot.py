@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
-from .singleshot_utils import plot_hist, general_hist, hist, _fit_gmm
+from .singleshot_utils import general_hist, hist, histogram_metrics, plot_hist
 
 
 # ── Programs ──────────────────────────────────────────────────────────────────
@@ -284,47 +284,6 @@ class SingleShot_ge_opt:
             self.data["Qf"] = self.Q_f_array
 
     @staticmethod
-    def _compute_metrics(I_g, Q_g, I_e, Q_e):
-        mg = np.array([I_g.mean(), Q_g.mean()])
-        me = np.array([I_e.mean(), Q_e.mean()])
-        v = me - mg
-        n = float(np.linalg.norm(v))
-        sep = 0.0
-        snr = 0.0
-        if n > 1e-12:
-            pg = ((I_g - mg[0]) * v[0] + (Q_g - mg[1]) * v[1]) / n
-            pe = ((I_e - mg[0]) * v[0] + (Q_e - mg[1]) * v[1]) / n
-            sep = n
-            snr = n**2 / (pg.var() + pe.var() + 1e-30)
-        all_c = np.concatenate([I_g + 1j * Q_g, I_e + 1j * Q_e])
-        theta_rad = -np.arctan2(me[1] - mg[1], me[0] - mg[0])
-        def _rot_I(c):
-            return c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
-        proj_g = _rot_I(I_g + 1j * Q_g)
-        proj_e = _rot_I(I_e + 1j * Q_e)
-        proj_all = _rot_I(all_c)
-        span = (proj_all.max() - proj_all.min()) / 2
-        mid = (proj_all.max() + proj_all.min()) / 2
-        xlims = [mid - span, mid + span]
-        (state_gmms, state_order, conf_matrix, thresholds,
-         primary_means, primary_stds, primary_weights) = _fit_gmm([proj_g, proj_e], xlims)
-        fid = float(np.mean(np.diag(conf_matrix)))
-        soft_accs = []
-        for i, proj in enumerate([proj_g, proj_e]):
-            X = proj.reshape(-1, 1)
-            ll = np.array([gmm.score_samples(X) for gmm in state_gmms])
-            ll_shifted = ll - ll.max(axis=0)
-            posteriors = np.exp(ll_shifted)
-            posteriors /= posteriors.sum(axis=0)
-            soft_accs.append(float(posteriors[i].mean()))
-        soft_fid = float(np.mean(soft_accs))
-        gmm_e = state_gmms[1]
-        leakage = float(1.0 - np.max(gmm_e.weights_)) if gmm_e.n_components > 1 else 0.0
-        gmm_g = state_gmms[0]
-        thermal = float(1.0 - np.max(gmm_g.weights_)) if gmm_g.n_components > 1 else 0.0
-        return dict(fid=fid, soft_fid=soft_fid, snr=snr, sep=sep, leakage=leakage, thermal=thermal)
-
-    @staticmethod
     def _is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
         is_eff = np.ones(len(costs), dtype=bool)
         for i, c in enumerate(costs):
@@ -363,9 +322,10 @@ class SingleShot_ge_opt:
         I_e = iq_list[0][1, :, 0]
         Q_e = iq_list[0][1, :, 1]
         data_slice = {"Ig": I_g, "Qg": Q_g, "Ie": I_e, "Qe": Q_e}
-        fid = hist(data_slice, plot=False, verbose=False)[0][0]
-        metrics = self._compute_metrics(I_g, Q_g, I_e, Q_e)
-        metrics["fid"] = fid
+        details = hist(
+            data_slice, plot=False, verbose=False, return_details=True
+        )
+        metrics = histogram_metrics(details)
         return I_g, Q_g, I_e, Q_e, metrics
 
     def analyze(self, leakage_threshold=0.20, thermal_threshold=0.10,
@@ -409,9 +369,11 @@ class SingleShot_ge_opt:
                     if shot_f:
                         data_slice["If"] = self.data["If"][l_idx, g_idx, f_idx]
                         data_slice["Qf"] = self.data["Qf"][l_idx, g_idx, f_idx]
-                    result = hist(data_slice, plot=False, verbose=False)
-                    fid_Array[l_idx, g_idx, f_idx] = result[0][0]
-                    m = self._compute_metrics(I_g, Q_g, I_e, Q_e)
+                    details = hist(
+                        data_slice, plot=False, verbose=False, return_details=True
+                    )
+                    fid_Array[l_idx, g_idx, f_idx] = details.fidelity
+                    m = histogram_metrics(details)
                     soft_fid_array[l_idx, g_idx, f_idx] = m["soft_fid"]
                     snr_array[l_idx, g_idx, f_idx] = m["snr"]
                     sep_array[l_idx, g_idx, f_idx] = m["sep"]
