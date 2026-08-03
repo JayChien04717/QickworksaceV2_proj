@@ -156,7 +156,7 @@ class SingleShot_gef:
             self.result.quality = QualityFlag.GOOD if fidelity >= 0.85 else QualityFlag.WARNING
         return analyzed
 
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, filename_mode="random"):
         from ...core.base_experiment import BaseExperiment
         has_f = "If" in self.data
         expt_name = ("s000_singleshot_gef" if has_f else "s000_singleshot_ge") + f"_{qb_idx}"
@@ -173,13 +173,16 @@ class SingleShot_gef:
             self.data["Ie"] + 1j * self.data["Qe"],
         ] + ([self.data["If"] + 1j * self.data["Qf"]] if has_f else []))
         states = [0, 1, 2] if has_f else [0, 1]
-        hdf5_generator(
+        saved_path = hdf5_generator(
             filepath=file_path,
             x_info={"name": "# shot", "unit": "#", "values": np.arange(self.cfg["shots"])},
             y_info={"name": "State", "unit": "", "values": states},
             z_info={"name": "Signal", "unit": "ADC unit", "values": shotdata},
             comment=f"{dict_val}", tag="SingleShot",
+            result=self.result,
+            filename_mode=filename_mode,
         )
+        return str(saved_path)
 
 
 # ── Experiment: SingleShot_ge_opt ─────────────────────────────────────────────

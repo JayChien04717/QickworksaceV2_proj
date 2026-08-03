@@ -59,32 +59,56 @@ def get_next_filename_labber(
         return os.path.join(save_path, final_filename)
 
 
-def hdf5_generator(filepath, x_info, z_info, y_info=None, comment=None, tag=None):
-    """Create a Labber-compatible HDF5 log file and write measurement data."""
+def hdf5_generator(
+    filepath,
+    x_info,
+    z_info,
+    y_info=None,
+    comment=None,
+    tag=None,
+    *,
+    result=None,
+    embed_native=True,
+    save_plots=True,
+    data_root=None,
+    filename_mode="random",
+    figures=None,
+):
+    """Save one combined Labber + native HDF5 file.
+
+    ``filename_mode`` is ``"random"`` by default and appends the native
+    experiment ID. Set it to ``"sequential"`` to retain ``_001``, ``_002``, ...
+    filenames returned by :func:`get_next_filename_labber`.
+    """
     try:
-        from ..tools import Labber_saver as Labber
-    except ImportError as e:
-        raise ImportError("Labber is required to save HDF5 files.") from e
+        from ..tools.Labber_saver import LabberHDF5Saver
+    except ImportError as exc:
+        raise ImportError("Labber_saver is required to save HDF5 files.") from exc
 
-    zdata = z_info["values"]
-    z_info.update({"complex": True, "vector": False})
+    if data_root is None:
+        try:
+            from ..core.base_experiment import BaseExperiment
+            data_root = BaseExperiment._data_path
+        except Exception:
+            data_root = None
 
-    log_channels = [z_info]
-    step_channels = list(filter(None, [x_info, y_info]))
-
-    fObj = Labber.createLogFile_ForData(
-        filepath, log_channels, step_channels, use_database=False
+    saver = LabberHDF5Saver(
+        filename_mode=filename_mode,
+        embed_native=embed_native,
+        save_plots=save_plots,
     )
-    if y_info:
-        for trace in zdata:
-            fObj.addEntry({z_info["name"]: trace})
-    else:
-        fObj.addEntry({z_info["name"]: zdata})
-
-    if comment:
-        fObj.setComment(comment)
-    if tag:
-        fObj.setTags(tag)
+    return saver.save(
+        filepath,
+        x_info,
+        z_info,
+        y_info=y_info,
+        comment=comment,
+        tag=tag,
+        result=result,
+        data_root=data_root,
+        figures=figures,
+        catalog=True,
+    )
 
 
 def clean_config(config):

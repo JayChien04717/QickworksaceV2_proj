@@ -142,5 +142,6 @@ class AllXY(BaseExperiment):
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
             comment=str(config_yaml),
             tag="ALLXY",
+            result=self.result,
         )
         print(f"Data saved to {file_path}")

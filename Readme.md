@@ -201,21 +201,18 @@ runs = find_experiments(
 latest_t1 = runs[0].load()
 ```
 
-To browse an entire Data path, use the lazy archive reader. Construction scans
-completed HDF5 metadata into the catalog, but raw arrays are loaded only when
-requested:
+To browse a Data path, query the SQLite catalog and load only the selected
+experiment:
 
 ```python
-from QickworkspaceV2.tools import ExperimentArchive
+from QickworkspaceV2.tools import find_experiments, load_result
 
-archive = ExperimentArchive(r"D:\Labber_Data\Jay\test")
-runs = archive.query(experiment_type="s008_T1_ge", qubit="Q1")
-
-record = runs[0]
-print(record.comment_preview, record.raw_keys(), record.analysis_keys())
-iq = record.load_raw("iq", selection={"delay_us": slice(0, 20)})
-figure = record.plot()              # dispatches through the stored plot_id
-result = record.load()              # explicitly load the complete experiment
+runs = find_experiments(
+    experiment_type="s008_T1_ge",
+    qubit="Q1",
+    data_root=r"D:\Labber_Data\Jay\test",
+)
+result = load_result(runs[0].path)
 ```
 
 The offline examples in [`test/hdf5_reader_demo`](test/hdf5_reader_demo)

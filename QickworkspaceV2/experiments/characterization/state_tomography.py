@@ -267,5 +267,6 @@ class Tomography(BaseExperiment):
             z_info={"name": "Signal", "unit": "ADC unit",
                     "values": np.array([self.tomo_data_raw["X"], self.tomo_data_raw["Y"], self.tomo_data_raw["Z"]])},
             comment=comment, tag="Tomography",
+            result=self.result,
         )
         print(f"Data saved to {file_path}")

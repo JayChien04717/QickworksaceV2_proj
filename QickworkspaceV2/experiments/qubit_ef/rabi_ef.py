@@ -431,6 +431,7 @@ class QubitTemp(BaseExperiment):
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
             comment=self._save_comment(f"{dict_val}\nState 0: ef only\nState 1: ge pi + ef"),
             tag=self.TAG,
+            result=self.result,
         )
         print(f"Data saved to {file_path}")
 

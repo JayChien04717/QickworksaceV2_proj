@@ -28,6 +28,8 @@ SCHEMA_NAME = "qickworkspace.experiment"
 SCHEMA_VERSION = "1.0"
 LOCAL_TIMEZONE = ZoneInfo("Asia/Taipei")
 CATALOG_FILENAME = "catalog.sqlite"
+EMBEDDED_GROUP = "metagroup"
+LEGACY_EMBEDDED_GROUPS = ("QickworkspaceV2",)
 _ID_RE = re.compile(r"^\d{8}T\d{12}Z-[0-9A-HJKMNP-TV-Z]{13}$")
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _STRING_DTYPE = h5py.string_dtype(encoding="utf-8")
@@ -475,12 +477,23 @@ def _attrs_dict(h5: h5py.File) -> dict:
     return result
 
 
+def _native_root(h5: h5py.File | h5py.Group):
+    """Return the native schema root for standalone or Labber-hybrid files."""
+    if h5.attrs.get("schema_name") == SCHEMA_NAME:
+        return h5
+    for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
+        candidate = h5.get(group_name)
+        if isinstance(candidate, h5py.Group) and candidate.attrs.get("schema_name") == SCHEMA_NAME:
+            return candidate
+    return None
+
+
 def inspect_file(path: os.PathLike | str) -> dict:
-    """Read lightweight root/meta information without loading raw arrays."""
+    """Read lightweight metadata from standalone or Labber-hybrid files."""
     path = Path(path).expanduser().resolve()
     with h5py.File(path, "r") as h5:
-        attrs = _attrs_dict(h5)
-        if attrs.get("schema_name") != SCHEMA_NAME:
+        root = _native_root(h5)
+        if root is None:
             meta = _json_loads(h5.attrs.get("meta"), {}) or {}
             return {
                 "path": str(path),
@@ -488,7 +501,8 @@ def inspect_file(path: os.PathLike | str) -> dict:
                 "schema_version": "0",
                 **meta,
             }
-        meta_group = h5.get("meta")
+        attrs = _attrs_dict(root)
+        meta_group = root.get("meta")
         metadata = _json_loads(_read_text(meta_group, "metadata_json"), {}) if meta_group else {}
         config = _json_loads(_read_text(meta_group, "config_json"), {}) if meta_group else {}
         lineage = _json_loads(_read_text(meta_group, "lineage_json"), {}) if meta_group else {}
@@ -510,6 +524,7 @@ def inspect_file(path: os.PathLike | str) -> dict:
             qubits = [qubits]
         return {
             "path": str(path),
+            "container_group": root.name if root.name != "/" else "/",
             **attrs,
             "comment": comment,
             "tags": tags,
@@ -519,47 +534,47 @@ def inspect_file(path: os.PathLike | str) -> dict:
             "qubits": [str(item) for item in qubits],
         }
 
-
 def load_result(path: os.PathLike | str):
-    """Load a native v1 file, with fallback support for the previous local format."""
+    """Load standalone native v1, Labber-hybrid, or the previous local format."""
     path = Path(path).expanduser().resolve()
     from ..core.experiment_data import ExperimentData, QualityFlag
 
     with h5py.File(path, "r") as h5:
-        if h5.attrs.get("schema_name") != SCHEMA_NAME:
+        root = _native_root(h5)
+        if root is None:
             return _load_previous_format(h5)
-        if not bool(h5.attrs.get("write_complete", False)):
+        if not bool(root.attrs.get("write_complete", False)):
             raise ValueError(f"Experiment file is incomplete: {path}")
-        experiment_id = str(h5.attrs.get("experiment_id", ""))
+        experiment_id = str(root.attrs.get("experiment_id", ""))
         if not validate_experiment_id(experiment_id):
             raise ValueError(f"Invalid experiment_id in {path}: {experiment_id!r}")
 
-        meta = h5["meta"]
+        meta = root["meta"]
         config = _json_loads(_read_text(meta, "config_json"), {}) or {}
         metadata = _json_loads(_read_text(meta, "metadata_json"), {}) or {}
         lineage = _json_loads(_read_text(meta, "lineage_json"), {}) or {}
-        results = h5["results"]
+        results = root["results"]
         summary = _json_loads(_read_text(results, "summary_json"), {}) or {}
         fit_result = _json_loads(_read_text(results, "fit_result_json"), {}) or {}
-        timestamp = datetime.fromisoformat(str(h5.attrs["timestamp_utc"]))
-        quality_raw = str(h5.attrs.get("quality", "no_information"))
+        timestamp = datetime.fromisoformat(str(root.attrs["timestamp_utc"]))
+        quality_raw = str(root.attrs.get("quality", "no_information"))
         try:
             quality = QualityFlag(quality_raw)
         except ValueError:
             quality = QualityFlag.NO_INFORMATION
 
-        raw_tree = _read_tree(h5["raw"])
-        raw_dims = _collect_dataset_dims(h5["raw"])
+        raw_tree = _read_tree(root["raw"])
+        raw_dims = _collect_dataset_dims(root["raw"])
         if "iq" in raw_tree:
             raw_iq = raw_tree["iq"]
             raw_data = {key: value for key, value in raw_tree.items() if key != "iq"}
         else:
             raw_iq = raw_tree or None
             raw_data = {}
-        analysis_data = _read_tree(h5["analysis"], preserve_attrs=True)
+        analysis_data = _read_tree(root["analysis"], preserve_attrs=True)
         axes = {}
         x_axis = y_axis = None
-        for name, group in h5["axes"].items():
+        for name, group in root["axes"].items():
             values = group["values"][:]
             if values.dtype.kind in {"O", "S"}:
                 values = np.asarray([
@@ -579,8 +594,8 @@ def load_result(path: os.PathLike | str):
                 y_axis = values / scale
 
         tags = [item.decode() if isinstance(item, bytes) else str(item) for item in meta["tags"][:]]
-        obj = ExperimentData(
-            experiment_type=str(h5.attrs.get("experiment_type", "")),
+        return ExperimentData(
+            experiment_type=str(root.attrs.get("experiment_type", "")),
             experiment_id=experiment_id,
             timestamp=timestamp,
             raw_iq=raw_iq,
@@ -596,27 +611,25 @@ def load_result(path: os.PathLike | str):
             metadata=metadata,
             parent_id=lineage.get("parent_id"),
             children=lineage.get("children") or [],
-            interrupted=bool(h5.attrs.get("interrupted", False)),
+            interrupted=bool(root.attrs.get("interrupted", False)),
             avg_count=int(summary.get("avg_count", 0)),
-            x_name=str(h5["axes/x"].attrs.get("label", "")) if "x" in h5["axes"] else "",
-            x_unit=str(h5["axes/x"].attrs.get("unit", "")) if "x" in h5["axes"] else "",
-            x_scale=float(h5["axes/x"].attrs.get("scale", 1.0)) if "x" in h5["axes"] else 1.0,
-            y_name=str(h5["axes/y"].attrs.get("label", "")) if "y" in h5["axes"] else "",
-            y_unit=str(h5["axes/y"].attrs.get("unit", "")) if "y" in h5["axes"] else "",
-            y_scale=float(h5["axes/y"].attrs.get("scale", 1.0)) if "y" in h5["axes"] else 1.0,
+            x_name=str(root["axes/x"].attrs.get("label", "")) if "x" in root["axes"] else "",
+            x_unit=str(root["axes/x"].attrs.get("unit", "")) if "x" in root["axes"] else "",
+            x_scale=float(root["axes/x"].attrs.get("scale", 1.0)) if "x" in root["axes"] else 1.0,
+            y_name=str(root["axes/y"].attrs.get("label", "")) if "y" in root["axes"] else "",
+            y_unit=str(root["axes/y"].attrs.get("unit", "")) if "y" in root["axes"] else "",
+            y_scale=float(root["axes/y"].attrs.get("scale", 1.0)) if "y" in root["axes"] else 1.0,
             axes=axes,
             raw_data=raw_data,
             analysis_data=analysis_data,
             dataset_dims=raw_dims,
-            data_kind=str(h5.attrs.get("data_kind", "")),
-            analysis_id=str(h5.attrs.get("analysis_id", "")),
-            plot_id=str(h5.attrs.get("plot_id", "")),
+            data_kind=str(root.attrs.get("data_kind", "")),
+            analysis_id=str(root.attrs.get("analysis_id", "")),
+            plot_id=str(root.attrs.get("plot_id", "")),
             comment=_read_text(meta, "comment"),
             tags=tags,
             session_id=lineage.get("session_id"),
         )
-        return obj
-
 
 def _load_previous_format(h5: h5py.File):
     from ..core.experiment_data import ExperimentData
@@ -644,41 +657,42 @@ class ValidationReport:
 
 
 def validate_file(path: os.PathLike | str) -> ValidationReport:
-    """Validate schema identity, completion state, ID, and dataset dimensions."""
+    """Validate standalone or embedded native schema and dataset dimensions."""
     errors: list[str] = []
     warnings: list[str] = []
     resolved = str(Path(path).expanduser().resolve())
     try:
         with h5py.File(resolved, "r") as h5:
-            if h5.attrs.get("schema_name") != SCHEMA_NAME:
+            root = _native_root(h5)
+            if root is None:
                 errors.append("schema_name is not qickworkspace.experiment")
-            if str(h5.attrs.get("schema_version", "")) != SCHEMA_VERSION:
-                errors.append(f"unsupported schema_version {h5.attrs.get('schema_version')!r}")
-            if not bool(h5.attrs.get("write_complete", False)):
+                return ValidationReport(resolved, False, errors, warnings)
+            if str(root.attrs.get("schema_version", "")) != SCHEMA_VERSION:
+                errors.append(f"unsupported schema_version {root.attrs.get('schema_version')!r}")
+            if not bool(root.attrs.get("write_complete", False)):
                 errors.append("write_complete is false")
-            if not validate_experiment_id(str(h5.attrs.get("experiment_id", ""))):
+            if not validate_experiment_id(str(root.attrs.get("experiment_id", ""))):
                 errors.append("experiment_id is invalid")
             for group in ("meta", "axes", "raw", "analysis", "results"):
-                if group not in h5:
+                if group not in root:
                     errors.append(f"missing group: {group}")
-            if "raw" in h5 and len(h5["raw"]) == 0:
+            if "raw" in root and len(root["raw"]) == 0:
                 warnings.append("raw group contains no datasets")
             axis_lengths = {
                 name: int(group["values"].size)
-                for name, group in h5.get("axes", {}).items()
+                for name, group in root.get("axes", {}).items()
                 if "values" in group
             }
             for group_name in ("raw", "analysis"):
-                if group_name not in h5:
+                if group_name not in root:
                     continue
+
                 def _check_dims(name, node):
                     if not isinstance(node, h5py.Dataset) or "dims" not in node.attrs:
                         return
                     dims = list(_json_loads(node.attrs["dims"], []) or [])
                     if len(dims) != node.ndim:
-                        errors.append(
-                            f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset"
-                        )
+                        errors.append(f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset")
                         return
                     for index, dim in enumerate(dims):
                         if dim not in axis_lengths:
@@ -688,11 +702,11 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
                                 f"{group_name}/{name}: shape[{index}]={node.shape[index]} "
                                 f"does not match axis {dim!r} length {axis_lengths[dim]}"
                             )
-                h5[group_name].visititems(_check_dims)
+
+                root[group_name].visititems(_check_dims)
     except Exception as exc:
         errors.append(str(exc))
     return ValidationReport(resolved, not errors, errors, warnings)
-
 
 def _catalog_path(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
@@ -719,10 +733,12 @@ def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
         return _catalog_contains_id(root, experiment_id)
     if not root.exists():
         return False
-    for path in root.rglob("*.h5"):
+    candidates = list(root.rglob("*.h5")) + list(root.rglob("*.hdf5"))
+    for path in candidates:
         try:
             with h5py.File(path, "r") as h5:
-                if str(h5.attrs.get("experiment_id", "")) == experiment_id:
+                native_root = _native_root(h5)
+                if native_root is not None and str(native_root.attrs.get("experiment_id", "")) == experiment_id:
                     return True
         except OSError:
             continue
@@ -888,7 +904,8 @@ def rebuild_catalog(data_root: os.PathLike | str) -> int:
         if sidecar.exists():
             sidecar.unlink()
     count = 0
-    for path in sorted(root.rglob("*.h5")):
+    candidates = sorted(set(root.rglob("*.h5")) | set(root.rglob("*.hdf5")))
+    for path in candidates:
         try:
             info = inspect_file(path)
             if info.get("schema_name") != SCHEMA_NAME or not info.get("write_complete"):
@@ -951,7 +968,7 @@ def convert_labber_file(
 
 
 __all__ = [
-    "SCHEMA_NAME", "SCHEMA_VERSION", "ExperimentReference", "ValidationReport",
+    "SCHEMA_NAME", "SCHEMA_VERSION", "EMBEDDED_GROUP", "LEGACY_EMBEDDED_GROUPS", "ExperimentReference", "ValidationReport",
     "generate_experiment_id", "validate_experiment_id", "save_result", "load_result",
     "inspect_file", "validate_file", "find_experiments", "rebuild_catalog",
     "convert_labber_file",

@@ -571,6 +571,7 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                     "values": np.array(self.rb_result).T},
             comment=str(dict_val),
             tag="RB",
+            result=self.result,
         )
         print(f"RB data saved to {file_path}")
 

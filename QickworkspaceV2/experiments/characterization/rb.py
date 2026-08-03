@@ -257,6 +257,7 @@ class RandomizedBenchmarking(BaseExperiment):
             y_info={"name": "Sample Number", "unit": "", "values": np.arange(self._number_sample, dtype=float)},
             z_info={"name": "Signal", "unit": "ADC unit", "values": np.array(self.rb_result).T},
             comment=str(dict_val), tag="RB",
+            result=self.result,
         )
         print(f"RB data saved to {file_path}")
 

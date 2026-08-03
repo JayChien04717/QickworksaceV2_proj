@@ -433,7 +433,7 @@ class BaseExperiment:
     # =========================================================================
     # Save
     # =========================================================================
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None, filename_mode="random"):
         """Legacy Labber-format HDF5 save (unchanged from original)."""
         from ..tools.system_tool import (
             config_to_yaml,
@@ -470,15 +470,18 @@ class BaseExperiment:
                 "values": self._sweep_vals_y * self.Y_SAVE_SCALE,
             }
 
-        hdf5_generator(
+        saved_path = hdf5_generator(
             filepath=file_path,
             x_info=x_info,
             y_info=y_info,
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
             comment=comment,
             tag=self.TAG,
+            result=self.result,
+            filename_mode=filename_mode,
         )
-        print(f"Data saved to {file_path}")
+        print(f"Data saved to {saved_path}")
+        return str(saved_path)
 
     # ══════════════════════════════════════════════════════════════════════════
     # Internal helpers
