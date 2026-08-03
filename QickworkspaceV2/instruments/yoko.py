@@ -7,23 +7,7 @@ from tqdm.auto import tqdm
 from typing import Literal, Union
 
 from .base import DCSourceInstrument
-
-try:
-    from ..tools.system_tool import auto_unit
-except Exception:
-    def auto_unit(value, base_unit=""):
-        prefixes = {
-            -12: "p", -9: "n", -6: "u", -3: "m",
-            0: "", 3: "k", 6: "M", 9: "G",
-        }
-        arr = np.array(value, dtype=float)
-        maxval = np.max(np.abs(arr))
-        if maxval == 0:
-            exp = 0
-        else:
-            exp = int(np.floor(np.log10(maxval) / 3) * 3)
-            exp = max(min(exp, 9), -12)
-        return {"unit": f"{prefixes[exp]}{base_unit}", "value": arr / (10**exp)}
+from ..tools.units import auto_unit
 
 
 class YOKOGS200(DCSourceInstrument):

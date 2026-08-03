@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import datetime
-import math
 import os
 import pprint
 import re
 import warnings
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 import yaml
 from addict import Dict as AddictDict
 
+from .units import auto_unit
+
 
 def get_next_filename_labber(
-    dest_path: str, exp_name: str, yoko_value: Optional[Dict[str, Any]] = None
+    dest_path: str, exp_name: str, yoko_value: dict[str, Any] | None = None
 ) -> str:
     """
     Generate the next HDF5 filename for a Labber-compatible log file.
@@ -50,8 +53,7 @@ def get_next_filename_labber(
                 match = pattern.match(f)
                 if match:
                     current_index = int(match.group(1))
-                    if current_index > max_index:
-                        max_index = current_index
+                    max_index = max(max_index, current_index)
         next_index = max_index + 1
         final_filename = f"{exp_name}_{next_index:03d}"
         return os.path.join(save_path, final_filename)
@@ -60,19 +62,19 @@ def get_next_filename_labber(
 def hdf5_generator(filepath, x_info, z_info, y_info=None, comment=None, tag=None):
     """Create a Labber-compatible HDF5 log file and write measurement data."""
     try:
-        import Labber
+        from ..tools import Labber_saver as Labber
     except ImportError as e:
         raise ImportError("Labber is required to save HDF5 files.") from e
 
-    np.float = float
-    np.bool = bool
     zdata = z_info["values"]
     z_info.update({"complex": True, "vector": False})
 
     log_channels = [z_info]
     step_channels = list(filter(None, [x_info, y_info]))
 
-    fObj = Labber.createLogFile_ForData(filepath, log_channels, step_channels)
+    fObj = Labber.createLogFile_ForData(
+        filepath, log_channels, step_channels, use_database=False
+    )
     if y_info:
         for trace in zdata:
             fObj.addEntry({z_info["name"]: trace})
@@ -138,9 +140,7 @@ class ExperimentConfig:
         Keys whose values are collapsed to a scalar when all qubits share the same value.
     """
 
-    def __init__(
-        self, data: Union[List, Dict], keys_to_unify: Optional[List[str]] = None
-    ):
+    def __init__(self, data: list | dict, keys_to_unify: list[str] | None = None):
         self._raw_list = data
         self.keys_to_unify = keys_to_unify or [
             "reps",
@@ -178,7 +178,7 @@ class ExperimentConfig:
         """Return the list of qubit names in config order."""
         return [cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)]
 
-    def get_qubit(self, q_id: Union[int, str]) -> AddictDict:
+    def get_qubit(self, q_id: int | str) -> AddictDict:
         """Return a flat configuration dict for a single qubit."""
         indices = self._resolve_indices(q_id)
         idx = indices[0]
@@ -466,7 +466,7 @@ class ExperimentConfig:
                         found = True
         return found
 
-    def read_config(self, q_id) -> Dict:
+    def read_config(self, q_id) -> dict:
         indices = self._resolve_indices(q_id)
         return self._clean_data(self._raw_list[indices[0]])
 
@@ -571,7 +571,7 @@ class ExperimentConfig:
                 f.write(yaml_str)
             print(f"Configuration saved to {filename}")
 
-    def _resolve_indices(self, q_identifier) -> List[int]:
+    def _resolve_indices(self, q_identifier) -> list[int]:
         if q_identifier is None:
             return list(range(len(self._raw_list)))
         if isinstance(q_identifier, (int, np.integer)):
@@ -662,27 +662,3 @@ class ExperimentConfig:
         if isinstance(item, int):
             return self.get_qubit(item)
         raise TypeError("Index must be int or str")
-
-
-def auto_unit(value, base_unit=""):
-    """Scale a numeric value to the most appropriate SI metric prefix."""
-    prefixes = {
-        -12: "p",
-        -9: "n",
-        -6: "u",
-        -3: "m",
-        0: "",
-        3: "k",
-        6: "M",
-        9: "G",
-    }
-    arr = np.array(value, dtype=float)
-    maxval = np.max(np.abs(arr))
-    if maxval == 0:
-        exp = 0
-    else:
-        exp = int(math.floor(math.log10(maxval) / 3) * 3)
-        exp = max(min(exp, 9), -12)
-    scaled_value = arr / (10**exp)
-    prefix = prefixes[exp]
-    return {"unit": f"{prefix}{base_unit}", "value": scaled_value}

@@ -1,23 +1,25 @@
-import threading
-import queue
-from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable
 
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython.display import display, clear_output, update_display
 from tqdm.auto import tqdm
 import math
 
-from ..tools.system_tool import auto_unit
+from ..core.acquisition import acquire_values
+from ..tools.units import auto_unit
+from .theme import style_axes, style_figure
 
+try:
+    from IPython.display import clear_output, display, update_display
+except ImportError:
+    def display(*args, **kwargs):
+        return None
 
-def _iq_to_complex(iq_list):
-    """Convert QICK acquire output into a complex numpy array."""
-    arr = np.asarray(iq_list[0][0])
-    if arr.ndim > 0 and arr.shape[-1] == 2:
-        return arr.dot([1, 1j])
-    return arr.astype(complex, copy=False)
+    def clear_output(*args, **kwargs):
+        return None
+
+    def update_display(*args, **kwargs):
+        return None
 
 
 def _process_iq(iqdata, iq_process):
@@ -97,166 +99,43 @@ def _normalize_rows(data):
     return (data - row_mins) / ranges
 
 
-@dataclass
-class LivePlotState:
-    current_avg: int = 0
-    total_avg: int = 1
-    interrupted: bool = False
-
-
-class LivePlotSession:
-    """Own notebook display behavior for a live plot."""
-
-    def __init__(
-        self,
-        fig=None,
-        ax=None,
-        figsize: Tuple[float, float] = (6, 4),
-        display_id: Optional[str] = None,
-        clear_output_on_finish: bool = True,
-        close_on_finish: bool = True,
-    ):
-        if fig is None or ax is None:
-            fig, ax = plt.subplots(figsize=figsize)
-            self.owns_figure = True
-        else:
-            self.owns_figure = False
-        self.fig = fig
-        self.ax = ax
-        self.display_id = display_id or f"live-plot-v2-{np.random.randint(1e9)}"
-        self.clear_output_on_finish = clear_output_on_finish
-        self.close_on_finish = close_on_finish
-
-    def show(self):
-        display(self.fig, display_id=self.display_id)
-
-    def update(self):
-        display(self.fig, display_id=self.display_id, update=True)
-
-    def finish(self):
-        if self.clear_output_on_finish:
-            clear_output(wait=True)
-        if self.close_on_finish and self.owns_figure:
-            plt.close(self.fig)
-
-
-class LineRenderer:
-    """Render a 1D software-average trace."""
-
-    def __init__(self, x_axis_vals, x_label, y_label, title_prefix):
-        self.x_axis_vals = x_axis_vals
-        self.x_label = x_label
-        self.y_label = y_label
-        self.title_prefix = title_prefix
-        self.line = None
-
-    def setup(self, ax):
-        (self.line,) = ax.plot(
-            self.x_axis_vals,
-            np.zeros_like(self.x_axis_vals),
-            "o-",
-            markersize=5,
-            alpha=0.7,
-        )
-        ax.set_xlabel(self.x_label)
-        ax.set_ylabel(self.y_label)
-        ax.set_title(f"{self.title_prefix} (Initializing...)")
-
-    def update(self, ax, data, state: LivePlotState):
-        self.line.set_ydata(data)
-        ax.set_ylim(*_safe_limits(data))
-        ax.set_title(
-            f"{self.title_prefix} | Average: {state.current_avg + 1} / {state.total_avg}"
-        )
-
-    def finalize(self, ax, data, interrupted, last_i):
-        title_status = "Interrupted" if interrupted else "Completed"
-        ax.set_title(f"{self.title_prefix} ({title_status} at avg {last_i + 1})")
-        ax.set_xlabel(self.x_label)
-        ax.set_ylabel(self.y_label)
-        if data is not None:
-            ax.plot(self.x_axis_vals, data, "o-", markersize=5, alpha=0.7)
-        else:
-            ax.text(
-                0.5, 0.5, "No data acquired",
-                ha="center", va="center", transform=ax.transAxes,
-            )
-
-
-class MeshRenderer:
-    """Render a normalized 2D software-average map."""
-
-    def __init__(self, x_axis_vals, y_axis_vals, x_label, y_label, title_prefix):
-        self.x_axis_vals = x_axis_vals
-        self.y_axis_vals = y_axis_vals
-        self.x_label = x_label
-        self.y_label = y_label
-        self.title_prefix = title_prefix
-        self.mesh = None
-
-    def setup(self, ax):
-        self.mesh = ax.pcolormesh(
-            self.x_axis_vals,
-            self.y_axis_vals,
-            np.zeros((len(self.y_axis_vals), len(self.x_axis_vals))),
-            cmap="viridis",
-        )
-        ax.figure.colorbar(self.mesh, ax=ax, label="Normalized Amplitude")
-        ax.set_xlabel(self.x_label)
-        ax.set_ylabel(self.y_label)
-        ax.set_title(f"{self.title_prefix} (Initializing...)")
-
-    def update(self, ax, data, state: LivePlotState):
-        self.mesh.set_array(data.ravel())
-        vmin, vmax = _safe_limits(data, pad_fraction=0.0)
-        self.mesh.set_clim(vmin=vmin, vmax=vmax)
-        ax.set_title(
-            f"{self.title_prefix} | Average: {state.current_avg + 1} / {state.total_avg}"
-        )
-
-    def finalize(self, ax, data, interrupted, last_i):
-        title_status = "Interrupted" if interrupted else "Completed"
-        ax.set_title(f"{self.title_prefix} ({title_status} at avg {last_i + 1})")
-        ax.set_xlabel(self.x_label)
-        ax.set_ylabel(self.y_label)
-        if data is not None:
-            im = ax.pcolormesh(
-                self.x_axis_vals,
-                self.y_axis_vals,
-                data,
-                cmap="viridis",
-            )
-            ax.figure.colorbar(im, ax=ax, label="Normalized Amplitude")
-        else:
-            ax.text(
-                0.5, 0.5, "No data acquired",
-                ha="center", va="center", transform=ax.transAxes,
-            )
+def _style_live_axes(fig, axes) -> None:
+    """Style a live-plot canvas while leaving its data artists untouched."""
+    style_figure(fig)
+    for axis in np.asarray(axes, dtype=object).reshape(-1):
+        style_axes(axis)
 
 
 class SoftwareAverageRunner:
     """Acquire repeated QICK averages and emit processed plot data."""
 
-    def __init__(self, prog, soc, py_avg, y_axis_vals=None, iq_process="all"):
+    def __init__(
+        self, prog, soc, py_avg, y_axis_vals=None, iq_process="all", threshold=None
+    ):
         self.prog = prog
         self.soc = soc
         self.py_avg = py_avg
         self.y_axis_vals = y_axis_vals
         self.iq_process = iq_process
+        self.threshold = threshold
+        self.current_iq = None
 
     def run(self, on_update: Callable[[int, Any], None]):
         iq = 0
         iqdata = None
-        last_i = 0
+        completed_count = 0
         interrupted = False
 
         try:
             for i in tqdm(range(self.py_avg), desc="Software Average Count", mininterval=0.1):
-                last_i = i
-                iq_list = self.prog.acquire(self.soc, rounds=1, progress=False)
-                iq_data = _iq_to_complex(iq_list)
+                iq_data = acquire_values(
+                    self.prog, self.soc, rounds=1,
+                    progress=False, threshold=self.threshold,
+                )
                 iq = iq_data if i == 0 else iq + iq_data
                 iqdata = iq / (i + 1)
+                self.current_iq = iqdata
+                completed_count = i + 1
                 plot_data = _process_iq(iqdata, self.iq_process)
                 if self.y_axis_vals is not None:
                     plot_data = _normalize_rows(plot_data)
@@ -264,7 +143,7 @@ class SoftwareAverageRunner:
         except KeyboardInterrupt:
             interrupted = True
 
-        return iqdata, interrupted, last_i + 1
+        return iqdata, interrupted, completed_count
 
 
 def run_software_average_liveplot(
@@ -278,97 +157,24 @@ def run_software_average_liveplot(
     title_prefix="Experiment",
     show_final_plot=False,
     iq_process="all",
+    threshold=None,
 ):
-    """Composable implementation for the software-average liveplot path."""
-    if _is_all_iq(iq_process) and y_axis_vals is None:
-        return _liveplot_sw_avg(
-            prog=prog,
-            soc=soc,
-            py_avg=py_avg,
-            x_axis_vals=x_axis_vals,
-            y_axis_vals=y_axis_vals,
-            x_label=x_label,
-            y_label=y_label,
-            title_prefix=title_prefix,
-            show_final_plot=show_final_plot,
-            iq_process=iq_process,
-        )
-
-    iq_process = _single_channel_iq_process(iq_process)
-    data_queue = queue.LifoQueue(maxsize=1)
-    stop_event = threading.Event()
-    state = LivePlotState(total_avg=py_avg)
-
-    session = LivePlotSession()
-    is_2d = y_axis_vals is not None
-    if is_2d:
-        renderer = MeshRenderer(x_axis_vals, y_axis_vals, x_label, y_label, title_prefix)
-    else:
-        renderer = LineRenderer(
-            x_axis_vals,
-            x_label,
-            _process_label(iq_process),
-            title_prefix,
-        )
-
-    renderer.setup(session.ax)
-    session.show()
-
-    def plotter_thread_func():
-        while not stop_event.is_set():
-            try:
-                current_i, data = data_queue.get(timeout=0.1)
-            except queue.Empty:
-                continue
-
-            state.current_avg = current_i
-            renderer.update(session.ax, data, state)
-            session.update()
-            data_queue.task_done()
-
-    def on_update(i, data):
-        try:
-            data_queue.put_nowait((i, data))
-        except queue.Full:
-            try:
-                data_queue.get_nowait()
-                data_queue.put_nowait((i, data))
-            except (queue.Empty, queue.Full):
-                pass
-
-    plot_thread = threading.Thread(target=plotter_thread_func, daemon=True)
-    plot_thread.start()
-
-    runner = SoftwareAverageRunner(
+    """Compatibility wrapper for the single software-average implementation."""
+    if threshold is not None and _is_all_iq(iq_process):
+        iq_process = "real"
+    return _liveplot_sw_avg(
         prog=prog,
         soc=soc,
         py_avg=py_avg,
+        x_axis_vals=x_axis_vals,
         y_axis_vals=y_axis_vals,
+        x_label=x_label,
+        y_label=y_label,
+        title_prefix=title_prefix,
+        show_final_plot=show_final_plot,
         iq_process=iq_process,
+        threshold=threshold,
     )
-    try:
-        iqdata, interrupted, avg_count = runner.run(on_update=on_update)
-    finally:
-        stop_event.set()
-        if plot_thread.is_alive():
-            plot_thread.join(timeout=1.0)
-        session.finish()
-
-    if show_final_plot:
-        final_session = LivePlotSession(
-            clear_output_on_finish=False,
-            close_on_finish=True,
-        )
-        plot_data = None
-        if iqdata is not None:
-            plot_data = _process_iq(iqdata, iq_process)
-            if is_2d:
-                plot_data = _normalize_rows(plot_data)
-        renderer.finalize(final_session.ax, plot_data, interrupted, avg_count - 1)
-        final_session.show()
-        plt.close(final_session.fig)
-
-    return iqdata, interrupted, avg_count
 
 
 def liveplotfun(
@@ -391,7 +197,7 @@ def liveplotfun(
     get_prog_callback=None,
     show_final_plot=True,
     iq_process="all",
-    liveplot=True,
+    threshold=None,
 ):
     """
     General-purpose live plotter (Facade pattern).
@@ -415,49 +221,8 @@ def liveplotfun(
     interrupted : bool
     n_done : int
     """
-    if not liveplot:
-        # Bypasses Matplotlib/IPython completely.
-        
-        # 1. Yoko Sweep
-        if instrument_manager is not None and yoko_name is not None:
-            if y_axis_vals is None:
-                raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
-            iqdata_full = np.zeros((len(y_axis_vals), len(x_axis_vals)), dtype=complex)
-            for idx, val in enumerate(tqdm(y_axis_vals, desc=f"Sweeping Yoko {yoko_name}")):
-                instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
-                iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-                iqdata_full[idx, :] = _iq_to_complex(iq_list)
-            return iqdata_full, False, len(y_axis_vals)
-            
-        # 2. 2D Scan
-        elif scan_x_axis is not None and scan_y_axis is not None:
-            if get_prog_callback is None:
-                raise ValueError("get_prog_callback must be provided for 2D scan.")
-            iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)
-            for y_idx, y_val in enumerate(tqdm(scan_y_axis, desc="2D Outer Scan")):
-                for x_idx, x_val in enumerate(scan_x_axis):
-                    prog_instance = get_prog_callback(x_val, y_val)
-                    iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
-                    iqdata_full[y_idx, x_idx] = _iq_to_complex(iq_list)
-            return iqdata_full, False, len(scan_y_axis)
-            
-        # 3. 1D Scan
-        elif scan_x_axis is not None:
-            if get_prog_callback is None:
-                raise ValueError("get_prog_callback must be provided for 1D scan.")
-            iqlst = []
-            for val in tqdm(scan_x_axis, desc="1D Scan"):
-                prog_instance = get_prog_callback(val)
-                iq_list = prog_instance.acquire(soc, rounds=py_avg, progress=False)
-                iqlst.append(_iq_to_complex(iq_list))
-            return np.array(iqlst), False, len(scan_x_axis)
-            
-        # 4. Standard Software Averaging
-        else:
-            # Directly use acquire(rounds=py_avg)
-            iq_list = prog.acquire(soc, rounds=py_avg, progress=True)
-            iqdata = _iq_to_complex(iq_list)
-            return iqdata, False, py_avg
+    if threshold is not None and _is_all_iq(iq_process):
+        iq_process = "real"
 
     if instrument_manager is not None and yoko_name is not None:
         if y_axis_vals is None:
@@ -478,6 +243,7 @@ def liveplotfun(
             y_label=y_label,
             title_prefix=title_prefix,
             iq_process=iq_process,
+            threshold=threshold,
         )
 
     elif scan_x_axis is not None:
@@ -496,6 +262,7 @@ def liveplotfun(
                 title_prefix=title_prefix,
                 show_final_plot=show_final_plot,
                 iq_process=iq_process,
+                threshold=threshold,
             )
         else:
             return _liveplot_1d_scan(
@@ -507,6 +274,7 @@ def liveplotfun(
                 title_prefix=title_prefix,
                 show_final_plot=show_final_plot,
                 iq_process=iq_process,
+                threshold=threshold,
             )
 
     else:
@@ -521,6 +289,7 @@ def liveplotfun(
             title_prefix=title_prefix,
             show_final_plot=show_final_plot,
             iq_process=iq_process,
+            threshold=threshold,
         )
 
 
@@ -535,21 +304,19 @@ def _liveplot_sw_avg(
     title_prefix="Experiment",
     show_final_plot=False,
     iq_process="all",
+    threshold=None,
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
 
-    iq = 0
-    iqdata = None
-    last_i = 0
-    interrupted = False
-
     if plot_all_iq and y_axis_vals is None:
         fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        _style_live_axes(fig, axes)
         axes_flat = axes.ravel()
         ax = axes_flat[0]
     else:
         fig, ax = plt.subplots(figsize=(6, 4))
+        _style_live_axes(fig, [ax])
         axes_flat = None
     plot_display_id = f"live-plot-{np.random.randint(1e9)}"
 
@@ -590,38 +357,37 @@ def _liveplot_sw_avg(
         ax.set_title(f"{title_prefix} (Initializing...)")
     display(fig, display_id=plot_display_id)
 
-    try:
-        for i in tqdm(range(py_avg), desc="Software Average Count", mininterval=0.1):
-            last_i = i
-            iq_list = prog.acquire(soc, rounds=1, progress=False)
-            iq_data = _iq_to_complex(iq_list)
-            iq = iq_data if i == 0 else iq + iq_data
-            iqdata = iq / (i + 1)
+    runner = SoftwareAverageRunner(
+        prog=prog,
+        soc=soc,
+        py_avg=py_avg,
+        y_axis_vals=y_axis_vals,
+        iq_process=iq_process,
+        threshold=threshold,
+    )
 
-            if plot_all_iq and not is_2d:
-                channel_data = _iq_channel_dict(iqdata)
-                for channel_ax, (channel_name, data_to_plot) in zip(
-                    axes_flat, channel_data.items()
-                ):
-                    plot_artist[channel_name].set_ydata(data_to_plot)
-                    channel_ax.set_ylim(*_safe_limits(data_to_plot))
-                fig.suptitle(f"{title_prefix} | Average: {i + 1} / {py_avg}")
-            elif is_2d:
-                plot_data = _process_iq(iqdata, iq_process)
-                data_to_plot = _normalize_rows(plot_data)
-                plot_artist.set_array(data_to_plot.ravel())
-                plot_artist.set_clim(*_safe_limits(data_to_plot, pad_fraction=0.0))
-                ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
-            else:
-                plot_data = _process_iq(iqdata, iq_process)
-                data_to_plot = plot_data
-                plot_artist.set_ydata(data_to_plot)
-                ax.set_ylim(*_safe_limits(data_to_plot))
-                ax.set_title(f"{title_prefix} | Average: {i + 1} / {py_avg}")
-            update_display(fig, display_id=plot_display_id)
+    def on_update(index, data_to_plot):
+        if plot_all_iq and not is_2d:
+            channel_data = _iq_channel_dict(runner.current_iq)
+            for channel_ax, (channel_name, channel_values) in zip(
+                axes_flat, channel_data.items()
+            ):
+                plot_artist[channel_name].set_ydata(channel_values)
+                channel_ax.set_ylim(*_safe_limits(channel_values))
+            fig.suptitle(f"{title_prefix} | Average: {index + 1} / {py_avg}")
+        elif is_2d:
+            plot_artist.set_array(data_to_plot.ravel())
+            plot_artist.set_clim(
+                *_safe_limits(data_to_plot, pad_fraction=0.0)
+            )
+            ax.set_title(f"{title_prefix} | Average: {index + 1} / {py_avg}")
+        else:
+            plot_artist.set_ydata(data_to_plot)
+            ax.set_ylim(*_safe_limits(data_to_plot))
+            ax.set_title(f"{title_prefix} | Average: {index + 1} / {py_avg}")
+        update_display(fig, display_id=plot_display_id)
 
-    except KeyboardInterrupt:
-        interrupted = True
+    iqdata, interrupted, avg_count = runner.run(on_update)
 
     clear_output(wait=True)
     plt.close(fig)
@@ -629,14 +395,16 @@ def _liveplot_sw_avg(
     if show_final_plot:
         if plot_all_iq and not is_2d:
             final_fig, final_axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            _style_live_axes(final_fig, final_axes)
             final_ax = final_axes.ravel()[0]
         else:
             final_fig, final_ax = plt.subplots(figsize=(6, 4))
+            _style_live_axes(final_fig, [final_ax])
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq and not is_2d:
-            final_fig.suptitle(f"{title_prefix} ({title_status} at avg {last_i + 1})")
+            final_fig.suptitle(f"{title_prefix} ({title_status} at avg {avg_count})")
         else:
-            final_ax.set_title(f"{title_prefix} ({title_status} at avg {last_i + 1})")
+            final_ax.set_title(f"{title_prefix} ({title_status} at avg {avg_count})")
             final_ax.set_xlabel(x_label)
 
         if iqdata is not None:
@@ -671,7 +439,7 @@ def _liveplot_sw_avg(
         display(final_fig)
         plt.close(final_fig)
 
-    return iqdata, interrupted, last_i + 1
+    return iqdata, interrupted, avg_count
 
 
 def _liveplot_sweep_yoko(
@@ -690,6 +458,7 @@ def _liveplot_sweep_yoko(
     y_label="Y Axis",
     title_prefix="Experiment",
     iq_process="all",
+    threshold=None,
 ):
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
@@ -705,12 +474,16 @@ def _liveplot_sweep_yoko(
     current_step_text = f"{current_step:.2e}" if current_step is not None else "unknown"
     interval_text = f"{interval * 1e3:.1f}" if interval is not None else "unknown"
 
-    iqdata_full = np.zeros((len(y_axis_vals_yoko), len(x_axis_vals)), dtype=complex)
+    result_dtype = float if threshold is not None else complex
+    iqdata_full = np.zeros(
+        (len(y_axis_vals_yoko), len(x_axis_vals)), dtype=result_dtype
+    )
     data_to_plot = np.zeros((len(y_axis_vals_yoko), len(x_axis_vals)))
     interrupted = False
     last_idx = 0
 
     fig, ax = plt.subplots(figsize=(6, 4))
+    _style_live_axes(fig, [ax])
 
     try:
         yoko_unit = "A" if yoko_mode == "current" else "V"
@@ -755,8 +528,9 @@ def _liveplot_sweep_yoko(
             suffix = "A" if yoko_mode == "current" else "V"
             ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}")
 
-            iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-            iq_data_row = _iq_to_complex(iq_list)
+            iq_data_row = acquire_values(
+                prog, soc, rounds=py_avg, progress=False, threshold=threshold
+            )
 
             iqdata_full[idx, :] = iq_data_row
             data_to_plot = _process_iq(iqdata_full, iq_process)
@@ -829,6 +603,7 @@ def _liveplot_1d_scan(
     title_prefix="1D Scan",
     show_final_plot=True,
     iq_process="all",
+    threshold=None,
 ):
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
@@ -840,6 +615,7 @@ def _liveplot_1d_scan(
 
     if plot_all_iq:
         fig, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+        _style_live_axes(fig, axes)
         axes_flat = axes.ravel()
         line = {}
         for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
@@ -854,6 +630,7 @@ def _liveplot_1d_scan(
         title = fig.suptitle(f"{title_prefix} (Initializing...)")
     else:
         fig, ax = plt.subplots(figsize=(6, 4))
+        _style_live_axes(fig, [ax])
         (line,) = ax.plot(
             scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=5, alpha=0.7
         )
@@ -870,8 +647,12 @@ def _liveplot_1d_scan(
             iqlst = []
             for val in scan_x_axis:
                 prog = get_prog_callback(val)
-                iq_list = prog.acquire(soc, rounds=1, progress=False)
-                iqlst.append(_iq_to_complex(iq_list))
+                iqlst.append(
+                    acquire_values(
+                        prog, soc, rounds=1,
+                        progress=False, threshold=threshold,
+                    )
+                )
 
             current_iq_data = np.array(iqlst)
             iq_sum = current_iq_data if avg == 0 else iq_sum + current_iq_data
@@ -906,9 +687,11 @@ def _liveplot_1d_scan(
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq:
             fig_final, axes_final = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            _style_live_axes(fig_final, axes_final)
             fig_final.suptitle(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
         else:
             fig_final, ax_final = plt.subplots(figsize=(6, 4))
+            _style_live_axes(fig_final, [ax_final])
             ax_final.set_title(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
             ax_final.set_xlabel(x_label)
             ax_final.set_ylabel(_y_label_proc)
@@ -958,16 +741,21 @@ def _liveplot_2d_scan(
     title_prefix="2D Scan",
     show_final_plot=True,
     iq_process="all",
+    threshold=None,
 ):
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 
-    iqdata_full = np.zeros((len(scan_y_axis), len(scan_x_axis)), dtype=complex)
+    result_dtype = float if threshold is not None else complex
+    iqdata_full = np.zeros(
+        (len(scan_y_axis), len(scan_x_axis)), dtype=result_dtype
+    )
     data_to_plot = np.zeros((len(scan_y_axis), len(scan_x_axis)))
     interrupted = False
     last_y_idx, last_x_idx = 0, 0
 
     fig, ax = plt.subplots(figsize=(6, 4))
+    _style_live_axes(fig, [ax])
 
     mesh = ax.pcolormesh(
         scan_x_axis,
@@ -995,8 +783,10 @@ def _liveplot_2d_scan(
                 last_x_idx = x_idx
 
                 prog = get_prog_callback(x_val, y_val)
-                iq_list = prog.acquire(soc, rounds=py_avg, progress=False)
-                iq_data_pt = _iq_to_complex(iq_list)
+                iq_data_pt = acquire_values(
+                    prog, soc, rounds=py_avg,
+                    progress=False, threshold=threshold,
+                )
 
                 iqdata_full[y_idx, x_idx] = iq_data_pt
                 data_to_plot = _process_iq(iqdata_full, iq_process)
@@ -1065,9 +855,6 @@ def _liveplot_2d_scan(
 
 
 __all__ = [
-    "LivePlotSession",
-    "LineRenderer",
-    "MeshRenderer",
     "SoftwareAverageRunner",
     "run_software_average_liveplot",
     "liveplotfun",

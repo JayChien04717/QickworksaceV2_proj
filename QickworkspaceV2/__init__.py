@@ -57,6 +57,7 @@ _LAZY_EXPORTS = {
     "TimeRabi": ".experiments.qubit_ge",
     "PowerRabi": ".experiments.qubit_ge",
     "PowerRabiReset": ".experiments.qubit_ge",
+    "ActiveResetRabi": ".experiments.qubit_ge",
     "Ramsey": ".experiments.coherence",
     "ACStark": ".experiments.coherence",
     "SpinEcho": ".experiments.coherence",
@@ -71,6 +72,9 @@ _LAZY_EXPORTS = {
     "RandomizedBenchmarking": ".experiments.characterization",
     "AutoRB": ".experiments.characterization",
     "Tomography": ".experiments.characterization",
+    "CryoscopeConst": ".experiments.cryoscope",
+    "CryoscopeZeroPadding": ".experiments.cryoscope",
+    "PredistortedCryoscope": ".experiments.cryoscope",
     "BaseInstrumentManager": ".instruments",
     "InstrumentManager": ".instruments",
 }
@@ -105,12 +109,15 @@ __all__ = [
     "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     # experiments — qubit ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
+    "ActiveResetRabi",
     # experiments — coherence
     "Ramsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
     # experiments — qubit ef
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "QubitTemp",
     # experiments — characterization
     "AllXY", "RandomizedBenchmarking", "AutoRB", "Tomography",
+    # experiments — cryoscope
+    "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
     # instruments
     "BaseInstrumentManager", "InstrumentManager",
 ]

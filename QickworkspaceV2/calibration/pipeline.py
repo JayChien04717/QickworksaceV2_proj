@@ -277,10 +277,10 @@ class AutoCalibrate:
 
     # ── Step 4 — Ramsey ───────────────────────────────────────────────────────
 
-    def step_ramsey(self, steps=100, py_avg=20, ramsey_freq=2.0):
+    def step_ramsey(self, steps=100, py_avg=20, virtual_detune=2.0):
         from qick.asm_v2 import QickSweep1D
         from ..experiments.coherence.ramsey import Ramsey
-        ramsey_freq = self._guess_float("ramsey_freq", ramsey_freq) or ramsey_freq
+        virtual_detune = self._guess_float("virtual_detune", virtual_detune) or virtual_detune
         stop = max(2.0, min(3.0 * self._T1, 15.0)) if self._T1 else 5.0
         _, stop, steps = self._range_guess("ramsey", 0.0, stop, steps)
         _freq_history:  list[float] = []
@@ -291,7 +291,7 @@ class AutoCalibrate:
             run_cfg.update([
                 ("steps", steps),
                 ("wait_time", QickSweep1D("waitloop", 0.0, stop)),
-                ("ramsey_freq", ramsey_freq),
+                ("virtual_detune", virtual_detune),
             ])
             expt = Ramsey(run_cfg)
             result: ExperimentData = expt.run(py_avg)
@@ -299,8 +299,8 @@ class AutoCalibrate:
             T2r = self._require_param("ramsey", result, "T2r_us", lo=0.01, hi=5000.0)
             detune = result.get_param("detune_MHz")
             if detune is None:
-                raise RuntimeError("ramsey: detune_MHz missing; use nonzero ramsey_freq")
-            signed_err = float(detune) - ramsey_freq
+                raise RuntimeError("ramsey: detune_MHz missing; use nonzero virtual_detune")
+            signed_err = float(detune) - virtual_detune
             abs_err    = abs(signed_err)
             self._T2r  = T2r
             self.results["T2r_us"] = T2r
@@ -338,12 +338,12 @@ class AutoCalibrate:
         T2e_est = 3.0 * T2r
         stop = max(20.0, 5.0 * T2e_est)
         _, stop, steps = self._range_guess("spin_echo", 0.0, stop, steps)
-        ramsey_freq = round(min(0.5, 1.5 / stop), 4)
+        virtual_detune = round(min(0.5, 1.5 / stop), 4)
         run_cfg = self._cfg()
         run_cfg.update([
             ("steps", steps),
             ("wait_time", QickSweep1D("waitloop", 0.0, stop)),
-            ("ramsey_freq", ramsey_freq),
+            ("virtual_detune", virtual_detune),
         ])
         expt = SpinEcho(run_cfg)
         result: ExperimentData = expt.run(py_avg)
@@ -351,7 +351,7 @@ class AutoCalibrate:
         T2e = self._require_param("spin_echo", result, "T2e_us", lo=0.01, hi=10000.0)
         self._T2e = T2e
         self.results["T2e_us"] = T2e
-        self._log("spin_echo", f"T2E={T2e:.2f} µs (stop={stop:.0f} µs, ramsey_freq={ramsey_freq} MHz)")
+        self._log("spin_echo", f"T2E={T2e:.2f} µs (stop={stop:.0f} µs, virtual_detune={virtual_detune} MHz)")
         return T2e
 
     # ── Step 6 — T1 ──────────────────────────────────────────────────────────

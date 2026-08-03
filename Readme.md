@@ -1,63 +1,68 @@
 # QickworkspaceV2
 
-Self-contained QICK-based quantum calibration workspace for running resonator,
-qubit, coherence, single-shot, and calibration pipeline experiments.
+Self-contained QICK-based quantum calibration framework for single-qubit,
+multiplexed-readout, characterization, instrument-control, and automated
+calibration workflows.
 
-This repository is intended to replace the older `qick_workspace` codebase. All
-shared experiment, fitting, plotting, instrument, and calibration utilities live
-inside this package.
+This package replaces the older `qick_workspace` codebase. Code inside
+`QickworkspaceV2/` must not import from `qick_workspace`; shared implementations
+live in this repository.
 
-## Features
+## Current capabilities
 
-- Unified experiment wrapper built around `BaseExperiment`
-- QICK program helpers through `BaseProgram`
-- Notebook-friendly experiment results through `ExperimentData`
-- Resonator, qubit, coherence, setup, and characterization experiments
-- Calibration store and automated ge-transition calibration pipeline
-- HDF5/Labber-style data saving helpers
-- FastAPI service for async experiment and calibration jobs
-- Instrument drivers for Yokogawa GS200, R&S SGS100A, and Anritsu MG3692
-- `BaseInstrumentManager` for registering instruments, checking ranges, and
-  printing live status/help in notebooks
+- Unified experiment lifecycle through `BaseExperiment` and `BaseProgram`
+- Complex-IQ acquisition, live plotting, fitting, and quality analysis
+- Typed experiment output through `ExperimentData`, including HDF5 save/load
+- Resonator, ge/ef qubit, coherence, single-shot, tomography, AllXY, and RB
+  experiments
+- Multiplexed one-tone, two-tone, punchout, Rabi, Ramsey, T1, RB, tomography,
+  and single-shot experiments in `experiments_mux/`
+- Timestamped `CalibrationStore`, dependency graph, drift monitor, and the
+  seven-step `AutoCalibrate` pipeline
+- PyVISA drivers and a safety-limit-aware instrument manager for Yokogawa
+  GS200, R&S SGS100A, and Anritsu MG3692 sources
+- An experimental FastAPI service and a stable experiment registry for clients
 
-## Repository Layout
+The former `QICKBackend` and `SimulatedBackend` APIs are no longer part of this
+project. Hardware sessions are configured directly on `BaseExperiment`.
+
+## Repository layout
 
 ```text
 QickworkspaceV2/
   analysis/          Fit and quality-analysis helpers
-  calibration/       Calibration store, graph, monitor, and pipeline
-  config/            System and qubit configuration
-  core/              BaseExperiment, BaseProgram, ExperimentData
-  experiments/       Experiment implementations
+  calibration/       Store, dependency graph, monitor, and pipeline
+  config/            Example system configuration
+  core/              Experiment lifecycle, programs, results, composites
+  experiments/       Single-qubit experiment implementations
+  experiments_mux/   Multiplexed-readout experiments
   instruments/       PyVISA drivers and instrument manager
   plotter/           Live plotting and plot utilities
-  service/           FastAPI REST service
-  tools/             Fitting, data, scoring, and RF helper utilities
+  service/           Experimental FastAPI REST service
+  tools/             Configuration, fitting, data, scoring, and RF helpers
 
-example/             Example HDF5 data and viewer scripts
-tutorial/            Tutorial notebooks, including instrument manager tests
+example/             Example data and viewer scripts
+tutorial/            Notebook tutorials
 ```
 
 ## Installation
 
-Create an environment with the dependencies in `requirements.txt`:
+This repository currently has no `pyproject.toml` or installable package
+metadata. Run it from the repository root after installing its dependencies:
 
 ```bash
-pip install -r requirements.txt
-```
-
-For real hardware runs, the environment also needs QICK, Pyro4, and the proper
-VISA backend for your lab computer.
-
-## Quick Import Check
-
-```bash
+python -m pip install -r requirements.txt
 python -c "import QickworkspaceV2; print(QickworkspaceV2.__version__)"
 ```
 
-## QICK Session Setup
+Real hardware runs also require a working QICK/Pyro4 setup and the VISA backend
+used by the lab computer. Labber is optional and is not installed by
+`requirements.txt`.
 
-In a notebook, connect once at the beginning of the session:
+## Hardware session
+
+Connect once near the beginning of a notebook. `data_path` is required because
+legacy experiment saving uses the shared session output directory.
 
 ```python
 from QickworkspaceV2 import BaseExperiment
@@ -70,162 +75,295 @@ soc, soccfg = BaseExperiment.connect_pyro4(
 )
 ```
 
-If you already have `soc` and `soccfg`, register them directly:
+If another tool has already created the QICK objects:
 
 ```python
-BaseExperiment.setup(soc, soccfg, data_path=r"D:\Labber_Data\Jay\test")
+BaseExperiment.setup(
+    soc,
+    soccfg,
+    data_path=r"D:\Labber_Data\Jay\test",
+)
 ```
+
+There is currently no simulated backend. Offline work can test pure analysis,
+configuration, serialization, calibration-store, and registry code, but an
+experiment instance requires an initialized QICK session.
 
 ## Configuration
 
-Use `ExperimentConfig` to get a mutable copy of one qubit's flattened config:
+`ExperimentConfig` is normally constructed from a list of nested qubit configurations.
+The repository provides `config_list` as an editable example:
 
 ```python
 from QickworkspaceV2 import ExperimentConfig
+from QickworkspaceV2.config.system_cfg import config_list
 
-cfg_all = ExperimentConfig()
+cfg_all = ExperimentConfig(config_list)
 cfg = cfg_all.get_qubit("Q1")
 
+# get_qubit() returns a flat, independent copy for a single run.
 cfg["reps"] = 1000
 cfg["steps"] = 101
+
+# Persist a change in the multi-qubit config manager.
+cfg_all.update("qb_freq_ge", 2872.65, q_index="Q1")
+cfg_all.update("res.res_gain_ge", 0.2, q_index="Q1")
 ```
 
-Important common keys include:
+Common flattened keys include `ro_ch`, `res_ch`, `qb_ch`, `reps`,
+`relax_delay`, `steps`, `res_freq_ge`, `qb_freq_ge`, `pi_gain_ge`, and
+`qb_mixer`.
 
-- `ro_ch`
-- `res_ch`
-- `qb_ch`
-- `reps`
-- `relax_delay`
-- `steps`
-- `res_freq_ge`
-- `qb_freq_ge`
-- `pi_gain_ge`
-- `qb_mixer`
+For multiplexed experiments, build a slot-stable configuration with
+`cfg_all.muxconfig(["Q1", "Q3"])`; inactive resonator gains are set to zero
+while tone/readout slots retain their physical indices.
 
-## Running Experiments
+## Running an experiment
 
 ```python
+from qick.asm_v2 import QickSweep1D
 from QickworkspaceV2 import ExperimentConfig
+from QickworkspaceV2.config.system_cfg import config_list
 from QickworkspaceV2.experiments.resonator import ResonatorSpec
 
-cfg = ExperimentConfig().get_qubit("Q1")
-expt = ResonatorSpec(cfg)
+cfg_all = ExperimentConfig(config_list)
+cfg = cfg_all.get_qubit("Q1")
+cfg.update({
+    "steps": 101,
+    "res_freq_ge": QickSweep1D("freqloop", 6707, 6727),
+})
 
+expt = ResonatorSpec(cfg)
 result = expt.run(py_avg=5)
+
+print(result.quality)
 print(result.fit_result)
 ```
 
-Live plotting shows all IQ views by default (`Abs`, `Phase`, `I`, and `Q`) for
-1D sweeps. To force a single displayed channel, pass `iq_process`:
+`BaseExperiment.run()` defaults to `iq_process="all"`. For a 1D sweep the live
+view shows amplitude, phase, I, and Q. Choose one display channel when needed:
 
 ```python
-result = expt.run(py_avg=5)                    # default: iq_process="all"
-result = expt.run(py_avg=5, iq_process="abs")  # options: "abs", "phase", "real", "imag"
+result = expt.run(py_avg=5, iq_process="abs")
+result = expt.run(py_avg=5, iq_process="real")
+result = expt.run(py_avg=5, iq_process="imag")
+result = expt.run(py_avg=5, iq_process="phase")
 ```
 
-For 2D heatmaps and Yoko sweeps, `iq_process="all"` falls back to the amplitude
-channel so the plot remains a single color map.
+Two-dimensional plots fall back from `"all"` to amplitude. The acquired data
+remains complex in `result.raw_iq`; `iq_process` selects plotting/analysis
+presentation and is recorded in `result.metadata`.
 
-`ExperimentData` stores raw IQ data, x/y axes, fit parameters, quality flags,
-and config metadata. It also keeps old notebook compatibility:
+Analysis runs automatically when an experiment binds an `Analysis` class, but
+the analysis figure is opt-in:
+
+```python
+result = expt.run(py_avg=5, plot_analysis=True)
+# Or reuse the latest acquisition without touching hardware:
+expt.plot()
+```
+
+`ExperimentData` also retains old notebook conveniences:
 
 ```python
 fit_params, fit_errors = result
-freq = float(result)
+frequency = float(result)       # only when a scalar result is available
 ```
 
-## Instrument Manager
+## Native HDF5 storage and catalog
 
-Instrument drivers and the notebook-friendly `BaseInstrumentManager` live in
-`QickworkspaceV2/instruments`. See `QickworkspaceV2/instruments/README.md` for
-usage details, multi-instrument naming, safety limits, and the test notebook
-workflow.
+`ExperimentData.save()` writes the native `qickworkspace.experiment` v1 format
+with raw complex IQ, dimension-aware axes, fit/analysis results, comments, and
+tags. Configuration remains managed by `ExperimentConfig`; use
+`cfg_all.to_yaml(q_id=...)` when a formatted configuration is needed. When no
+filename is supplied it creates a UTC-based unique
+experiment ID, a date-organized filename, and a rebuildable SQLite catalog:
 
-## Calibration Store
+```python
+from QickworkspaceV2 import ExperimentData
+from QickworkspaceV2.tools.hdf5_store import find_experiments
 
-`CalibrationStore` persists calibrated values as timestamped JSON:
+path = result.save(
+    data_root="data",
+    comment="attenuator 調整後重新量測",
+    tags=["cooldown-202607", "final"],
+)
+loaded = ExperimentData.load(path)
+
+# SQLite is only a search index; no SQL knowledge is required.
+runs = find_experiments(
+    experiment_type="s008_T1_ge",
+    qubit="Q1",
+    tags=["final"],
+    start="2026-07-01",
+    data_root="data",
+)
+latest_t1 = runs[0].load()
+```
+
+To browse an entire Data path, use the lazy archive reader. Construction scans
+completed HDF5 metadata into the catalog, but raw arrays are loaded only when
+requested:
+
+```python
+from QickworkspaceV2.tools import ExperimentArchive
+
+archive = ExperimentArchive(r"D:\Labber_Data\Jay\test")
+runs = archive.query(experiment_type="s008_T1_ge", qubit="Q1")
+
+record = runs[0]
+print(record.comment_preview, record.raw_keys(), record.analysis_keys())
+iq = record.load_raw("iq", selection={"delay_us": slice(0, 20)})
+figure = record.plot()              # dispatches through the stored plot_id
+result = record.load()              # explicitly load the complete experiment
+```
+
+The offline examples in [`test/hdf5_reader_demo`](test/hdf5_reader_demo)
+generate T1, Rabi, single-shot, RB, tomography, and SSH optimization files and
+exercise indexing, selective raw reads, comments, tags, and plotting.
+
+HDF5 remains the source of truth. If `catalog.sqlite` is deleted or data is
+moved, rebuild it with `rebuild_catalog("data")`. Explicit paths remain
+supported, but existing files are never overwritten. See
+[`QickworkspaceV2/tools/HDF5_SCHEMA.md`](QickworkspaceV2/tools/HDF5_SCHEMA.md)
+for the complete schema and the `inspect_file`, `validate_file`, and Labber
+conversion APIs.
+
+The legacy Labber-style saver remains available for existing notebooks:
+
+```python
+expt.saveLabber(qb_idx=1)
+```
+
+## Calibration
+
+`CalibrationStore` persists values and update timestamps in JSON:
 
 ```python
 from QickworkspaceV2 import CalibrationStore
 
-store = CalibrationStore("cal_Q1.json")
-store.set("Q1", "qb_freq_ge", 4500.0)
+store = CalibrationStore("data/calibrations.json")
+store.set("Q1", "qb_freq_ge", 2872.65)
 store.get("Q1", "qb_freq_ge")
 store.is_stale("Q1", "qb_freq_ge", max_age_hours=24)
 ```
 
-## Auto Calibration
-
-`AutoCalibrate` runs the standard ge-transition pipeline and writes results back
-to both `ExperimentConfig` and `CalibrationStore`:
-
-```python
-from QickworkspaceV2 import ExperimentConfig, CalibrationStore, AutoCalibrate
-
-cfg_all = ExperimentConfig()
-store = CalibrationStore("cal_Q1.json")
-
-auto = AutoCalibrate(cfg_all, "Q1", cal_store=store)
-auto.run()
-auto.summary()
-```
-
-The default pipeline includes:
+`AutoCalibrate` updates both the live `ExperimentConfig` and the optional
+store. Its current default order is:
 
 1. Resonator spectroscopy
 2. Qubit spectroscopy
 3. Power Rabi
-4. Ramsey
-5. Spin echo
-6. T1
+4. T1
+5. Ramsey frequency correction
+6. Spin echo
 7. Single-shot optimization
 
-## Data Saving
-
-Experiments can save results through the modern `ExperimentData.save(...)` path
-or the backward-compatible `saveLabber(...)` path:
-
 ```python
-result.save("data/resonator_q1.h5")
-expt.saveLabber(qb_idx=1)
+from QickworkspaceV2 import AutoCalibrate, CalibrationStore, ExperimentConfig
+from QickworkspaceV2.config.system_cfg import config_list
+
+cfg_all = ExperimentConfig(config_list)
+store = CalibrationStore("data/calibrations.json")
+
+auto = AutoCalibrate(cfg_all, "Q1", cal_store=store)
+auto.run(skip=("ss_opt",))
+auto.summary()
 ```
 
-## REST Service
+The calibration package also exports `CalibrationGraph`, `CalibrationNode`, and
+`CalibrationMonitor` for stale-only or scheduled workflows.
 
-Run the FastAPI service:
+## Sequential and parallel composition
+
+`BatchExperiment` runs experiments sequentially and can stop on a bad quality
+flag. `ParallelExperiment` uses threads, so it must only be used when the
+experiments truly have independent hardware resources; it does not arbitrate
+access to a shared QICK board.
+
+```python
+from QickworkspaceV2 import BatchExperiment
+
+batch = BatchExperiment(
+    [("res", ResonatorSpec(cfg_res)), ("t1", T1(cfg_t1))],
+    stop_on_bad=True,
+)
+results = batch.run(py_avg=5)
+```
+
+## Instrument manager
+
+Use `BaseInstrumentManager` for named instruments, lab safety limits, and Yoko
+ramps used by liveplot sweeps:
+
+```python
+from QickworkspaceV2.instruments import BaseInstrumentManager
+
+inst = BaseInstrumentManager()
+inst.add_yoko(
+    "q1_flux",
+    "GPIB0::1::INSTR",
+    limits={"current": (-3e-3, 3e-3)},
+)
+
+result = expt.run(
+    py_avg=5,
+    instrument_manager=inst,
+    yoko_name="q1_flux",
+    yoko_value=flux_values,
+    yoko_mode="current",
+)
+```
+
+See [`QickworkspaceV2/instruments/README.md`](QickworkspaceV2/instruments/README.md)
+for driver and manager details.
+
+## REST service status
+
+The FastAPI layer exposes an experiment catalog, job endpoints, calibration
+store endpoints, and an auto-calibration endpoint:
 
 ```bash
 uvicorn QickworkspaceV2.service.api:app --host 0.0.0.0 --port 8000
 ```
 
-Common endpoints:
+The module-level default app is created without `CalibrationStore` or
+`ExperimentConfig`, so calibration endpoints return `503` until an application
+is created with `create_app(cal_store=..., config_all=...)`. Experiment jobs
+also require a `BaseExperiment` hardware session in the service process.
 
-- `POST /experiments/run`
-- `GET /experiments/{id}/result`
-- `POST /calibrate/{qubit}/run`
+The service is currently experimental: completed experiment jobs reference a
+serializer module that is not present in this repository, job state is
+in-memory only, and there is no hardware queue/cancellation API. Use the Python
+API for production measurements until those gaps are resolved.
 
-## Development Notes
+## Development and validation
 
-- Do not import from the old `qick_workspace` package inside `QickworkspaceV2`.
-- Keep shared code inside `QickworkspaceV2/tools`, `QickworkspaceV2/plotter`,
-  and `QickworkspaceV2/instruments`.
-- There is no full automated test suite yet. Validation is mostly notebook-based
-  and hardware-in-the-loop.
-- Use `SimulatedBackend` or offline smoke tests when hardware is unavailable.
+- Never import `qick_workspace` from inside `QickworkspaceV2/`.
+- Native HDF5/ID/catalog behavior has hardware-independent unittest coverage
+  in `tests/test_hdf5_store.py`; experiment validation remains notebook- and
+  hardware-in-the-loop driven.
+- The experiment registry in `core/experiment_registry.py` is the stable list
+  for generic clients. Experimental classes may exist without registry entries.
+- Keep hardware-dependent imports lazy where possible so analysis and data
+  utilities remain usable without QICK installed.
 
-## Import Examples
+Useful imports:
 
 ```python
 from QickworkspaceV2 import (
-    BaseExperiment,
-    ExperimentConfig,
-    CalibrationStore,
     AutoCalibrate,
+    BaseExperiment,
+    BatchExperiment,
+    CalibrationStore,
+    ExperimentConfig,
+    ExperimentData,
+    ParallelExperiment,
+    QualityFlag,
 )
 
 from QickworkspaceV2.experiments.resonator import ResonatorSpec, Punchout
 from QickworkspaceV2.experiments.qubit_ge import QubitSpec, PowerRabi
 from QickworkspaceV2.experiments.coherence import T1, Ramsey, SpinEcho
-from QickworkspaceV2.instruments import BaseInstrumentManager
+from QickworkspaceV2.experiments_mux import MuxOneTone, MuxPowerRabi, MuxT1
 ```

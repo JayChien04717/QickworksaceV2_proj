@@ -4,7 +4,7 @@ Ramsey EF (s012) — T2* and detuning for the ef transition.
 
 from __future__ import annotations
 
-from ...analysis.qubit import RamseyAnalysis
+from ...analysis.qubit import RamseyEfAnalysis
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
 
@@ -20,7 +20,7 @@ class RamseyEfProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ge", name="qb_ge_pi", gain_key="pi_gain_ge")
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse1", gain_key="pi2_gain_ef")
         ramsey_phase = (
-            cfg.get("qb_phase_ef", 0) + cfg["wait_time"] * 360 * cfg["ramsey_freq"]
+            cfg.get("qb_phase_ef", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
             cfg, "ef", name="qb_ef_pulse2", gain_key="pi2_gain_ef", phase=ramsey_phase
@@ -55,7 +55,7 @@ class RamseyEf(BaseExperiment):
     X_SAVE_UNIT = "s"
     X_SAVE_SCALE = 1e-6
 
-    Analysis = RamseyAnalysis
+    Analysis = RamseyEfAnalysis
 
     def _create_program(self):
         return RamseyEfProgram(
@@ -75,13 +75,13 @@ class RamseyEf(BaseExperiment):
             raise RuntimeError("Run the experiment first.")
         detune = self.result.fit_result.get("detune_MHz", (None,))[0]
         if detune is None:
-            print("Detune not available (ramsey_freq=0 or fit failed).")
+            print("Detune not available (virtual_detune=0 or fit failed).")
             return self.cfg["qb_freq_ef"]
-        if abs(detune - self.cfg["ramsey_freq"]) > 0.005:
+        if abs(detune - self.cfg["virtual_detune"]) > 0.005:
             self.cfg["qb_freq_ef"] = self.cfg["qb_freq_ef"] - round(
-                (detune - self.cfg["ramsey_freq"]), 2
+                (detune - self.cfg["virtual_detune"]), 2
             )
-            print(f"over detune {round((detune - self.cfg['ramsey_freq']), 5)}MHz")
+            print(f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz")
             return round(self.cfg["qb_freq_ef"], 5)
         else:
             print("Detune < 5kHz")

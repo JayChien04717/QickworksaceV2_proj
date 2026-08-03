@@ -11,7 +11,6 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxPunchoutProgram(AveragerProgramV2):
@@ -188,7 +187,6 @@ class MuxPunchout(BaseExperiment):
             x_axis=self.freq_offsets,
             y_axis=self.gain_axis,
             fit_result={"status": ("punchout_acquired", None)} if has_data else {},
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,

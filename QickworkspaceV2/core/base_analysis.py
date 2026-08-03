@@ -43,6 +43,7 @@ class BaseAnalysis(ABC):
     """
 
     thresholds: dict = {}
+    REQUIRED_CONFIG_KEYS: tuple[str, ...] = ()
 
     def run(self, data: "ExperimentData") -> "ExperimentData":
         """
@@ -71,6 +72,14 @@ class BaseAnalysis(ABC):
 
     # ── Helper ───────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _config_value(data: "ExperimentData", key: str, default=None):
+        """Read persisted analysis context with legacy config fallback."""
+        context = data.metadata.get("analysis_context") or {}
+        if key in context:
+            return context[key]
+        return data.config.get(key, default)
+
     def _show_fit(
         self,
         data: "ExperimentData",
@@ -82,7 +91,7 @@ class BaseAnalysis(ABC):
         result_text: str = "",
         extra_lines=None,
     ) -> None:
-        """Render the professional 2×3 fit-result figure via plot_utils."""
+        """Render the shared fit dashboard via plot_utils."""
         from ..plotter.plot_utils import plot_fit_result
 
         if data.x_axis is None or data.raw_iq is None:
@@ -172,6 +181,15 @@ class BaseAnalysis(ABC):
         score, channel, y, popt, pcov = best
         data.metadata["fit_channel"] = channel
         data.metadata["fit_channel_snr"] = float(score)
+        fit_y = np.asarray(simfunc(np.asarray(data.x_axis), *popt), dtype=float)
+        data.analysis_data.update({
+            "fit_input": {"values": np.asarray(y, dtype=float), "dims": ["x"]},
+            "fit_curve": {"values": fit_y, "dims": ["x"]},
+            "residual": {
+                "values": np.asarray(y, dtype=float) - fit_y,
+                "dims": ["x"],
+            },
+        })
         return y, popt, pcov, channel, float(score)
 
     @abstractmethod

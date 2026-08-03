@@ -20,7 +20,7 @@ class DragProgram(BaseProgram):
 
     def _initialize(self, cfg):
         self.setup_resonator(cfg)
-        self.declare_gen_auto(cfg["qb_ch"], cfg["nqz_qb"], "qb_mixer", cfg)
+        self.setup_qubit_gen(cfg, "ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="x180_ge",
                             phase=0, gain_key="pi_gain_ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="mx180_ge",
@@ -132,7 +132,6 @@ class DragCalibration(BaseExperiment):
             fit_result={k: (v, None) for k, v in fit_result.items()},
             scalar_result=float(optimal_alpha) if optimal_alpha is not None else None,
             quality=QualityFlag.NO_INFORMATION,
-            config=dict(self.cfg) if hasattr(self.cfg, "__iter__") else {},
             interrupted=interrupted,
             avg_count=avg_count,
             x_name=self.X_SAVE_NAME,

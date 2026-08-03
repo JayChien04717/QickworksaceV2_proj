@@ -36,6 +36,8 @@ def list_data_files(root_dir: str) -> list[dict]:
 def load_data(filepath: str) -> dict:
     """Load a saved experiment into the dict shape expected by the GUI."""
     with h5py.File(filepath, "r") as h5:
+        if h5.attrs.get("schema_name") == "qickworkspace.experiment":
+            return _load_native_data(filepath)
         meta = json.loads(h5.attrs.get("meta", "{}"))
         data_group = h5.get("data")
         if data_group is None:
@@ -75,9 +77,71 @@ def load_data(filepath: str) -> dict:
 def _read_meta(path: Path) -> dict:
     try:
         with h5py.File(path, "r") as h5:
+            if h5.attrs.get("schema_name") == "qickworkspace.experiment":
+                from .hdf5_store import inspect_file
+
+                info = inspect_file(path)
+                return {
+                    "timestamp": info.get("timestamp_utc", ""),
+                    "experiment_type": info.get("experiment_type", ""),
+                    "metadata": {
+                        **(info.get("metadata", {}) or {}),
+                        "tag": ",".join(info.get("tags", [])),
+                    },
+                    "config": {},
+                }
             return json.loads(h5.attrs.get("meta", "{}"))
     except Exception:
         return {}
+
+
+def _first_array(value):
+    if isinstance(value, np.ndarray):
+        return value
+    if isinstance(value, dict):
+        if isinstance(value.get("iq"), np.ndarray):
+            return value["iq"]
+        for child in value.values():
+            found = _first_array(child)
+            if found is not None:
+                return found
+    return None
+
+
+def _load_native_data(filepath: str) -> dict:
+    from .hdf5_store import load_result
+
+    result = load_result(filepath)
+    iq = _first_array(result.raw_iq)
+    if iq is None:
+        iq = np.asarray([], dtype=complex)
+    elif not np.iscomplexobj(iq):
+        iq = np.asarray(iq, dtype=float).astype(complex)
+    x_values = result.x_axis
+    if x_values is None:
+        x_values = np.arange(iq.shape[-1] if iq.ndim else iq.size, dtype=float)
+    x = {"name": result.x_name or "x", "unit": result.x_unit, "values": x_values}
+    y = None
+    if result.y_axis is not None:
+        y = {"name": result.y_name or "y", "unit": result.y_unit, "values": result.y_axis}
+    return {
+        "path": filepath,
+        "filename": os.path.basename(filepath),
+        "experiment": result.experiment_type,
+        "qubit": _qubit_index(result.to_dict()),
+        "timestamp": result.timestamp.isoformat(),
+        "tag": ",".join(result.tags),
+        "config": result.config,
+        "fit_result": result.fit_result,
+        "x": x,
+        "y": y,
+        "avgi": np.real(iq),
+        "avgq": np.imag(iq),
+        "mag": np.abs(iq),
+        "phase": np.degrees(np.angle(iq)),
+        "raw": result.raw_iq,
+        "analysis": result.analysis_data,
+    }
 
 
 def _axis_dict(h5, name: str, fallback_size: int) -> dict:

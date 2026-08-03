@@ -13,7 +13,6 @@ from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
 from ..tools.fitting import error_fit_err, fitrb, rb_error, rb_func
-from ..tools.system_tool import clean_config
 
 
 class MuxRBProgram(AveragerProgramV2):
@@ -202,6 +201,7 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             [int(rng.integers(0, 2**31)) for _ in range(number_sample)]
             for _ in range(len(self.x))
         ]
+        sequences_matrix = [[None] * number_sample for _ in range(len(self.x))]
         depth_indices = np.arange(len(self.x))
         if randomize_depth_order:
             rng.shuffle(depth_indices)
@@ -220,6 +220,7 @@ class MuxRandomizedBenchmarking(BaseExperiment):
                             interleave=interleaved_gate,
                             seed=seeds_matrix[d_idx][sample_idx],
                         )[0]
+                        sequences_matrix[d_idx][sample_idx] = seq
                         run_cfg = dict(cfg)
                         run_cfg["gate_seq"] = seq
                         prog = MuxRBProgram(
@@ -291,13 +292,31 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             x_axis=self.x.astype(float),
             y_axis=plot_data.mean(axis=2),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "number_sample": number_sample,
                 "interleaved_gate": interleaved_gate,
                 "fit_params": fit_params,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["qubit", "depth", "sample"]},
+            analysis_data={
+                "mean_signal": {"values": plot_data.mean(axis=2), "dims": ["qubit", "depth"]},
+                "standard_error": {
+                    "values": plot_data.std(axis=2) / np.sqrt(max(number_sample, 1)),
+                    "dims": ["qubit", "depth"],
+                },
+            },
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
             figures=figures,
             quality=QualityFlag.GOOD if self.rb_result is not None else QualityFlag.BAD,
             interrupted=interrupted,
@@ -334,6 +353,9 @@ class MuxAutoRB:
         iq_process="abs",
         plot=True,
     ):
+        from ..tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         gates = [None] + list(interleaved_gates or [])
         for gate in tqdm(gates, desc="Mux AutoRB"):
             label = "ref" if gate is None else gate
@@ -348,6 +370,8 @@ class MuxAutoRB:
                 iq_process=iq_process,
                 plot=plot,
             )
+            result.parent_id = session_id
+            result.session_id = session_id
             self.rb_objects[label] = rb
             self.results[label] = result.fit_result
         return self.results

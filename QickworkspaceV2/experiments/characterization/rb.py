@@ -118,30 +118,46 @@ class RandomizedBenchmarking(BaseExperiment):
             [int(rng.integers(0, 2**31)) for _ in range(number_sample)]
             for _ in range(n_depths)
         ]
+        sequences_matrix = [[None] * number_sample for _ in range(n_depths)]
+        programs_matrix = [[None] * number_sample for _ in range(n_depths)]
         depth_indices = np.arange(n_depths)
         if randomize_depth_order:
             rng.shuffle(depth_indices)
 
+        for idx in tqdm(depth_indices, desc=f"Compile {desc}", leave=False):
+            depth = self.x[idx]
+            for sample_idx in range(number_sample):
+                sequence = single_qb_rb(
+                    n_clifford=depth,
+                    n_sample=1,
+                    interleave=interleaved_gate,
+                    seed=seeds_matrix[idx][sample_idx],
+                )[0]
+                sequences_matrix[idx][sample_idx] = sequence
+                program_cfg = dict(self.cfg)
+                program_cfg["gate_seq"] = sequence
+                program_cfg["prefix"] = prefix
+                programs_matrix[idx][sample_idx] = RBProgram(
+                    self.soccfg,
+                    reps=program_cfg["reps"],
+                    final_delay=program_cfg["relax_delay"],
+                    cfg=program_cfg,
+                )
+
         rb_accum = [[None] * number_sample for _ in range(n_depths)]
-        for avg_i in tqdm(range(py_avg), desc="Software Average"):
+        for _ in tqdm(range(py_avg), desc="Software Average"):
             for idx in tqdm(depth_indices, desc=desc, leave=False):
-                depth = self.x[idx]
-                for s_i in tqdm(range(number_sample), desc="Samples", leave=False):
-                    seqs = single_qb_rb(
-                        n_clifford=depth, n_sample=1,
-                        interleave=interleaved_gate, seed=seeds_matrix[idx][s_i],
+                for sample_idx in tqdm(
+                    range(number_sample), desc="Samples", leave=False
+                ):
+                    acquired = programs_matrix[idx][sample_idx].acquire(
+                        self.soc, rounds=1, progress=False
                     )
-                    self.cfg["gate_seq"] = seqs[0]
-                    self.cfg["prefix"] = prefix
-                    prog = RBProgram(
-                        self.soccfg, reps=self.cfg["reps"],
-                        final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+                    iq_data = acquired[0][0].dot([1, 1j])
+                    previous = rb_accum[idx][sample_idx]
+                    rb_accum[idx][sample_idx] = (
+                        iq_data if previous is None else previous + iq_data
                     )
-                    iq_data = prog.acquire(self.soc, rounds=1, progress=False)[0][0].dot([1, 1j])
-                    if avg_i == 0:
-                        rb_accum[idx][s_i] = iq_data
-                    else:
-                        rb_accum[idx][s_i] = rb_accum[idx][s_i] + iq_data
 
         self.rb_result = [
             [rb_accum[idx][s_i] / py_avg for s_i in range(number_sample)]
@@ -156,8 +172,27 @@ class RandomizedBenchmarking(BaseExperiment):
             raw_iq=raw_iq,
             x_axis=self.x.astype(float),
             y_axis=avg,
-            config=self._snapshot_config(),
-            metadata={"iq_process": iq_process, "number_sample": number_sample},
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "iq_process": iq_process,
+                "number_sample": number_sample,
+                "interleaved_gate": interleaved_gate,
+                "prefix": prefix,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
+            },
+            axes={
+                "depth": {"values": self.x.astype(float), "label": "Circuit depth", "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["depth", "sample"]},
+            analysis_data={
+                "mean_signal": {"values": avg, "dims": ["depth"]},
+            },
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
             avg_count=py_avg,
             quality=QualityFlag.NO_INFORMATION,
         )
@@ -211,8 +246,11 @@ class RandomizedBenchmarking(BaseExperiment):
             expt_name = f"s015_RB_{qb_idx}_ref"
         save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        # Save the effective per-run config, including notebook overrides.
-        dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
         hdf5_generator(
             filepath=file_path,
             x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
@@ -255,6 +293,9 @@ class AutoRB:
         prefix: str = "ge",
         iq_process: str = "abs",
     ):
+        from ...tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         self._rb_kwargs = dict(
             max_circuit_depth=max_circuit_depth,
             delta_clifford=delta_clifford,
@@ -266,6 +307,8 @@ class AutoRB:
             label = "ref" if gate is None else gate
             rb = RandomizedBenchmarking(self.cfg)
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
+            rb.result.parent_id = session_id
+            rb.result.session_id = session_id
             self._rb_objects[label] = rb
 
     def plot(self, show_individual=False, *, plot_analysis=True):

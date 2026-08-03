@@ -1,0 +1,33 @@
+"""Shared QICK acquisition call and output decoding helpers."""
+
+import numpy as np
+
+
+def decode_acquisition(acquired, *, threshold: bool):
+    """Decode one QICK readout as complex IQ or real threshold population."""
+    try:
+        data = acquired[0][0]
+    except (IndexError, TypeError):
+        data = acquired
+
+    values = np.asarray(data)
+    if threshold:
+        if np.iscomplexobj(values):
+            return np.real(values).squeeze()
+        return values.astype(float, copy=False).squeeze()
+
+    if values.ndim > 0 and values.shape[-1] == 2:
+        return values.dot([1, 1j])
+    return values.astype(complex, copy=False)
+
+
+def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None):
+    """Run ``prog.acquire`` and return values in the selected readout mode."""
+    call_kwargs = {"rounds": rounds, "progress": progress}
+    if threshold is not None:
+        call_kwargs["threshold"] = threshold
+    acquired = prog.acquire(soc, **call_kwargs)
+    return decode_acquisition(acquired, threshold=threshold is not None)
+
+
+__all__ = ["acquire_values", "decode_acquisition"]

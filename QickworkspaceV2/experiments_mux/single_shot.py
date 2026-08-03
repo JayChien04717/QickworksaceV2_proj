@@ -11,7 +11,6 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxSingleShotGEProgram(AveragerProgramV2):
@@ -271,7 +270,6 @@ class MuxSingleShotGE(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=np.arange(int(cfg["shots"])),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -280,6 +278,33 @@ class MuxSingleShotGE(BaseExperiment):
                 "states": ["g", "e"],
                 "shots": int(cfg["shots"]),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "state": {"values": ["g", "e"]},
+                "shot": {"values": np.arange(int(cfg["shots"])), "unit": "#"},
+            },
+            dataset_dims={"iq": ["qubit", "state", "shot"]},
+            analysis_data={
+                "fidelity": {
+                    "values": np.asarray([analysis.get(name, {}).get("fidelity", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "threshold": {
+                    "values": np.asarray([analysis.get(name, {}).get("threshold", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "rotation_deg": {
+                    "values": np.asarray([analysis.get(name, {}).get("theta_deg", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "snr": {
+                    "values": np.asarray([analysis.get(name, {}).get("snr", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+            },
+            data_kind="single_shot",
+            analysis_id="single_shot",
+            plot_id="single_shot_iq",
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
             quality_message="Mux single-shot ge acquired." if has_data else "No data acquired.",
@@ -557,7 +582,6 @@ class MuxSingleShotGEOpt(BaseExperiment):
             x_axis=self.freq_offsets,
             y_axis=self.gain_axis,
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -569,6 +593,27 @@ class MuxSingleShotGEOpt(BaseExperiment):
                 "points_acquired": points_done,
                 "shots": int(shots),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "length": {"values": self.length_axis, "unit": "us"},
+                "gain": {"values": self.gain_axis, "unit": "DAC unit"},
+                "frequency_offset": {"values": self.freq_offsets, "unit": "MHz"},
+                "state": {"values": ["g", "e"]},
+                "shot": {"values": np.arange(int(shots)), "unit": "#"},
+            },
+            dataset_dims={
+                "iq": ["qubit", "length", "gain", "frequency_offset", "state", "shot"]
+            },
+            analysis_data={
+                name: {
+                    "values": values,
+                    "dims": ["qubit", "length", "gain", "frequency_offset"],
+                }
+                for name, values in self.metric_arrays.items()
+            },
+            data_kind="single_shot_optimization",
+            analysis_id="single_shot_optimization",
+            plot_id="single_shot_optimization",
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
             quality_message="Mux single-shot ge optimization acquired."

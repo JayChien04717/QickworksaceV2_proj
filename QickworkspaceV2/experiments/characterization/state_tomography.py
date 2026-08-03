@@ -140,9 +140,16 @@ class Tomography(BaseExperiment):
         ], dtype=float)
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
-            raw_iq=expectation_values,
+            raw_iq={
+                "calibration_g": self.iq_g,
+                "calibration_e": self.iq_e,
+                "tomography": {
+                    "X": self.tomo_data_raw["X"],
+                    "Y": self.tomo_data_raw["Y"],
+                    "Z": self.tomo_data_raw["Z"],
+                },
+            },
             x_axis=expectation_axis,
-            y_axis=self.rho_mle,
             fit_result={
                 "expect_X": self.expect_values["X"],
                 "expect_Y": self.expect_values["Y"],
@@ -152,9 +159,25 @@ class Tomography(BaseExperiment):
             },
             x_name="Tomography axis",
             x_unit="X/Y/Z",
-            y_name="Expectation",
-            y_unit="",
+            axes={
+                "tomography_axis": {"values": ["X", "Y", "Z"]},
+                "ket": {"values": ["0", "1"]},
+                "bra": {"values": ["0", "1"]},
+            },
+            analysis_data={
+                "expectation": {"values": expectation_values, "dims": ["tomography_axis"]},
+                "density_matrix": {"values": self.rho_mle, "dims": ["bra", "ket"]},
+            },
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "axes": ["X", "Y", "Z"],
+                "prep_pulse": self.prep_pulse_name,
+            },
+            data_kind="tomography",
+            analysis_id="tomography",
+            plot_id="density_matrix",
             quality=QualityFlag.GOOD if purity >= 0.8 else QualityFlag.WARNING,
+            avg_count=py_avg,
         )
         self.result = result
         return result
@@ -218,15 +241,20 @@ class Tomography(BaseExperiment):
             plt.show()
             return fig, None
 
-    def saveLabber(self, qb_idx, yoko_value=None):
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
         if not self.tomo_data_raw:
             print("No data. Run first.")
             return
         from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
         save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, f"s016_Tomography_ge_Q{qb_idx}", yoko_value)
+        config_yaml = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
         comment = (
-            f"{config_to_yaml(self.cfg)}\n--- Tomography ---\n"
+            f"{config_yaml}\n--- Tomography ---\n"
             f"Prepared: {self.prep_pulse_name}\n"
             f"<X>={self.expect_values['X']:.4f}, "
             f"<Y>={self.expect_values['Y']:.4f}, "

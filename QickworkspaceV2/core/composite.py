@@ -78,9 +78,9 @@ class BatchExperiment:
             Mapping ``experiment_type → ExperimentData``.
         """
         import time
-        import uuid
+        from ..tools.hdf5_store import generate_experiment_id
 
-        batch_id = str(uuid.uuid4())[:8]
+        batch_id = generate_experiment_id()
         self.results = {}
 
         for i, (label, expt) in enumerate(self._named):
@@ -91,6 +91,7 @@ class BatchExperiment:
 
             result = expt.run(py_avg=py_avg, **kwargs)
             result.parent_id = batch_id
+            result.session_id = batch_id
             self.results[expt_name] = result
 
             if self.stop_on_bad and result.quality == QualityFlag.BAD:
@@ -148,7 +149,9 @@ class ParallelExperiment:
     def run(self, py_avg: int, **kwargs) -> Dict[str, ExperimentData]:
         """Run all experiments concurrently, return collected results."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from ..tools.hdf5_store import generate_experiment_id
 
+        session_id = generate_experiment_id()
         futures = {}
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             for label, expt in self._named:
@@ -160,12 +163,16 @@ class ParallelExperiment:
                 name = futures[future]
                 try:
                     self.results[name] = future.result()
+                    self.results[name].parent_id = session_id
+                    self.results[name].session_id = session_id
                 except Exception as exc:
                     print(f"  [ParallelExperiment] {name} raised: {exc}")
                     self.results[name] = ExperimentData(
                         experiment_type=name,
                         quality=QualityFlag.BAD,
                         quality_message=str(exc),
+                        parent_id=session_id,
+                        session_id=session_id,
                     )
 
         return self.results

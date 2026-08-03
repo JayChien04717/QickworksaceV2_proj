@@ -1,0 +1,92 @@
+import unittest
+from unittest.mock import Mock, patch
+
+import numpy as np
+
+from QickworkspaceV2.plotter.liveplot import (
+    SoftwareAverageRunner,
+    run_software_average_liveplot,
+)
+
+
+class LiveplotThresholdTests(unittest.TestCase):
+    def test_software_average_keeps_complex_iq_without_threshold(self):
+        prog = Mock()
+        prog.acquire.side_effect = [
+            [[np.array([[1.0, 2.0], [3.0, 4.0]])]],
+            [[np.array([[3.0, 4.0], [5.0, 6.0]])]],
+        ]
+        runner = SoftwareAverageRunner(
+            prog=prog, soc="soc", py_avg=2, iq_process="real"
+        )
+
+        values, interrupted, avg_count = runner.run(lambda *_: None)
+
+        np.testing.assert_array_equal(
+            values, np.array([2.0 + 3.0j, 4.0 + 5.0j])
+        )
+        self.assertTrue(np.iscomplexobj(values))
+        self.assertFalse(interrupted)
+        self.assertEqual(avg_count, 2)
+
+    def test_software_average_passes_threshold_and_averages_real_values(self):
+        prog = Mock()
+        prog.acquire.side_effect = [
+            [[np.array([0.0, 1.0])]],
+            [[np.array([1.0, 1.0])]],
+        ]
+        updates = []
+        runner = SoftwareAverageRunner(
+            prog=prog,
+            soc="soc",
+            py_avg=2,
+            iq_process="real",
+            threshold=0.4,
+        )
+
+        values, interrupted, avg_count = runner.run(
+            lambda index, data: updates.append((index, data.copy()))
+        )
+
+        self.assertEqual(prog.acquire.call_count, 2)
+        prog.acquire.assert_called_with(
+            "soc",
+            rounds=1,
+            progress=False,
+            threshold=0.4,
+        )
+        np.testing.assert_array_equal(values, np.array([0.5, 1.0]))
+        self.assertFalse(np.iscomplexobj(values))
+        self.assertFalse(interrupted)
+        self.assertEqual(avg_count, 2)
+        self.assertEqual([index for index, _ in updates], [0, 1])
+
+    def test_interrupt_before_first_average_reports_zero_completed(self):
+        prog = Mock()
+        prog.acquire.side_effect = KeyboardInterrupt
+        runner = SoftwareAverageRunner(
+            prog=prog, soc="soc", py_avg=2, iq_process="real"
+        )
+
+        values, interrupted, avg_count = runner.run(lambda *_: None)
+
+        self.assertIsNone(values)
+        self.assertTrue(interrupted)
+        self.assertEqual(avg_count, 0)
+
+    def test_public_wrapper_uses_single_software_average_implementation(self):
+        expected = (np.array([1 + 2j]), False, 3)
+        with patch(
+            "QickworkspaceV2.plotter.liveplot._liveplot_sw_avg",
+            return_value=expected,
+        ) as implementation:
+            result = run_software_average_liveplot(
+                prog="prog", soc="soc", py_avg=3, x_axis_vals=np.array([0.0])
+            )
+
+        self.assertIs(result, expected)
+        implementation.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
