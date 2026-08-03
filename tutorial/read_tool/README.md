@@ -4,12 +4,12 @@ This hardware-independent tutorial creates T1, Rabi, single-shot, RB,
 tomography, and SSH optimization files through the public
 `ExperimentData.save()` API.
 
-The default archive contains seven measurement dates, repeated T1/Rabi runs,
+The bundled HDF5 dataset contains seven measurement dates, repeated T1/Rabi runs,
 Q1/Q2 single-shot checks, daily RB, periodic tomography, and selected SSH
 optimization runs. Repeated runs share a daily `session_id` and carry date,
 qubit, repeat, comment, tag, and quality metadata for query testing.
 
-From the repository root, regenerate the sample archive with:
+From the repository root, regenerate the sample dataset with:
 
 ```bash
 python tutorial/read_tool/generate_mock_data.py --clean

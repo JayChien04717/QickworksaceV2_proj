@@ -37,7 +37,7 @@ offline; experiment construction and acquisition require the shared
 | [00_quickstart.ipynb](00_quickstart.ipynb) | Session, config, and first experiment |
 | [01_config_and_store.ipynb](01_config_and_store.ipynb) | `ExperimentConfig` and `CalibrationStore` |
 | [02_running_experiments.ipynb](02_running_experiments.ipynb) | Resonator, qubit, Rabi, T1, and Ramsey |
-| [03_batch_pipeline.ipynb](03_batch_pipeline.ipynb) | `BatchExperiment` and `ParallelExperiment` |
+| [03_batch_pipeline.ipynb](03_batch_pipeline.ipynb) | Sequential batches; threaded parallel API and hardware-safety warning |
 | [04_auto_calibrate.ipynb](04_auto_calibrate.ipynb) | Seven-step `AutoCalibrate` pipeline |
 | [05_custom_experiment.ipynb](05_custom_experiment.ipynb) | Custom `BaseProgram` and `BaseExperiment` |
 | [06_real_hardware.ipynb](06_real_hardware.ipynb) | QICK connection and saving |
@@ -81,3 +81,5 @@ same server.
 | Note | Topic |
 | --- | --- |
 | [T1_nonuniform_sweep.md](T1_nonuniform_sweep.md) | QICK Macro, DMEM/register concepts, and a non-uniform T1 time sweep implementation |
+
+Current hardware notebooks import `config_list` from `QickworkspaceV2.config.system_cfg` and add run-specific `QickSweep1D` values on a copied qubit config.
