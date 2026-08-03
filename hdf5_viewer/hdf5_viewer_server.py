@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import h5py
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, Response
+
+APP_DIR = Path(__file__).resolve().parent
+REPO_ROOT = APP_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from QickworkspaceV2.tools.hdf5_store import (
     CATALOG_FILENAME,
@@ -23,7 +29,6 @@ from QickworkspaceV2.tools.hdf5_store import (
 )
 
 
-APP_DIR = Path(__file__).resolve().parent
 HTML_FILE = APP_DIR / "hdf5_viewer.html"
 app = FastAPI(title="Qickworkspace HDF5 Viewer", docs_url=None, redoc_url=None)
 

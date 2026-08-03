@@ -27,5 +27,5 @@ all authoritative data remains in the `.h5` files.
 
 For the current native HDF5 API walkthrough, open
 `tutorial/07_data_management.ipynb`. For interactive browsing, run
-`python hdf5_viewer_server.py` from the repository root and choose this
+`python hdf5_viewer/hdf5_viewer_server.py` from the repository root and choose this
 `tutorial/read_tool/data` folder in the viewer.

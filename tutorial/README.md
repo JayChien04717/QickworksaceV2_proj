@@ -69,11 +69,11 @@ the source of truth and can rebuild the catalog with `rebuild_catalog(data_root)
 The repository also includes a local viewer:
 
 ```bash
-python hdf5_viewer_server.py
+python hdf5_viewer/hdf5_viewer_server.py
 ```
 
 Open `http://127.0.0.1:8000`, choose a data folder, and use **Rebuild** if the
-catalog is missing or stale. On Windows, `start_hdf5_viewer.bat` launches the
+catalog is missing or stale. On Windows, `hdf5_viewer/start_hdf5_viewer.bat` launches the
 same server.
 
 ## Additional Notes
