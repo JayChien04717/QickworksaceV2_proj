@@ -1,10 +1,11 @@
-"""Local-only web server for browsing Qickworkspace SQLite/HDF5 archives."""
+"""Local-only web server for browsing, plotting, and comparing Qickworkspace HDF5 archives."""
 
 from __future__ import annotations
 
 import json
 import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 import h5py
@@ -21,16 +22,16 @@ from QickworkspaceV2.tools.hdf5_store import (
     CATALOG_FILENAME,
     EMBEDDED_GROUP,
     LEGACY_EMBEDDED_GROUPS,
+    _native_root,
     inspect_file,
     load_result,
     rebuild_catalog,
     validate_file,
-    _native_root,
 )
-
 
 HTML_FILE = APP_DIR / "hdf5_viewer.html"
 app = FastAPI(title="Qickworkspace HDF5 Viewer", docs_url=None, redoc_url=None)
+_DIALOG_LOCK = threading.Lock()
 
 
 def _root(folder: str) -> Path:
@@ -42,21 +43,16 @@ def _root(folder: str) -> Path:
     return root
 
 
-def _catalog(root: Path, *, build: bool = False) -> Path:
+def _catalog(root: Path) -> Path:
     catalog = root / CATALOG_FILENAME
-    if not catalog.exists() and build:
-        rebuild_catalog(root)
     if not catalog.is_file():
-        raise HTTPException(
-            404,
-            f"No {CATALOG_FILENAME} in {root}. Save a hybrid/native experiment first or choose Rebuild.",
-        )
+        raise HTTPException(404, f"No {CATALOG_FILENAME} in {root}. Choose Rebuild catalog first.")
     return catalog
 
 
 def _rows(root: Path, *, limit: int = 2000):
     catalog = _catalog(root)
-    with sqlite3.connect(f"file:{catalog.as_posix()}?mode=ro", uri=True, timeout=10) as connection:
+    with sqlite3.connect(f"file:{catalog.as_posix()}?mode=ro&immutable=1", uri=True, timeout=10) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             "SELECT * FROM experiments ORDER BY timestamp_utc DESC LIMIT ?", (int(limit),)
@@ -72,8 +68,7 @@ def _rows(root: Path, *, limit: int = 2000):
 
 
 def _row(root: Path, experiment_id: str):
-    catalog = _catalog(root)
-    with sqlite3.connect(f"file:{catalog.as_posix()}?mode=ro", uri=True, timeout=10) as connection:
+    with sqlite3.connect(f"file:{_catalog(root).as_posix()}?mode=ro&immutable=1", uri=True, timeout=10) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             "SELECT * FROM experiments WHERE experiment_id = ?", (experiment_id,)
@@ -102,16 +97,49 @@ def _jsonable(value):
     return value
 
 
-def _dataset_keys(path: Path, section: str) -> list[str]:
-    keys = []
+def _decode_dims(node: h5py.Dataset) -> list[str]:
+    value = node.attrs.get("dims", "[]")
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    try:
+        return [str(item) for item in (json.loads(value) if isinstance(value, str) else value)]
+    except (TypeError, json.JSONDecodeError):
+        return []
+
+
+def _dataset_descriptor(name: str, node: h5py.Dataset) -> dict:
+    dtype = np.dtype(node.dtype)
+    return {
+        "name": name,
+        "shape": list(node.shape),
+        "size": int(node.size),
+        "dtype": str(dtype),
+        "dims": _decode_dims(node),
+        "complex": bool(np.issubdtype(dtype, np.complexfloating)),
+        "numeric": bool(np.issubdtype(dtype, np.number)),
+        "rank": int(node.ndim),
+    }
+
+
+def _logical_datasets(path: Path, section: str) -> list[dict]:
+    result: list[dict] = []
     with h5py.File(path, "r") as h5:
         root = _native_root(h5)
         if root is None or section not in root:
-            return keys
-        root[section].visititems(
-            lambda name, obj: keys.append(name) if isinstance(obj, h5py.Dataset) else None
-        )
-    return keys
+            return result
+
+        def visit(group: h5py.Group, prefix: str = "") -> None:
+            for name, node in group.items():
+                logical_name = f"{prefix}/{name}" if prefix else name
+                if isinstance(node, h5py.Group) and "values" in node and isinstance(node["values"], h5py.Dataset):
+                    result.append(_dataset_descriptor(logical_name, node["values"]))
+                elif isinstance(node, h5py.Group):
+                    visit(node, logical_name)
+                elif isinstance(node, h5py.Dataset):
+                    result.append(_dataset_descriptor(logical_name, node))
+
+        visit(root[section])
+    return result
 
 
 def _axis_summary(path: Path) -> dict:
@@ -124,13 +152,12 @@ def _axis_summary(path: Path) -> dict:
             if not isinstance(axis, h5py.Group) or "values" not in axis:
                 continue
             values = np.asarray(axis["values"])
-            first = values.reshape(-1)[:5]
+            numeric = np.issubdtype(values.dtype, np.number)
             summary[name] = {
-                "size": int(values.size),
-                "shape": list(values.shape),
-                "unit": str(axis.attrs.get("unit", "")),
-                "label": str(axis.attrs.get("label", "")),
-                "first": _jsonable(first),
+                "size": int(values.size), "shape": list(values.shape),
+                "unit": str(axis.attrs.get("unit", "")), "label": str(axis.attrs.get("label", "")),
+                "min": _jsonable(np.nanmin(values)) if numeric and values.size else None,
+                "max": _jsonable(np.nanmax(values)) if numeric and values.size else None,
             }
     return summary
 
@@ -147,31 +174,116 @@ def _read_dataset(path: Path, section: str, dataset: str):
             node = node["values"]
         if not isinstance(node, h5py.Dataset):
             raise KeyError(f"Not a dataset: {section}/{dataset}")
-        values = np.asarray(node)
-        dims_value = node.attrs.get("dims", "[]")
-        if isinstance(dims_value, bytes):
-            dims_value = dims_value.decode("utf-8")
+        return np.asarray(node), _decode_dims(node)
+
+
+def _read_axis(path: Path, name: str) -> tuple[np.ndarray, dict]:
+    with h5py.File(path, "r") as h5:
+        root = _native_root(h5)
+        if root is None or f"axes/{name}/values" not in root:
+            raise KeyError(name)
+        group = root[f"axes/{name}"]
+        return np.asarray(group["values"]), {
+            key: _jsonable(group.attrs.get(key, "")) for key in ("label", "unit", "description", "scale")
+        }
+
+
+def _numeric_channel(values: np.ndarray, channel: str) -> tuple[np.ndarray, str]:
+    channel = {"amplitude": "abs", "amp": "abs", "i": "real", "q": "imag"}.get(
+        (channel or "auto").lower(), (channel or "auto").lower()
+    )
+    if np.iscomplexobj(values):
+        channel = "abs" if channel in {"auto", "value"} else channel
+        converters = {
+            "abs": np.abs, "real": np.real, "imag": np.imag,
+            "phase": lambda value: np.unwrap(np.angle(value), axis=-1),
+        }
+        if channel not in converters:
+            raise ValueError(f"Unsupported complex channel: {channel}")
+        return np.asarray(converters[channel](values), dtype=float), channel
+    if not np.issubdtype(values.dtype, np.number):
+        raise ValueError("Selected dataset is not numeric")
+    return np.asarray(values, dtype=float), "value"
+
+
+def _one_dimensional(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values)
+    if values.ndim == 0:
+        return values.reshape(1)
+    if values.ndim == 1:
+        return values
+    return np.nanmean(values.reshape(-1, values.shape[-1]), axis=0)
+
+
+def _sample_indices(size: int, max_points: int) -> np.ndarray:
+    if size <= max_points:
+        return np.arange(size, dtype=int)
+    return np.unique(np.linspace(0, size - 1, max_points, dtype=int))
+
+
+def _result_summary(path: Path) -> dict:
+    """Read fit summaries without materialising the potentially large raw tree."""
+    def read_node(node):
+        if isinstance(node, h5py.Group):
+            return {name: read_node(child) for name, child in node.items()}
+        value = node[()]
+        if isinstance(value, bytes):
+            return value.decode("utf-8")
+        return _jsonable(value)
+
+    with h5py.File(path, "r") as h5:
+        root = _native_root(h5)
+        if root is None or "results" not in root:
+            return {"fit_result": {}, "fit_params": None, "fit_errors": None,
+                    "scalar_result": None, "quality_message": ""}
+        results = root["results"]
+        fit_text = read_node(results["fit_result_json"]) if "fit_result_json" in results else "{}"
+        summary_text = read_node(results["summary_json"]) if "summary_json" in results else "{}"
         try:
-            dims = json.loads(dims_value) if isinstance(dims_value, str) else list(dims_value)
-        except (TypeError, json.JSONDecodeError):
-            dims = []
-        return values, dims
+            fit_result = json.loads(fit_text) if isinstance(fit_text, str) else {}
+        except json.JSONDecodeError:
+            fit_result = {}
+        try:
+            summary = json.loads(summary_text) if isinstance(summary_text, str) else {}
+        except json.JSONDecodeError:
+            summary = {}
+        return {
+            "fit_result": fit_result,
+            "fit_params": read_node(results["fit_params"]) if "fit_params" in results else None,
+            "fit_errors": read_node(results["fit_errors"]) if "fit_errors" in results else None,
+            "scalar_result": summary.get("scalar_result"),
+            "quality_message": summary.get("quality_message", ""),
+        }
+
 
 @app.get("/")
 def index():
     return FileResponse(HTML_FILE)
 
 
+@app.get("/api/choose-folder")
+def choose_folder(initial: str = Query("")):
+    """Open a native local folder picker; this viewer is intentionally local-only."""
+    with _DIALOG_LOCK:
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            initial_dir = initial if initial and Path(initial).is_dir() else str(Path.home())
+            selected = filedialog.askdirectory(parent=root, initialdir=initial_dir, mustexist=True)
+            root.destroy()
+        except Exception as exc:
+            raise HTTPException(500, f"Could not open the native folder dialog: {exc}") from exc
+    return {"folder": selected or ""}
+
+
 @app.get("/api/catalog")
 def catalog(folder: str = Query(...), limit: int = Query(2000, ge=1, le=10000)):
     root = _root(folder)
     rows = _rows(root, limit=limit)
-    return {
-        "folder": str(root),
-        "catalog": str(root / CATALOG_FILENAME),
-        "count": len(rows),
-        "experiments": rows,
-    }
+    return {"folder": str(root), "catalog": str(root / CATALOG_FILENAME), "count": len(rows), "experiments": rows}
 
 
 @app.post("/api/rebuild")
@@ -190,29 +302,66 @@ def experiment(experiment_id: str, folder: str = Query(...)):
     _, path = _row(root, experiment_id)
     info = inspect_file(path)
     report = validate_file(path)
-    axis_summary = _axis_summary(path)
-    return JSONResponse(
-        _jsonable(
-            {
-                **info,
-                "valid": report.valid,
-                "validation_errors": report.errors,
-                "validation_warnings": report.warnings,
-                "raw_keys": _dataset_keys(path, "raw"),
-                "analysis_keys": _dataset_keys(path, "analysis"),
-                "axes": axis_summary,
-            }
-        )
-    )
+    return JSONResponse(_jsonable({
+        **info, **_result_summary(path), "valid": report.valid,
+        "validation_errors": report.errors, "validation_warnings": report.warnings,
+        "datasets": {"raw": _logical_datasets(path, "raw"), "analysis": _logical_datasets(path, "analysis")},
+        "axes": _axis_summary(path),
+    }))
 
 
-@app.get("/api/data/{experiment_id}")
-def data(
+@app.get("/api/trace/{experiment_id}")
+def trace(
     experiment_id: str,
     folder: str = Query(...),
     dataset: str = Query("iq"),
     source: str = Query("raw", pattern="^(raw|analysis)$"),
-    max_points: int = Query(4000, ge=100, le=50000),
+    channel: str = Query("auto", pattern="^(auto|value|abs|real|imag|phase)$"),
+    max_points: int = Query(3000, ge=100, le=20000),
+):
+    root = _root(folder)
+    _, path = _row(root, experiment_id)
+    try:
+        values, dims = _read_dataset(path, source, dataset)
+        display_values, actual_channel = _numeric_channel(values, channel)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    y = _one_dimensional(display_values)
+    axis_name = dims[-1] if dims else "x"
+    axis_meta = {"label": axis_name, "unit": "", "scale": 1.0}
+    try:
+        x, axis_meta = _read_axis(path, axis_name)
+        x = np.asarray(x).reshape(-1)
+    except KeyError:
+        x = np.arange(y.size, dtype=float)
+    if x.size != y.size:
+        x = np.arange(y.size, dtype=float)
+        axis_meta = {"label": "index", "unit": "", "scale": 1.0}
+    fit = None
+    try:
+        fit_values, fit_dims = _read_dataset(path, "analysis", "fit_curve")
+        fit = _one_dimensional(np.asarray(fit_values, dtype=float))
+        if fit.size != y.size or (fit_dims and dims and fit_dims[-1] != dims[-1]):
+            fit = None
+    except (KeyError, ValueError, TypeError):
+        pass
+    indices = _sample_indices(y.size, max_points)
+    result = _result_summary(path)
+    metadata = inspect_file(path).get("metadata", {}) or {}
+    return JSONResponse(_jsonable({
+        "experiment_id": experiment_id, "experiment_type": inspect_file(path).get("experiment_type", ""),
+        "dataset": f"{source}/{dataset}", "channel": actual_channel,
+        "shape": list(values.shape), "dims": dims, "reduction": "mean leading dimensions" if values.ndim > 1 else "none",
+        "x": x[indices], "y": y[indices], "fit": fit[indices] if fit is not None else None,
+        "x_label": axis_meta.get("label") or axis_name, "x_unit": axis_meta.get("unit", ""),
+        "y_label": metadata.get("fit_channel", actual_channel), **result,
+    }))
+
+
+@app.get("/api/data/{experiment_id}")
+def data(
+    experiment_id: str, folder: str = Query(...), dataset: str = Query("iq"),
+    source: str = Query("raw", pattern="^(raw|analysis)$"), max_points: int = Query(4000, ge=100, le=50000),
 ):
     root = _root(folder)
     _, path = _row(root, experiment_id)
@@ -221,22 +370,11 @@ def data(
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     flat = array.reshape(-1)
-    stride = max(1, int(np.ceil(flat.size / max_points)))
-    sampled = flat[::stride]
-    payload = {
-        "dataset": f"{source}/{dataset}",
-        "shape": list(array.shape),
-        "dtype": str(array.dtype),
-        "dims": list(dims),
-        "stride": stride,
-        "sample_count": int(sampled.size),
-    }
+    indices = _sample_indices(flat.size, max_points)
+    sampled = flat[indices]
+    payload = {"dataset": f"{source}/{dataset}", "shape": list(array.shape), "dtype": str(array.dtype), "dims": dims, "sample_count": int(sampled.size)}
     if np.iscomplexobj(sampled):
-        payload.update(
-            real=sampled.real.tolist(),
-            imag=sampled.imag.tolist(),
-            magnitude=np.abs(sampled).tolist(),
-        )
+        payload.update(real=sampled.real.tolist(), imag=sampled.imag.tolist(), magnitude=np.abs(sampled).tolist())
     elif np.issubdtype(sampled.dtype, np.number):
         payload["values"] = sampled.tolist()
     else:
@@ -245,38 +383,21 @@ def data(
 
 
 @app.get("/api/plot/{experiment_id}")
-def plot(
-    experiment_id: str,
-    folder: str = Query(...),
-    name: str = Query("main.png", pattern="^(main|analysis|preview)\\.png$"),
-):
+def plot(experiment_id: str, folder: str = Query(...), name: str = Query("main.png", pattern="^(main|analysis|preview)\\.png$")):
     root = _root(folder)
     _, path = _row(root, experiment_id)
     with h5py.File(path, "r") as h5:
-        plot_candidates = []
-        for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
-            plot_candidates.append(f"{group_name}/plots/{name}")
-        for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
-            plot_candidates.extend([
-                f"{group_name}/plots/main.png",
-                f"{group_name}/plots/analysis.png",
-                f"{group_name}/plots/preview.png",
-            ])
-        for embedded in plot_candidates:
+        exact = [f"{group}/plots/{name}" for group in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS)]
+        for embedded in exact:
             if embedded in h5:
                 return Response(np.asarray(h5[embedded], dtype=np.uint8).tobytes(), media_type="image/png")
-
-    # Standalone native files get the same hardware-independent preview.
     from QickworkspaceV2.tools.Labber_saver import _preview_png
-
     return Response(_preview_png(load_result(path)), media_type="image/png")
 
 
 if __name__ == "__main__":
-    import threading
     import webbrowser
     import uvicorn
-
     url = "http://127.0.0.1:8765"
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     print(f"Opening {url}")
