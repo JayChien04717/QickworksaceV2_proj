@@ -47,7 +47,7 @@ class TimeRabi(BaseExperiment):
     """Time Rabi (ge): sweeps flat-top pulse length, fits decaying sinusoid."""
 
     EXPT_NAME = "s004_time_rabi_ge"
-    TAG = "Rabi"
+    TAG = "TimeRabi"
     X_LABEL = "Pulse Length (us)"
     TITLE_PREFIX = "Qubit Time Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_flat_top_length_ge"]
@@ -125,7 +125,7 @@ class PowerRabi(BaseExperiment):
     """Power Rabi (ge): sweeps gain, fits sinusoid for pi and pi/2 gains."""
 
     EXPT_NAME = "s005_power_rabi_ge"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ge"]
@@ -204,7 +204,7 @@ class PowerRabiReset(PowerRabi):
     """Power Rabi with active reset (s005b)."""
 
     EXPT_NAME = "s005b_power_rabi_reset_ge"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     TITLE_PREFIX = "Qubit Power Rabi ge (Reset)"
 
     def _create_program(self):

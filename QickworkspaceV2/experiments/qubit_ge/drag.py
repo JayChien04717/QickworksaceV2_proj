@@ -66,7 +66,7 @@ class DragCalibration(BaseExperiment):
     """
 
     EXPT_NAME = "s005a_drag_ge"
-    TAG = "DRAGCalibration"
+    TAG = "Drag"
     X_LABEL = "DRAG Parameter (α)"
     Y_LABEL = "Iterations (N)"
     TITLE_PREFIX = "DRAG Calibration"

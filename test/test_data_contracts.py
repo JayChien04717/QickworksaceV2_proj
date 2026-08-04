@@ -8,11 +8,80 @@ import numpy as np
 from QickworkspaceV2.calibration.store import CalibrationStore
 from QickworkspaceV2.core.experiment_components import SweepAxes, _infer_iq_dims
 from QickworkspaceV2.core.experiment_data import ExperimentData, QualityFlag
+from QickworkspaceV2.experiments.characterization.allxy import AllXY
+from QickworkspaceV2.experiments.qubit_ef.rabi_ef import PowerRabiEf
+from QickworkspaceV2.experiments.qubit_ge.aae import PowerRabiChevron
+from QickworkspaceV2.experiments.qubit_ge.drag import DragCalibration
+from QickworkspaceV2.experiments.qubit_ge.rabi import (
+    PowerRabi,
+    PowerRabiReset,
+    TimeRabi,
+)
+from QickworkspaceV2.experiments.qubit_ge.rabi_reset import ActiveResetRabi
 from QickworkspaceV2.experiments_mux._common import fit_quality
-from QickworkspaceV2.tools.hdf5_store import validate_file
+from QickworkspaceV2.tools.hdf5_store import _normalise_tags, validate_file
 
 
 class DataContractTests(unittest.TestCase):
+    def test_builtin_tags_use_canonical_spelling(self):
+        self.assertEqual(
+            _normalise_tags([
+                "t1",
+                "T1",
+                " t2 ",
+                "one tone",
+                "one_tone",
+                "TWOTONE",
+                "single shot",
+                "spin_echo",
+                "mux t1",
+                "mux-one-tone",
+                "allxy",
+                "my-custom-tag",
+            ]),
+            [
+                "T1",
+                "T2",
+                "OneTone",
+                "TwoTone",
+                "SingleShot",
+                "Spin Echo",
+                "MuxT1",
+                "MuxOneTone",
+                "AllXY",
+                "my-custom-tag",
+            ],
+        )
+        self.assertEqual(
+            _normalise_tags(["power rabi", "time_rabi", "custom"]),
+            ["PowerRabi", "TimeRabi", "custom"],
+        )
+        self.assertEqual(
+            _normalise_tags(["Rabi"], "s004_time_rabi_ge"),
+            ["TimeRabi"],
+        )
+        self.assertEqual(
+            _normalise_tags(["Rabi"], "s005_power_rabi_ge"),
+            ["PowerRabi"],
+        )
+        self.assertEqual(
+            _normalise_tags(["ALLXY", "DRAGCalibration"]),
+            ["AllXY", "Drag"],
+        )
+
+    def test_experiment_classes_publish_specific_rabi_allxy_drag_tags(self):
+        self.assertEqual(TimeRabi.TAG, "TimeRabi")
+        for experiment in (
+            PowerRabi,
+            PowerRabiReset,
+            PowerRabiChevron,
+            ActiveResetRabi,
+            PowerRabiEf,
+        ):
+            self.assertEqual(experiment.TAG, "PowerRabi")
+        self.assertEqual(AllXY.TAG, "AllXY")
+        self.assertEqual(DragCalibration.TAG, "Drag")
+
     def test_experiment_data_is_json_serializable_and_round_trips(self):
         original = ExperimentData(
             experiment_type="demo",

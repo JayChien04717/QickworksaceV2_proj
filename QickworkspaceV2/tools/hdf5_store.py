@@ -440,7 +440,72 @@ def _quality_value(result) -> str:
     return str(getattr(quality, "value", quality))
 
 
-def _normalise_tags(tags: Iterable[str] | str | None) -> list[str]:
+# Canonical spellings are limited to values emitted by the original
+# saveLabber paths: class-level TAG values plus the few legacy experiments
+# that pass tag directly. T2 is retained for older archives even though
+# current Ramsey and SpinEcho classes use descriptive tags.
+_CANONICAL_TAG_NAMES = (
+    "ACStark",
+    "AllXY",
+    "Chi",
+    "Cryoscope",
+    "Drag",
+    "MuxAllXY",
+    "MuxOneTone",
+    "MuxPowerRabi",
+    "MuxPunchout",
+    "MuxRamsey",
+    "MuxRB",
+    "MuxSingleShotGE",
+    "MuxSingleShotGEOpt",
+    "MuxT1",
+    "MuxTOF",
+    "MuxTomography",
+    "MuxTwoTone",
+    "OneTone",
+    "PowerRabi",
+    "Ramsey",
+    "RB",
+    "SingleShot",
+    "Spin Echo",
+    "T1",
+    "T2",
+    "Temperature",
+    "TimeRabi",
+    "TOF",
+    "Tomography",
+    "TwoTone",
+)
+
+
+def _tag_key(tag: object) -> str:
+    """Return a case- and separator-insensitive lookup key."""
+    return re.sub(r"[^a-z0-9]+", "", str(tag).casefold())
+
+
+_CANONICAL_TAGS = {
+    _tag_key(tag): tag
+    for tag in _CANONICAL_TAG_NAMES
+}
+_CANONICAL_TAGS.update({
+    "allxy": "AllXY",
+    "dragcalibration": "Drag",
+    "rabi": "PowerRabi",
+})
+
+
+def _canonical_tag(tag: object, experiment_type: str = "") -> str:
+    """Return the preferred display spelling for one tag."""
+    text = str(tag).strip()
+    if _tag_key(text) == "rabi" and "timerabi" in _tag_key(experiment_type):
+        return "TimeRabi"
+    return _CANONICAL_TAGS.get(_tag_key(text), text)
+
+
+def _normalise_tags(
+    tags: Iterable[str] | str | None,
+    experiment_type: str = "",
+) -> list[str]:
     """Normalize tags.
 
     Parameters
@@ -457,7 +522,9 @@ def _normalise_tags(tags: Iterable[str] | str | None) -> list[str]:
         return []
     if isinstance(tags, str):
         tags = [tags]
-    return list(dict.fromkeys(str(tag).strip() for tag in tags if str(tag).strip()))
+    cleaned = (_canonical_tag(tag, experiment_type) for tag in tags)
+    cleaned = (tag for tag in cleaned if tag)
+    return list(dict.fromkeys(cleaned))
 
 
 def _qubits_from_result(result) -> list[str]:
@@ -800,7 +867,10 @@ def save_result(
         result.experiment_id = generate_experiment_id(utc_time)
     result.timestamp = utc_time
     result.comment = str(comment if comment != "" else getattr(result, "comment", ""))
-    result.tags = _normalise_tags(tags if tags else getattr(result, "tags", []))
+    result.tags = _normalise_tags(
+        tags if tags else getattr(result, "tags", []),
+        getattr(result, "experiment_type", ""),
+    )
 
     if explicit_path:
         final_path = Path(path).expanduser().resolve()
@@ -890,6 +960,10 @@ def inspect_file(path: os.PathLike | str) -> dict:
         root = _native_root(h5)
         if root is None:
             meta = _json_loads(h5.attrs.get("meta"), {}) or {}
+            meta["tags"] = _normalise_tags(
+                meta.get("tags", []),
+                meta.get("experiment_type", ""),
+            )
             return {
                 "path": str(path),
                 "schema_name": "qickworkspace.legacy",
@@ -906,7 +980,13 @@ def inspect_file(path: os.PathLike | str) -> dict:
         if meta_group is not None:
             comment = _read_text(meta_group, "comment")
             if "tags" in meta_group:
-                tags = [item.decode() if isinstance(item, bytes) else str(item) for item in meta_group["tags"][:]]
+                tags = _normalise_tags(
+                    [
+                        item.decode() if isinstance(item, bytes) else str(item)
+                        for item in meta_group["tags"][:]
+                    ],
+                    str(attrs.get("experiment_type", "")),
+                )
         qubits = (
             (metadata or {}).get("qubit_names")
             or (metadata or {}).get("qubits")
@@ -1004,7 +1084,13 @@ def load_result(path: os.PathLike | str):
                 scale = float(group.attrs.get("scale", 1.0)) or 1.0
                 y_axis = values / scale
 
-        tags = [item.decode() if isinstance(item, bytes) else str(item) for item in meta["tags"][:]]
+        tags = _normalise_tags(
+            [
+                item.decode() if isinstance(item, bytes) else str(item)
+                for item in meta["tags"][:]
+            ],
+            str(root.attrs.get("experiment_type", "")),
+        )
         return ExperimentData(
             experiment_type=str(root.attrs.get("experiment_type", "")),
             experiment_id=experiment_id,
@@ -1059,6 +1145,7 @@ def _load_previous_format(h5: h5py.File):
 
     meta = _json_loads(h5.attrs.get("meta"), {}) or {}
     obj = ExperimentData.from_dict(meta)
+    obj.tags = _normalise_tags(obj.tags, obj.experiment_type)
     if "data" in h5:
         data = h5["data"]
         obj.raw_iq = data["avgi"][:] + 1j * data["avgq"][:]
@@ -1425,7 +1512,10 @@ def find_experiments(
     with _connect_catalog(root) as connection:
         connection.row_factory = sqlite3.Row
         for row in connection.execute(query, params):
-            row_tags = tuple(_json_loads(row["tags_json"], []) or [])
+            row_tags = tuple(_normalise_tags(
+                _json_loads(row["tags_json"], []) or [],
+                row["experiment_type"],
+            ))
             row_qubits = tuple(str(q) for q in (_json_loads(row["qubits_json"], []) or []))
             if qubit is not None and str(qubit) not in row_qubits:
                 continue

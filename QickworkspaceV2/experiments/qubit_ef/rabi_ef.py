@@ -59,7 +59,7 @@ class PowerRabiEf(BaseExperiment):
     """EF power Rabi (s011): sweep ef gain and fit pi / pi2 gains."""
 
     EXPT_NAME = "s011_power_rabi_ef"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ef"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ef"]

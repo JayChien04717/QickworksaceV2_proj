@@ -23,6 +23,7 @@ from QickworkspaceV2.tools.hdf5_store import (
     EMBEDDED_GROUP,
     LEGACY_EMBEDDED_GROUPS,
     _native_root,
+    _normalise_tags,
     inspect_file,
     load_result,
     rebuild_catalog,
@@ -61,7 +62,10 @@ def _rows(root: Path, *, limit: int = 2000):
     for row in rows:
         item = dict(row)
         item["qubits"] = json.loads(item.pop("qubits_json") or "[]")
-        item["tags"] = json.loads(item.pop("tags_json") or "[]")
+        item["tags"] = _normalise_tags(
+            json.loads(item.pop("tags_json") or "[]"),
+            item.get("experiment_type", ""),
+        )
         item["path"] = str((root / item["relative_path"]).resolve())
         result.append(item)
     return result

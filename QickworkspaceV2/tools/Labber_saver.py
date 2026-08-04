@@ -1573,7 +1573,10 @@ def embed_result_in_labber(
         result.experiment_id = native.generate_experiment_id(utc_time)
     result.timestamp = utc_time
     result.comment = str(comment if comment != "" else getattr(result, "comment", ""))
-    result.tags = native._normalise_tags(tags if tags else getattr(result, "tags", []))
+    result.tags = native._normalise_tags(
+        tags if tags else getattr(result, "tags", []),
+        getattr(result, "experiment_type", ""),
+    )
 
     with h5py.File(path, "r+") as h5:
         if EMBEDDED_GROUP in h5:

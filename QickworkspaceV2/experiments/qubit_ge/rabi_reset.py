@@ -192,7 +192,7 @@ class ActiveResetRabi(BaseExperiment):
     """
 
     EXPT_NAME = "s005c_power_rabi_active_reset_ge"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ge (Active Reset)"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ge"]

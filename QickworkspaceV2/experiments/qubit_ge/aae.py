@@ -61,7 +61,7 @@ class PowerRabiChevron(BaseExperiment):
     """
 
     EXPT_NAME = "s005_power_rabi_chevron"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ge"]

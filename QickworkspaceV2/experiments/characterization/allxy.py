@@ -82,6 +82,7 @@ class AllXY(BaseExperiment):
     """AllXY gate error diagnostic (s014): 21 gate-pair sequences."""
 
     EXPT_NAME = "s014_AllXY_ge"
+    TAG = "AllXY"
     Analysis = AllXYAnalysis
 
     def __init__(self, config):
@@ -199,7 +200,7 @@ class AllXY(BaseExperiment):
             x_info={"name": "Sequence", "unit": "None", "values": np.arange(len(ALLXY_SEQUENCE))},
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
             comment=str(config_yaml),
-            tag="ALLXY",
+            tag=self.TAG,
             result=self.result,
         )
         print(f"Data saved to {file_path}")
