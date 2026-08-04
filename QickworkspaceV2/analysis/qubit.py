@@ -9,7 +9,6 @@ import numpy as np
 from ..core.base_analysis import BaseAnalysis
 from ..core.experiment_data import ExperimentData, QualityFlag
 
-# ── T1 ────────────────────────────────────────────────────────────────────────
 
 
 class T1Analysis(BaseAnalysis):
@@ -20,6 +19,13 @@ class T1Analysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import expfunc, fitexp
@@ -43,6 +49,13 @@ class T1Analysis(BaseAnalysis):
             data.quality_message = f"T1 fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import expfunc
@@ -61,7 +74,6 @@ class T1Analysis(BaseAnalysis):
         )
 
 
-# ── Ramsey ────────────────────────────────────────────────────────────────────
 
 
 class RamseyAnalysis(BaseAnalysis):
@@ -75,6 +87,13 @@ class RamseyAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
@@ -86,6 +105,13 @@ class RamseyAnalysis(BaseAnalysis):
             self._fit_exp(data)
 
     def _fit_decaysin(self, data: ExperimentData) -> None:
+        """Fit decaysin.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         from ..tools.fitting import decaysin, fitdecaysin
 
         x = data.x_axis
@@ -117,6 +143,13 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey decaysin fit failed: {exc}"
 
     def _fit_exp(self, data: ExperimentData) -> None:
+        """Fit exp.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         from ..tools.fitting import expfunc, fitexp
 
         x = data.x_axis
@@ -138,6 +171,13 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey exp fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         virtual_detune = self._config_value(data, "virtual_detune", 0.0)
@@ -170,7 +210,6 @@ class RamseyAnalysis(BaseAnalysis):
         )
 
 
-# ── SpinEcho ──────────────────────────────────────────────────────────────────
 
 
 class SpinEchoAnalysis(BaseAnalysis):
@@ -183,6 +222,13 @@ class SpinEchoAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
@@ -226,6 +272,13 @@ class SpinEchoAnalysis(BaseAnalysis):
             data.quality_message = f"SpinEcho fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         virtual_detune = self._config_value(data, "virtual_detune", 0.0)
@@ -271,6 +324,13 @@ class PowerRabiAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitsin, fix_phase, sinfunc
@@ -295,6 +355,13 @@ class PowerRabiAnalysis(BaseAnalysis):
             data.quality_message = f"PowerRabi sine fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import sinfunc
@@ -338,7 +405,6 @@ class PowerRabiAnalysis(BaseAnalysis):
         )
 
 
-# ── TimeRabi ──────────────────────────────────────────────────────────────────
 
 
 class TimeRabiAnalysis(BaseAnalysis):
@@ -347,6 +413,13 @@ class TimeRabiAnalysis(BaseAnalysis):
     thresholds = {}
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import decaysin, fitdecaysin
@@ -373,6 +446,13 @@ class TimeRabiAnalysis(BaseAnalysis):
             data.quality_message = f"TimeRabi fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import decaysin
@@ -388,7 +468,6 @@ class TimeRabiAnalysis(BaseAnalysis):
         )
 
 
-# ── QubitTemp ─────────────────────────────────────────────────────────────────
 
 
 class QubitTempAnalysis(BaseAnalysis):
@@ -400,6 +479,13 @@ class QubitTempAnalysis(BaseAnalysis):
 
     def _run(self, data: ExperimentData) -> None:
         # Population ratio → temperature via Boltzmann
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         n_e = data.fit_result.get("n_excited", (None, None))[0]
         f_ge = data.config.get("qb_freq_ge", 5000.0)  # MHz
 
@@ -415,7 +501,6 @@ class QubitTempAnalysis(BaseAnalysis):
                 data.scalar_result = T_mK
 
 
-# ── SingleShot ────────────────────────────────────────────────────────────────
 
 
 class SingleShotAnalysis(BaseAnalysis):
@@ -428,5 +513,12 @@ class SingleShotAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         # Actual analysis is handled inside SingleShot_gef.plot()
         # This class just wraps whatever the experiment already computed.
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if "fidelity" not in data.fit_result:
             data.quality = QualityFlag.NO_INFORMATION

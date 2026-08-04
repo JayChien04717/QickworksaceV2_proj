@@ -18,11 +18,25 @@ class StateTomographyProgram(BaseProgram):
     """QICK program for a single tomography axis measurement with optional state prep."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_standard_gates(cfg, prefix="ge")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         axis = cfg["tomo_axis"]
         cal_pulse = cfg.get("cal_pulse", None)
         prep_pulse = cfg.get("prep_pulse", None)
@@ -56,6 +70,13 @@ class Tomography(BaseExperiment):
     EXPT_NAME = "s016_Tomography_ge"
 
     def __init__(self, config):
+        """Initialize the Tomography instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.iq_g = None
         self.iq_e = None
@@ -70,6 +91,18 @@ class Tomography(BaseExperiment):
         self._sz = np.array([[1, 0], [0, -1]], dtype=complex)
 
     def _run_calibration(self, pyavg):
+        """Run calibration.
+
+        Parameters
+        ----------
+        pyavg : Any
+            Value for ``pyavg``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         for cal_label, cal_val in [("ground", "None"), ("excited", "x180_ge")]:
             print(f"Calibrating |{'0' if cal_val == 'None' else '1'}⟩ state...")
             cfg = self.cfg.copy()
@@ -87,6 +120,20 @@ class Tomography(BaseExperiment):
         return self.iq_g, self.iq_e
 
     def _run_tomography(self, pyavg, prep_pulse_name=None):
+        """Run tomography.
+
+        Parameters
+        ----------
+        pyavg : Any
+            Value for ``pyavg``.
+        prep_pulse_name : Any, default: None
+            Name of the prep pulse.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         resolved = resolve_gate(prep_pulse_name) if prep_pulse_name else None
         tomo_data = {}
         for axis in tqdm(["X", "Y", "Z"], desc=f"Tomography ({prep_pulse_name})"):
@@ -100,12 +147,40 @@ class Tomography(BaseExperiment):
         return tomo_data
 
     def _project_to_expect(self, iq_data, iq_g, iq_e):
+        """Return the project to expect result.
+
+        Parameters
+        ----------
+        iq_data : Any
+            Value for ``iq_data``.
+        iq_g : Any
+            Value for ``iq_g``.
+        iq_e : Any
+            Value for ``iq_e``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cal_vector = iq_e - iq_g
         data_vector = iq_data - iq_g
         projection = np.real(data_vector * np.conj(cal_vector)) / np.abs(cal_vector)**2
         return float(np.clip((1 - projection) - projection, -1, 1))
 
     def _mle_reconstruction(self, rho_raw):
+        """Return the mle reconstruction result.
+
+        Parameters
+        ----------
+        rho_raw : Any
+            Value for ``rho_raw``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         eig_vals, eig_vecs = np.linalg.eigh(rho_raw)
         eig_vals = np.maximum(0, eig_vals)
         trace = np.sum(eig_vals)
@@ -113,6 +188,13 @@ class Tomography(BaseExperiment):
         return eig_vecs @ np.diag(eig_vals) @ np.conj(eig_vecs.T)
 
     def _reconstruct_density_matrix(self):
+        """Return the reconstruct density matrix result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         expect_values = {
             axis: self._project_to_expect(self.tomo_data_raw[axis], self.iq_g, self.iq_e)
             for axis in ["X", "Y", "Z"]
@@ -126,6 +208,20 @@ class Tomography(BaseExperiment):
         return expect_values, rho_mle
 
     def run(self, py_avg: int, prep_pulse_name: str | None = None) -> ExperimentData:
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        prep_pulse_name : str | None, default: None
+            Name of the prep pulse.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         self.prep_pulse_name = str(prep_pulse_name)
         self._run_calibration(py_avg)
         self.tomo_data_raw = self._run_tomography(py_avg, prep_pulse_name)
@@ -183,6 +279,22 @@ class Tomography(BaseExperiment):
         return result
 
     def plot(self, plot_type: str = "2d", qb_idx=None, *, plot_analysis=True):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        plot_type : str, default: '2d'
+            Value for ``plot_type``.
+        qb_idx : Any, default: None
+            Value for ``qb_idx``.
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.rho_mle is None:
             print("No data. Run first.")
             return None, None
@@ -242,6 +354,17 @@ class Tomography(BaseExperiment):
             return fig, None
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
+        """Save Labber.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        """
         if not self.tomo_data_raw:
             print("No data. Run first.")
             return

@@ -27,6 +27,23 @@ _LABBER_EXPORTS = {"LabberHDF5Saver"}
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     if name in _SYSTEM_TOOL_EXPORTS:
         from .system_tool import get_next_filename_labber, hdf5_generator, config_to_yaml, auto_unit
 

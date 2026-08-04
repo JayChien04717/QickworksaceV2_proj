@@ -18,11 +18,29 @@ from .units import auto_unit
 def get_next_filename_labber(
     dest_path: str, exp_name: str, yoko_value: dict[str, Any] | None = None
 ) -> str:
-    """
-    Generate the next HDF5 filename for a Labber-compatible log file.
+    """Generate the next HDF5 filename for a Labber-compatible log file.
 
-    Files are saved inside a date-structured subdirectory under *dest_path*
-    (``<dest_path>/<YYYY>/<MM>/Data_<MMDD>/``).
+            Files are saved inside a date-structured subdirectory under *dest_path*
+            (``<dest_path>/<YYYY>/<MM>/Data_<MMDD>/``).
+
+    Parameters
+    ----------
+    dest_path : str
+        Filesystem location for dest path.
+    exp_name : str
+        Name of the exp.
+    yoko_value : dict[str, Any] | None, default: None
+        Value for ``yoko_value``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
     dest_path = os.path.abspath(dest_path)
     yy, mm, dd = datetime.datetime.today().strftime("%Y-%m-%d").split("-")
@@ -76,9 +94,46 @@ def hdf5_generator(
 ):
     """Save one combined Labber + native HDF5 file.
 
-    ``filename_mode`` is ``"random"`` by default and appends the native
-    experiment ID. Set it to ``"sequential"`` to retain ``_001``, ``_002``, ...
-    filenames returned by :func:`get_next_filename_labber`.
+            ``filename_mode`` is ``"random"`` by default and appends the native
+            experiment ID. Set it to ``"sequential"`` to retain ``_001``, ``_002``, ...
+            filenames returned by :func:`get_next_filename_labber`.
+
+    Parameters
+    ----------
+    filepath : Any
+        Value for ``filepath``.
+    x_info : Any
+        Value for ``x_info``.
+    z_info : Any
+        Value for ``z_info``.
+    y_info : Any, default: None
+        Value for ``y_info``.
+    comment : Any, default: None
+        Value for ``comment``.
+    tag : Any, default: None
+        Value for ``tag``.
+    result : Any, default: None
+        Experiment result to process.
+    embed_native : Any, default: True
+        Value for ``embed_native``.
+    save_plots : Any, default: True
+        Value for ``save_plots``.
+    data_root : Any, default: None
+        Value for ``data_root``.
+    filename_mode : Any, default: 'random'
+        Value for ``filename_mode``.
+    figures : Any, default: None
+        Value for ``figures``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ImportError
+        If the operation cannot be completed.
     """
     try:
         from ..tools.Labber_saver import LabberHDF5Saver
@@ -112,7 +167,18 @@ def hdf5_generator(
 
 
 def clean_config(config):
-    """Recursively clean a config dict for serialization (removes QickParam, converts numpy)."""
+    """Recursively clean a config dict for serialization (removes QickParam, converts numpy).
+
+    Parameters
+    ----------
+    config : Any
+        Experiment configuration.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     try:
         from qick.asm_v2 import QickParam
 
@@ -121,6 +187,18 @@ def clean_config(config):
         _qick_param_types = ()
 
     def _clean(obj):
+        """Return the clean result.
+
+        Parameters
+        ----------
+        obj : Any
+            Value for ``obj``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if isinstance(obj, (dict, AddictDict)):
             return {
                 k: _clean(v)
@@ -143,7 +221,18 @@ def clean_config(config):
 
 
 def config_to_yaml(config: dict) -> str:
-    """Clean a config dict and serialize it to a YAML string."""
+    """Clean a config dict and serialize it to a YAML string.
+
+    Parameters
+    ----------
+    config : dict
+        Experiment configuration.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     return yaml.dump(
         clean_config(config),
         default_flow_style=False,
@@ -165,6 +254,15 @@ class ExperimentConfig:
     """
 
     def __init__(self, data: list | dict, keys_to_unify: list[str] | None = None):
+        """Initialize the ExperimentConfig instance.
+
+        Parameters
+        ----------
+        data : list | dict
+            Input data to process.
+        keys_to_unify : list[str] | None, default: None
+            Value for ``keys_to_unify``.
+        """
         self._raw_list = data
         self.keys_to_unify = keys_to_unify or [
             "reps",
@@ -185,6 +283,13 @@ class ExperimentConfig:
 
     @property
     def unified_config(self) -> AddictDict:
+        """Return the unified config result.
+
+        Returns
+        -------
+        AddictDict
+            Result of the operation.
+        """
         if self._dirty or self._unified_cache is None:
             raw_collected = self._collect_all_key_values(self._raw_list)
             self._unified_cache = self._refine_cfg(raw_collected)
@@ -192,18 +297,43 @@ class ExperimentConfig:
         return self._unified_cache
 
     def _mark_dirty(self) -> None:
+        """Return the mark dirty result."""
         self._dirty = True
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         names = [cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)]
         return f"ExperimentConfig(qubits={names})"
 
     def qubit_names(self) -> list:
-        """Return the list of qubit names in config order."""
+        """Return the list of qubit names in config order.
+
+        Returns
+        -------
+        list
+            Result of the operation.
+        """
         return [cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)]
 
     def get_qubit(self, q_id: int | str) -> AddictDict:
-        """Return a flat configuration dict for a single qubit."""
+        """Return a flat configuration dict for a single qubit.
+
+        Parameters
+        ----------
+        q_id : int | str
+            Value for ``q_id``.
+
+        Returns
+        -------
+        AddictDict
+            Result of the operation.
+        """
         indices = self._resolve_indices(q_id)
         idx = indices[0]
         selected = AddictDict()
@@ -220,8 +350,24 @@ class ExperimentConfig:
     ) -> AddictDict:
         """Build a mux configuration for selected qubits.
 
-        The mux generator tones and readout channels remain slot-stable. For
-        example, Q1/Q3 with mux_ro_ch_start=2 uses readout channels [2, 4].
+                        The mux generator tones and readout channels remain slot-stable. For
+                        example, Q1/Q3 with mux_ro_ch_start=2 uses readout channels [2, 4].
+
+        Parameters
+        ----------
+        qb_list : Any
+            Value for ``qb_list``.
+        mux_ro_ch_start : Any, default: 2
+            Value for ``mux_ro_ch_start``.
+        mux_gen : Any, default: 12
+            Value for ``mux_gen``.
+        LO_ext : Any, default: None
+            Value for ``LO_ext``.
+
+        Returns
+        -------
+        AddictDict
+            Result of the operation.
         """
         active_slots = self._resolve_indices(qb_list)
         active_set = set(active_slots)
@@ -246,6 +392,20 @@ class ExperimentConfig:
         ro_phases = list(selected.get("ro_phase", [0] * len(all_slots)))
 
         def _pad(values, default):
+            """Return the pad result.
+
+            Parameters
+            ----------
+            values : Any
+                Values to process.
+            default : Any
+                Value for ``default``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             values = list(values)
             if len(values) < len(all_slots):
                 values.extend([default] * (len(all_slots) - len(values)))
@@ -288,9 +448,37 @@ class ExperimentConfig:
         return selected
 
     def to_yaml_mux(self, qb_list, **kwargs) -> str:
+        """Convert the value to yaml mux.
+
+        Parameters
+        ----------
+        qb_list : Any
+            Value for ``qb_list``.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         indices = self._resolve_indices(qb_list)
 
         def _get_mux_val(key, path_parts):
+            """Return mux val.
+
+            Parameters
+            ----------
+            key : Any
+                Lookup key.
+            path_parts : Any
+                Value for ``path_parts``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             vals = []
             for idx in indices:
                 cfg = self._raw_list[idx]
@@ -312,6 +500,20 @@ class ExperimentConfig:
             return vals
 
         def _recursive_fill(template_node, path=[]):
+            """Return the recursive fill result.
+
+            Parameters
+            ----------
+            template_node : Any
+                Value for ``template_node``.
+            path : Any, default: []
+                Filesystem path.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             if isinstance(template_node, dict):
                 res = {}
                 for k, v in template_node.items():
@@ -345,10 +547,36 @@ class ExperimentConfig:
         return self._dump_dict_with_spacing(mux_nested)
 
     def update_mux(self, param, value=None, q_index=None) -> None:
+        """Update mux.
+
+        Parameters
+        ----------
+        param : Any
+            Value for ``param``.
+        value : Any, default: None
+            Value to apply.
+        q_index : Any, default: None
+            Value for ``q_index``.
+        """
         self.update(param, value, q_index)
 
     def update(self, param, value=None, q_index=None) -> None:
-        """Unified update: dict merge, list-of-tuples, auto-search, or dot-path."""
+        """Unified update: dict merge, list-of-tuples, auto-search, or dot-path.
+
+        Parameters
+        ----------
+        param : Any
+            Value for ``param``.
+        value : Any, default: None
+            Value to apply.
+        q_index : Any, default: None
+            Value for ``q_index``.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
+        """
         target_indices = self._resolve_indices(q_index)
 
         if isinstance(param, (list, tuple)) and all(
@@ -399,6 +627,20 @@ class ExperimentConfig:
             should_distribute = is_list_val and (len(value) == len(target_indices))
 
             def _key_exists_in(nested, path_keys):
+                """Return the key exists in result.
+
+                Parameters
+                ----------
+                nested : Any
+                    Value for ``nested``.
+                path_keys : Any
+                    Value for ``path_keys``.
+
+                Returns
+                -------
+                Any
+                    Result of the operation.
+                """
                 curr = nested
                 for k in path_keys[:-1]:
                     if not isinstance(curr, dict) or k not in curr:
@@ -452,6 +694,22 @@ class ExperimentConfig:
         self._mark_dirty()
 
     def _find_key_path(self, nested, target_key, _path=()):
+        """Return key path.
+
+        Parameters
+        ----------
+        nested : Any
+            Value for ``nested``.
+        target_key : Any
+            Value for ``target_key``.
+        _path : Any, default: ()
+            Filesystem location for  path.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if isinstance(nested, dict):
             if target_key in nested:
                 return _path + (target_key,)
@@ -469,6 +727,22 @@ class ExperimentConfig:
         return None
 
     def _recursive_update(self, nested_data, target_key, new_value) -> bool:
+        """Return the recursive update result.
+
+        Parameters
+        ----------
+        nested_data : Any
+            Value for ``nested_data``.
+        target_key : Any
+            Value for ``target_key``.
+        new_value : Any
+            Value for ``new_value``.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         found = False
         if isinstance(nested_data, dict):
             if target_key in nested_data:
@@ -491,12 +765,31 @@ class ExperimentConfig:
         return found
 
     def read_config(self, q_id) -> dict:
+        """Return config.
+
+        Parameters
+        ----------
+        q_id : Any
+            Value for ``q_id``.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         indices = self._resolve_indices(q_id)
         return self._clean_data(self._raw_list[indices[0]])
 
     read_qubit_config = read_config
 
     def save_to_py(self, filename: str = "latest_cfg.py") -> None:
+        """Save to py.
+
+        Parameters
+        ----------
+        filename : str, default: 'latest_cfg.py'
+            Value for ``filename``.
+        """
         clean_data = self._clean_data(self._raw_list)
         with open(filename, "w", encoding="utf-8") as f:
             f.write("# Auto-generated configuration file\n")
@@ -506,6 +799,17 @@ class ExperimentConfig:
         print(f"Configuration saved to {filename}")
 
     def save_qubit_config(self, q_id, filename=None, var_name="config") -> None:
+        """Save qubit config.
+
+        Parameters
+        ----------
+        q_id : Any
+            Value for ``q_id``.
+        filename : Any, default: None
+            Value for ``filename``.
+        var_name : Any, default: 'config'
+            Name of the var.
+        """
         indices = self._resolve_indices(q_id)
         raw_nested_cfg = self._raw_list[indices[0]]
         clean_data = self._clean_data(raw_nested_cfg)
@@ -523,6 +827,23 @@ class ExperimentConfig:
         print(f"Saved {q_id} configuration to {filename}")
 
     def to_yaml(self, q_id=None) -> str:
+        """Convert the value to yaml.
+
+        Parameters
+        ----------
+        q_id : Any, default: None
+            Value for ``q_id``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         if q_id is not None:
             indices = self._resolve_indices(q_id)
             if not indices:
@@ -541,6 +862,22 @@ class ExperimentConfig:
                 return self._dump_dict_with_spacing(clean_data)
 
     def _dump_dict_with_spacing(self, data, is_list_item=False, indent=0) -> str:
+        """Return the dump dict with spacing result.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+        is_list_item : Any, default: False
+            Whether to is list item.
+        indent : Any, default: 0
+            Value for ``indent``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         if not isinstance(data, dict):
             if isinstance(data, list) and all(
                 not isinstance(x, (dict, list)) for x in data
@@ -589,6 +926,15 @@ class ExperimentConfig:
         return "\n".join(parts)
 
     def to_yaml_file(self, filename, q_id=None):
+        """Convert the value to yaml file.
+
+        Parameters
+        ----------
+        filename : Any
+            Value for ``filename``.
+        q_id : Any, default: None
+            Value for ``q_id``.
+        """
         yaml_str = self.to_yaml(q_id=q_id)
         if filename:
             with open(filename, "w", encoding="utf-8") as f:
@@ -596,6 +942,25 @@ class ExperimentConfig:
             print(f"Configuration saved to {filename}")
 
     def _resolve_indices(self, q_identifier) -> list[int]:
+        """Resolve indices.
+
+        Parameters
+        ----------
+        q_identifier : Any
+            Value for ``q_identifier``.
+
+        Returns
+        -------
+        list[int]
+            Result of the operation.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         if q_identifier is None:
             return list(range(len(self._raw_list)))
         if isinstance(q_identifier, (int, np.integer)):
@@ -618,6 +983,18 @@ class ExperimentConfig:
         raise TypeError("Invalid q_index type.")
 
     def _clean_data(self, data: Any) -> Any:
+        """Return the clean data result.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
             from qick.asm_v2 import QickParam
 
@@ -626,6 +1003,18 @@ class ExperimentConfig:
             _qp = ()
 
         def _clean(obj):
+            """Return the clean result.
+
+            Parameters
+            ----------
+            obj : Any
+                Value for ``obj``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             if isinstance(obj, (dict, AddictDict)):
                 return {
                     k: _clean(v)
@@ -645,6 +1034,18 @@ class ExperimentConfig:
         return _clean(data)
 
     def _collect_all_key_values(self, data) -> defaultdict:
+        """Return the collect all key values result.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+
+        Returns
+        -------
+        defaultdict
+            Result of the operation.
+        """
         result = defaultdict(list)
         if isinstance(data, (dict, AddictDict)):
             for key, value in data.items():
@@ -663,6 +1064,18 @@ class ExperimentConfig:
         return result
 
     def _refine_cfg(self, collected_data) -> AddictDict:
+        """Return the refine cfg result.
+
+        Parameters
+        ----------
+        collected_data : Any
+            Value for ``collected_data``.
+
+        Returns
+        -------
+        AddictDict
+            Result of the operation.
+        """
         refined_dict = AddictDict(collected_data)
         for key, value_list in refined_dict.items():
             if (
@@ -679,6 +1092,23 @@ class ExperimentConfig:
         return refined_dict
 
     def __getitem__(self, item):
+        """Return the getitem result.
+
+        Parameters
+        ----------
+        item : Any
+            Value for ``item``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
+        """
         if isinstance(item, str):
             if item in self._name_map:
                 return self.get_qubit(item)

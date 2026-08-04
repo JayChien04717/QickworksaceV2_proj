@@ -64,7 +64,13 @@ _BY_CLASS_PATH = {spec.class_path: spec for spec in EXPERIMENT_SPECS}
 
 
 def experiment_schema() -> dict[str, Any]:
-    """Return a JSON-serialisable experiment catalog."""
+    """Return a JSON-serialisable experiment catalog.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     categories: dict[str, list[dict[str, Any]]] = {}
     for spec in EXPERIMENT_SPECS:
         categories.setdefault(spec.category, []).append(asdict(spec))
@@ -72,7 +78,23 @@ def experiment_schema() -> dict[str, Any]:
 
 
 def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
-    """Resolve public id, legacy GUI id, or full class path to a spec."""
+    """Resolve public id, legacy GUI id, or full class path to a spec.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    ExperimentSpec
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     spec = _BY_ID.get(identifier) or _BY_LEGACY.get(identifier) or _BY_CLASS_PATH.get(identifier)
     if spec is None:
         valid = sorted(_BY_ID)
@@ -81,10 +103,34 @@ def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
 
 
 def canonical_class_path(identifier: str) -> str:
+    """Return the canonical class path result.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     return resolve_experiment_spec(identifier).class_path
 
 
 def resolve_experiment_class(identifier: str):
+    """Resolve experiment class.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     class_path = canonical_class_path(identifier)
     module_name, class_name = class_path.rsplit(".", 1)
     module = import_module(module_name)
@@ -92,11 +138,34 @@ def resolve_experiment_class(identifier: str):
 
 
 def fit_updates_from_result(result) -> dict[str, Any]:
-    """Convert known fit_result entries into config update suggestions."""
+    """Convert known fit_result entries into config update suggestions.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     fit_result = getattr(result, "fit_result", {}) or {}
     experiment_type = (getattr(result, "experiment_type", "") or "").lower()
 
     def value_of(name):
+        """Return the value of result.
+
+        Parameters
+        ----------
+        name : Any
+            Name of the target object.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         item = fit_result.get(name)
         if item is None:
             return None

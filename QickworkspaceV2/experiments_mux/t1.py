@@ -16,6 +16,13 @@ class MuxT1Program(AveragerProgramV2):
     """Mux T1: pi pulse, swept wait, mux readout on active channels."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -107,6 +114,13 @@ class MuxT1Program(AveragerProgramV2):
         self.wait_time = QickSweep1D("waitloop", cfg["start_wait"], cfg["stop_wait"])
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             self.pulse(ch=cfg["qb_ch"][idx], name=f"{name}_pulse", t=0)
         self.delay_auto(self.wait_time + 0.05, tag="wait")
@@ -127,10 +141,24 @@ class MuxT1(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     def __init__(self, config):
+        """Initialize the MuxT1 instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.wait_axis = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         return MuxT1Program(
             self.soccfg,
@@ -140,10 +168,36 @@ class MuxT1(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.wait_axis
 
     @staticmethod
     def _sweep_iq(iq_list, n_trace):
+        """Return the sweep iq result.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -154,6 +208,22 @@ class MuxT1(BaseExperiment):
         return np.asarray(vals, dtype=complex)
 
     def run(self, py_avg=1, iq_process="abs", plot=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: False
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         prog = MuxT1Program(
             self.soccfg,
@@ -254,6 +324,25 @@ class MuxT1(BaseExperiment):
 
     @staticmethod
     def _fit_t1(wait_axis, trace):
+        """Fit t1.
+
+        Parameters
+        ----------
+        wait_axis : Any
+            Value for ``wait_axis``.
+        trace : Any
+            Value for ``trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         try:
             from ..tools.fitting import fitexp
 
@@ -267,6 +356,20 @@ class MuxT1(BaseExperiment):
 
     @staticmethod
     def _get_wait_axis(prog, cfg):
+        """Return wait axis.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+        cfg : Any
+            Experiment configuration mapping.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
             wait_axis = np.asarray(
                 prog.get_time_param("wait", "t", as_array=True),
@@ -284,6 +387,20 @@ class MuxT1(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq_process = (iq_process or "abs").lower()
         if iq_process in {"real", "i", "avgi"}:
             return np.real(iqdata)

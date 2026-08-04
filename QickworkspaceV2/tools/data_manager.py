@@ -12,7 +12,18 @@ import numpy as np
 
 
 def list_data_files(root_dir: str) -> list[dict]:
-    """Return HDF5 files under ``root_dir`` with lightweight metadata."""
+    """Return HDF5 files under ``root_dir`` with lightweight metadata.
+
+    Parameters
+    ----------
+    root_dir : str
+        Filesystem location for root dir.
+
+    Returns
+    -------
+    list[dict]
+        Result of the operation.
+    """
     files = []
     root = Path(root_dir)
     if not root.exists():
@@ -34,7 +45,23 @@ def list_data_files(root_dir: str) -> list[dict]:
 
 
 def load_data(filepath: str) -> dict:
-    """Load a saved experiment into the dict shape expected by the GUI."""
+    """Load a saved experiment into the dict shape expected by the GUI.
+
+    Parameters
+    ----------
+    filepath : str
+        Value for ``filepath``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     with h5py.File(filepath, "r") as h5:
         if h5.attrs.get("schema_name") == "qickworkspace.experiment":
             return _load_native_data(filepath)
@@ -75,6 +102,18 @@ def load_data(filepath: str) -> dict:
 
 
 def _read_meta(path: Path) -> dict:
+    """Return meta.
+
+    Parameters
+    ----------
+    path : Path
+        Filesystem path.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     try:
         with h5py.File(path, "r") as h5:
             if h5.attrs.get("schema_name") == "qickworkspace.experiment":
@@ -96,6 +135,18 @@ def _read_meta(path: Path) -> dict:
 
 
 def _first_array(value):
+    """Return the first array result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(value, np.ndarray):
         return value
     if isinstance(value, dict):
@@ -109,6 +160,18 @@ def _first_array(value):
 
 
 def _load_native_data(filepath: str) -> dict:
+    """Return native data.
+
+    Parameters
+    ----------
+    filepath : str
+        Value for ``filepath``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     from .hdf5_store import load_result
 
     result = load_result(filepath)
@@ -145,6 +208,22 @@ def _load_native_data(filepath: str) -> dict:
 
 
 def _axis_dict(h5, name: str, fallback_size: int) -> dict:
+    """Return the axis dict result.
+
+    Parameters
+    ----------
+    h5 : Any
+        Value for ``h5``.
+    name : str
+        Name of the target object.
+    fallback_size : int
+        Value for ``fallback_size``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     if name in h5:
         group = h5[name]
         values = np.asarray(group["values"][:])
@@ -162,6 +241,18 @@ def _axis_dict(h5, name: str, fallback_size: int) -> dict:
 
 
 def _qubit_index(meta: dict):
+    """Return the qubit index result.
+
+    Parameters
+    ----------
+    meta : dict
+        Value for ``meta``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     cfg = meta.get("config", {}) or {}
     raw = cfg.get("name") or cfg.get("qubit") or meta.get("metadata", {}).get("qubit")
     if isinstance(raw, int):

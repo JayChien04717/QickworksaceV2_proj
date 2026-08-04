@@ -38,7 +38,23 @@ class HistogramAnalysis:
 
 
 def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
-    """Derive optimizer metrics from an existing GMM fit without refitting."""
+    """Derive optimizer metrics from an existing GMM fit without refitting.
+
+    Parameters
+    ----------
+    details : HistogramAnalysis
+        Value for ``details``.
+
+    Returns
+    -------
+    dict[str, float]
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     if len(details.projections) < 2 or len(details.state_gmms) < 2:
         raise ValueError("At least g and e states are required")
 
@@ -75,6 +91,34 @@ def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
 
 def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
               label=None, alpha=None, normalize=True):
+    """Plot hist.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    bins : Any
+        Value for ``bins``.
+    ax : Any, default: None
+        Matplotlib axes on which to draw.
+    xlims : Any, default: None
+        Value for ``xlims``.
+    color : Any, default: None
+        Value for ``color``.
+    linestyle : Any, default: None
+        Value for ``linestyle``.
+    label : Any, default: None
+        Value for ``label``.
+    alpha : Any, default: None
+        Value for ``alpha``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if color is None:
         color = next(cycle(default_colors))
     hist_data, bin_edges = np.histogram(data, bins=bins, range=xlims)
@@ -98,6 +142,22 @@ def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
 
 
 def _bic_gmm(X, max_components=2, n_init=5):
+    """Return the bic gmm result.
+
+    Parameters
+    ----------
+    X : Any
+        Value for ``X``.
+    max_components : Any, default: 2
+        Value for ``max_components``.
+    n_init : Any, default: 5
+        Value for ``n_init``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     best_gmm, best_bic = None, np.inf
     for k in range(1, max_components + 1):
         try:
@@ -115,6 +175,24 @@ def _bic_gmm(X, max_components=2, n_init=5):
 
 
 def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
+    """Fit gmm.
+
+    Parameters
+    ----------
+    I_projs : Any
+        Value for ``I_projs``.
+    xlims : Any
+        Value for ``xlims``.
+    n_init : Any, default: 5
+        Value for ``n_init``.
+    max_components : Any, default: 2
+        Value for ``max_components``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     n_states = len(I_projs)
     _MAX_G_SECONDARY = 0.30
     state_gmms = []
@@ -190,6 +268,55 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
                  ps_threshold=None, theta=None, plot=True, verbose=True,
                  fid_avg=False, normalize=True, title=None, export=False,
                  return_details=False):
+    """Return the general hist result.
+
+    Parameters
+    ----------
+    iqshots : Any
+        Value for ``iqshots``.
+    state_labels : Any
+        Value for ``state_labels``.
+    g_states : Any
+        Value for ``g_states``.
+    e_states : Any
+        Value for ``e_states``.
+    e_label : Any, default: 'e'
+        Value for ``e_label``.
+    check_qubit_label : Any, default: None
+        Value for ``check_qubit_label``.
+    numbins : Any, default: 200
+        Value for ``numbins``.
+    amplitude_mode : Any, default: False
+        Value for ``amplitude_mode``.
+    ps_threshold : Any, default: None
+        Value for ``ps_threshold``.
+    theta : Any, default: None
+        Value for ``theta``.
+    plot : Any, default: True
+        Value for ``plot``.
+    verbose : Any, default: True
+        Value for ``verbose``.
+    fid_avg : Any, default: False
+        Value for ``fid_avg``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+    title : Any, default: None
+        Value for ``title``.
+    export : Any, default: False
+        Value for ``export``.
+    return_details : Any, default: False
+        Value for ``return_details``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ImportError
+        If the operation cannot be completed.
+    """
     if not _HAS_SKLEARN:
         raise ImportError(
             "scikit-learn is required for GMM fitting. "
@@ -209,9 +336,45 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
                                     np.mean(e_c.real) - np.mean(g_c.real))
 
             def _make_rot(tr):
+                """Create rot.
+
+                Parameters
+                ----------
+                tr : Any
+                    Value for ``tr``.
+
+                Returns
+                -------
+                Any
+                    Result of the operation.
+                """
                 def _rot_I(c):
+                    """Return the rot I result.
+
+                    Parameters
+                    ----------
+                    c : Any
+                        Value for ``c``.
+
+                    Returns
+                    -------
+                    Any
+                        Result of the operation.
+                    """
                     return c.real * np.cos(tr) - c.imag * np.sin(tr)
                 def _rot_IQ(c):
+                    """Return the rot IQ result.
+
+                    Parameters
+                    ----------
+                    c : Any
+                        Value for ``c``.
+
+                    Returns
+                    -------
+                    Any
+                        Result of the operation.
+                    """
                     I = c.real * np.cos(tr) - c.imag * np.sin(tr)
                     Q = c.real * np.sin(tr) + c.imag * np.cos(tr)
                     return I, Q
@@ -239,9 +402,33 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
             theta_rad = float(theta) * np.pi / 180.0
 
         def _rot_I(c):
+            """Return the rot I result.
+
+            Parameters
+            ----------
+            c : Any
+                Value for ``c``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
 
         def _rot_IQ(c):
+            """Return the rot IQ result.
+
+            Parameters
+            ----------
+            c : Any
+                Value for ``c``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             I = c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
             Q = c.real * np.sin(theta_rad) + c.imag * np.cos(theta_rad)
             return I, Q
@@ -401,6 +588,38 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
 def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
          plot=True, verbose=True, fid_avg=False,
          normalize=True, title=None, export=False, return_details=False):
+    """Return the hist result.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    amplitude_mode : Any, default: False
+        Value for ``amplitude_mode``.
+    ps_threshold : Any, default: None
+        Value for ``ps_threshold``.
+    theta : Any, default: None
+        Value for ``theta``.
+    plot : Any, default: True
+        Value for ``plot``.
+    verbose : Any, default: True
+        Value for ``verbose``.
+    fid_avg : Any, default: False
+        Value for ``fid_avg``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+    title : Any, default: None
+        Value for ``title``.
+    export : Any, default: False
+        Value for ``export``.
+    return_details : Any, default: False
+        Value for ``return_details``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     iqshots      = [(data["Ig"], data["Qg"]), (data["Ie"], data["Qe"])]
     state_labels = ["g", "e"]
     g_states     = [0]

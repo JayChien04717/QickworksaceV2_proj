@@ -39,6 +39,13 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
     }
 
     def __init__(self, address: str) -> None:
+        """Initialize the RohdeSchwarzSGS100A instance.
+
+        Parameters
+        ----------
+        address : str
+            Instrument resource address.
+        """
         self.address = address
         if "::" not in address:
             self.resource_name = f"TCPIP::{address}::INSTR"
@@ -55,6 +62,7 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         self.connect_message()
 
     def connect_message(self) -> None:
+        """Connect message."""
         try:
             idn = self.instrument.query("*IDN?")
             print(f"Connected to: {idn.strip()}")
@@ -62,44 +70,117 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
             print(f"Could not query IDN. Error: {e}")
 
     def idn(self) -> str:
+        """Return the instrument identification string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("*IDN?")
 
     def close(self) -> None:
+        """Close the operation."""
         print(f"Disconnecting from {self.instrument.resource_name}")
         self.instrument.close()
         self.rm.close()
 
     def write(self, cmd: str) -> None:
+        """Write the operation.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+        """
         self.instrument.write(cmd)
 
     def query(self, cmd: str) -> str:
+        """Query the instrument and return its response.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.instrument.query(cmd).strip()
 
     def reset(self) -> None:
+        """Reset the operation."""
         print("Resetting instrument...")
         self.write("*RST")
 
     def run_self_tests(self) -> str:
+        """Run self tests.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         print("Running self-tests...")
         result = self.query("*TST?")
         print(f"Self-test result: {result}")
         return result
 
     def check_error(self) -> str:
+        """Return the latest instrument error.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         err_msg = self.query("SYST:ERR?")
         print(f"Instrument Status: {err_msg}")
         return err_msg
 
     def get_limit(self, parameter: str) -> Tuple[float, float]:
+        """Return limit.
+
+        Parameters
+        ----------
+        parameter : str
+            Value for ``parameter``.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         param_lower = parameter.lower()
         if param_lower in self.DEFAULT_LIMITS:
             return self.DEFAULT_LIMITS[param_lower]
         raise ValueError(f"Limits not defined for parameter '{parameter}'.")
 
     def get_limits(self) -> dict:
+        """Return limits.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return dict(self.DEFAULT_LIMITS)
 
     def discover_limits(self) -> dict:
+        """Discover limits.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         limits = self.get_limits()
         queries = {
             "frequency": ("SOUR:FREQ? MIN", "SOUR:FREQ? MAX"),
@@ -113,12 +194,46 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return limits
 
     def _validate_and_write(self, cmd_template: str, value: str, valid_set: set, name: str) -> None:
+        """Validate and write.
+
+        Parameters
+        ----------
+        cmd_template : str
+            Value for ``cmd_template``.
+        value : str
+            Value to apply.
+        valid_set : set
+            Value for ``valid_set``.
+        name : str
+            Name of the target object.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         val_upper = str(value).upper()
         if val_upper not in valid_set:
             raise ValueError(f"Invalid {name} value: {value}. Allowed: {valid_set}")
         self.write(cmd_template.format(val_upper))
 
     def _map_and_write(self, cmd_template: str, value: Union[str, int, bool], name: str) -> None:
+        """Return the map and write result.
+
+        Parameters
+        ----------
+        cmd_template : str
+            Value for ``cmd_template``.
+        value : Union[str, int, bool]
+            Value to apply.
+        name : str
+            Name of the target object.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         try:
             mapped_val = ON_OFF_MAP[str(value).lower()]
             self.write(cmd_template.format(mapped_val))
@@ -126,15 +241,41 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
             raise ValueError(f"Invalid {name} value: {value}. Use 'on' or 'off'.")
 
     def _query_and_map(self, cmd: str) -> str:
+        """Return and map.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         val = self.query(cmd)
         return ON_OFF_MAP_INV.get(val, f"unknown_val_{val}")
 
     @property
     def frequency(self) -> float:
+        """Return the current frequency setting.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:FREQ?"))
 
     @frequency.setter
     def frequency(self, value: float) -> None:
+        """Return the current frequency setting.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("frequency")
         if not (min_v <= value <= max_v):
             print(f"Warning: Frequency {value} Hz is outside driver's expected range ({min_v}, {max_v})")
@@ -142,10 +283,24 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def phase(self) -> float:
+        """Return the current phase setting.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:PHAS?"))
 
     @phase.setter
     def phase(self, value: float) -> None:
+        """Return the current phase setting.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("phase")
         if not (min_v <= value <= max_v):
             print(f"Warning: Phase {value} deg is outside driver's expected range ({min_v}, {max_v})")
@@ -153,10 +308,24 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def power(self) -> float:
+        """Return the current power setting.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:POW?"))
 
     @power.setter
     def power(self, value: float) -> None:
+        """Return the current power setting.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("power")
         if not (min_v <= value <= max_v):
             print(f"Warning: Power {value} dBm is outside driver's expected range ({min_v}, {max_v})")
@@ -164,19 +333,42 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def status(self) -> str:
+        """Return the current status.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self._query_and_map(":OUTP:STAT?")
 
     @status.setter
     def status(self, value: Union[str, int, bool]) -> None:
+        """Return the current status.
+
+        Parameters
+        ----------
+        value : Union[str, int, bool]
+            Value to apply.
+        """
         self._map_and_write(":OUTP:STAT {}", value, "status")
 
     def on(self) -> None:
+        """Enable the instrument output."""
         self.status = "on"
 
     def off(self) -> None:
+        """Disable the instrument output."""
         self.status = "off"
 
     def snapshot(self) -> dict:
+        """Return the current instrument settings.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return {
             "output": self.status,
             "frequency": self.frequency,
@@ -187,82 +379,222 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def IQ_state(self) -> str:
+        """Return the IQ state result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self._query_and_map(":IQ:STAT?")
 
     @IQ_state.setter
     def IQ_state(self, value: Union[str, int, bool]) -> None:
+        """Return the IQ state result.
+
+        Parameters
+        ----------
+        value : Union[str, int, bool]
+            Value to apply.
+        """
         self._map_and_write(":IQ:STAT {}", value, "IQ_state")
 
     @property
     def pulsemod_state(self) -> str:
+        """Return the pulsemod state result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self._query_and_map(":SOUR:PULM:STAT?")
 
     @pulsemod_state.setter
     def pulsemod_state(self, value: Union[str, int, bool]) -> None:
+        """Return the pulsemod state result.
+
+        Parameters
+        ----------
+        value : Union[str, int, bool]
+            Value to apply.
+        """
         self._map_and_write(":SOUR:PULM:STAT {}", value, "pulsemod_state")
 
     @property
     def pulsemod_source(self) -> str:
+        """Return the pulsemod source result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("SOUR:PULM:SOUR?")
 
     @pulsemod_source.setter
     def pulsemod_source(self, value: Literal["INT", "EXT", "int", "ext"]) -> None:
+        """Return the pulsemod source result.
+
+        Parameters
+        ----------
+        value : Literal['INT', 'EXT', 'int', 'ext']
+            Value to apply.
+        """
         self._validate_and_write("SOUR:PULM:SOUR {}", value, PULSE_SOURCE_VALS, "pulsemod_source")
 
     @property
     def ref_osc_source(self) -> str:
+        """Return the ref osc source result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("SOUR:ROSC:SOUR?")
 
     @ref_osc_source.setter
     def ref_osc_source(self, value: Literal["INT", "EXT", "int", "ext"]) -> None:
+        """Return the ref osc source result.
+
+        Parameters
+        ----------
+        value : Literal['INT', 'EXT', 'int', 'ext']
+            Value to apply.
+        """
         self._validate_and_write("SOUR:ROSC:SOUR {}", value, REF_LO_SOURCE_VALS, "ref_osc_source")
 
     @property
     def LO_source(self) -> str:
+        """Return the LO source result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("SOUR:LOSC:SOUR?")
 
     @LO_source.setter
     def LO_source(self, value: Literal["INT", "EXT", "int", "ext"]) -> None:
+        """Return the LO source result.
+
+        Parameters
+        ----------
+        value : Literal['INT', 'EXT', 'int', 'ext']
+            Value to apply.
+        """
         self._validate_and_write("SOUR:LOSC:SOUR {}", value, REF_LO_SOURCE_VALS, "LO_source")
 
     @property
     def ref_LO_out(self) -> str:
+        """Return the ref LO out result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("CONN:REFL:OUTP?")
 
     @ref_LO_out.setter
     def ref_LO_out(self, value: Literal["REF", "LO", "OFF", "ref", "lo", "off"]) -> None:
+        """Return the ref LO out result.
+
+        Parameters
+        ----------
+        value : Literal['REF', 'LO', 'OFF', 'ref', 'lo', 'off']
+            Value to apply.
+        """
         self._validate_and_write("CONN:REFL:OUTP {}", value, REF_LO_OUT_VALS, "ref_LO_out")
 
     @property
     def ref_osc_output_freq(self) -> str:
+        """Return the ref osc output freq result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("SOUR:ROSC:OUTP:FREQ?")
 
     @ref_osc_output_freq.setter
     def ref_osc_output_freq(self, value: Literal["10MHz", "100MHz", "1000MHz"]) -> None:
+        """Return the ref osc output freq result.
+
+        Parameters
+        ----------
+        value : Literal['10MHz', '100MHz', '1000MHz']
+            Value to apply.
+        """
         self._validate_and_write("SOUR:ROSC:OUTP:FREQ {}", value, REF_FREQ_VALS, "ref_osc_output_freq")
 
     @property
     def ref_osc_external_freq(self) -> str:
+        """Return the ref osc external freq result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("SOUR:ROSC:EXT:FREQ?")
 
     @ref_osc_external_freq.setter
     def ref_osc_external_freq(self, value: Literal["10MHz", "100MHz", "1000MHz"]) -> None:
+        """Return the ref osc external freq result.
+
+        Parameters
+        ----------
+        value : Literal['10MHz', '100MHz', '1000MHz']
+            Value to apply.
+        """
         self._validate_and_write("SOUR:ROSC:EXT:FREQ {}", value, REF_FREQ_VALS, "ref_osc_external_freq")
 
     @property
     def IQ_impairments(self) -> str:
+        """Return the IQ impairments result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self._query_and_map(":SOUR:IQ:IMP:STAT?")
 
     @IQ_impairments.setter
     def IQ_impairments(self, value: Union[str, int, bool]) -> None:
+        """Return the IQ impairments result.
+
+        Parameters
+        ----------
+        value : Union[str, int, bool]
+            Value to apply.
+        """
         self._map_and_write(":SOUR:IQ:IMP:STAT {}", value, "IQ_impairments")
 
     @property
     def I_offset(self) -> float:
+        """Return the I offset result.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:IQ:IMP:LEAK:I?"))
 
     @I_offset.setter
     def I_offset(self, value: float) -> None:
+        """Return the I offset result.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("i_offset")
         if not (min_v <= value <= max_v):
             print(f"Warning: I offset {value}% is outside expected range ({min_v}, {max_v})")
@@ -270,10 +602,24 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def Q_offset(self) -> float:
+        """Return the Q offset result.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:IQ:IMP:LEAK:Q?"))
 
     @Q_offset.setter
     def Q_offset(self, value: float) -> None:
+        """Return the Q offset result.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("q_offset")
         if not (min_v <= value <= max_v):
             print(f"Warning: Q offset {value}% is outside expected range ({min_v}, {max_v})")
@@ -281,10 +627,24 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def IQ_gain_imbalance(self) -> float:
+        """Return the IQ gain imbalance result.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:IQ:IMP:IQR?"))
 
     @IQ_gain_imbalance.setter
     def IQ_gain_imbalance(self, value: float) -> None:
+        """Return the IQ gain imbalance result.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("iq_gain_imbalance")
         if not (min_v <= value <= max_v):
             print(f"Warning: IQ gain imbalance {value} dB is outside expected range ({min_v}, {max_v})")
@@ -292,10 +652,24 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def IQ_angle(self) -> float:
+        """Return the IQ angle result.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:IQ:IMP:QUAD?"))
 
     @IQ_angle.setter
     def IQ_angle(self, value: float) -> None:
+        """Return the IQ angle result.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("iq_angle")
         if not (min_v <= value <= max_v):
             print(f"Warning: IQ angle {value} deg is outside expected range ({min_v}, {max_v})")
@@ -303,18 +677,46 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
 
     @property
     def trigger_connector_mode(self) -> str:
+        """Return the trigger connector mode result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("CONN:TRIG:OMOD?")
 
     @trigger_connector_mode.setter
     def trigger_connector_mode(self, value: str) -> None:
+        """Return the trigger connector mode result.
+
+        Parameters
+        ----------
+        value : str
+            Value to apply.
+        """
         self._validate_and_write("CONN:TRIG:OMOD {}", value, TRIG_MODE_VALS, "trigger_connector_mode")
 
     @property
     def pulsemod_delay(self) -> float:
+        """Return the pulsemod delay result.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         return float(self.query("SOUR:PULM:DEL?"))
 
     @pulsemod_delay.setter
     def pulsemod_delay(self, value: float) -> None:
+        """Return the pulsemod delay result.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_v, max_v = self.get_limit("pulsemod_delay")
         if not (min_v <= value <= max_v):
             print(f"Warning: Pulse modulation delay {value} s is outside expected range ({min_v}, {max_v})")

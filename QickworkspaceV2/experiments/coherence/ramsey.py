@@ -13,6 +13,13 @@ class RamseyProgram(BaseProgram):
     """QICK program for Ramsey: two π/2 pulses with swept inter-pulse delay."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
@@ -25,6 +32,13 @@ class RamseyProgram(BaseProgram):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -56,6 +70,13 @@ class Ramsey(BaseExperiment):
     Analysis = RamseyAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return RamseyProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -64,11 +85,34 @@ class Ramsey(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.delay_times = prog.get_time_param("wait", "t", as_array=True)
         return self.delay_times
 
     def correct_detune(self):
-        """Correct qubit ge frequency based on fitted detuning."""
+        """Correct qubit ge frequency based on fitted detuning.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.result is None:
             raise RuntimeError("Run the experiment first.")
         detune = self.result.fit_result.get("detune_MHz", (None,))[0]
@@ -86,6 +130,18 @@ class Ramsey(BaseExperiment):
             return self.cfg["qb_freq_ge"]
 
     def _save_comment(self, dict_val):
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.result is not None:
             T2 = self.result.fit_result.get("T2r_us", (None,))[0]
             if T2 is not None:
@@ -97,6 +153,13 @@ class ACStarkProgram(BaseProgram):
     """QICK program for AC Stark shift measurement."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
@@ -109,6 +172,13 @@ class ACStarkProgram(BaseProgram):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)  # Stark tone on during wait
         self.pulse(ch=cfg["qb_ch"], name="qb_pulse1", t=0)
@@ -126,6 +196,13 @@ class ACStark(Ramsey):
     TITLE_PREFIX = "AC Stark Shift"
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return ACStarkProgram(
             self.soccfg,
             reps=self.cfg["reps"],

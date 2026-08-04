@@ -17,6 +17,13 @@ class MuxPunchoutProgram(AveragerProgramV2):
     """Single mux readout point for resonator punchout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -47,6 +54,13 @@ class MuxPunchoutProgram(AveragerProgramV2):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.trigger(ros=cfg["active_ro_chs"], pins=[0], t=cfg["trig_time"])
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
 
@@ -67,6 +81,13 @@ class MuxPunchout(BaseExperiment):
     Y_SAVE_SCALE = 1.0
 
     def __init__(self, config):
+        """Initialize the MuxPunchout instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.freq_offsets = None
         self.gain_axis = None
@@ -74,6 +95,20 @@ class MuxPunchout(BaseExperiment):
 
     @staticmethod
     def _point_iq(iq_list, n_trace):
+        """Return the point iq result.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -85,6 +120,22 @@ class MuxPunchout(BaseExperiment):
 
     @staticmethod
     def _configured_axis(cfg, key, fallback):
+        """Return the configured axis result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        key : Any
+            Lookup key.
+        fallback : Any
+            Value for ``fallback``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if key in cfg:
             arr = np.asarray(cfg[key], dtype=float)
             if arr.ndim == 1 and arr.size > 1:
@@ -93,6 +144,24 @@ class MuxPunchout(BaseExperiment):
 
     @staticmethod
     def _point_cfg(cfg, active_slots, freq_offset, gain):
+        """Return the point cfg result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        active_slots : Any
+            Value for ``active_slots``.
+        freq_offset : Any
+            Value for ``freq_offset``.
+        gain : Any
+            Value for ``gain``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         point_cfg = dict(cfg)
         point_cfg["res_freqs"] = [float(freq) + freq_offset for freq in cfg["res_freqs"]]
         point_cfg["res_gains"] = list(cfg["res_gains"])
@@ -110,6 +179,30 @@ class MuxPunchout(BaseExperiment):
         normalize_per_power=True,
         plot=False,
     ):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        span : Any, default: 20.0
+            Value for ``span``.
+        f_steps : Any, default: 101
+            Value for ``f_steps``.
+        gains : Any, default: None
+            Value for ``gains``.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        normalize_per_power : Any, default: True
+            Value for ``normalize_per_power``.
+        plot : Any, default: False
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         active_slots = list(cfg["active_slots"])
         active_ro_chs = list(cfg["active_ro_chs"])
@@ -212,6 +305,20 @@ class MuxPunchout(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq_process = (iq_process or "abs").lower()
         if iq_process in {"real", "i", "avgi"}:
             return np.real(iqdata)
@@ -223,6 +330,18 @@ class MuxPunchout(BaseExperiment):
 
     @staticmethod
     def _normalize_per_power(plot_data):
+        """Normalize per power.
+
+        Parameters
+        ----------
+        plot_data : Any
+            Value for ``plot_data``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         data = np.asarray(plot_data, dtype=float)
         row_min = np.nanmin(data, axis=-1, keepdims=True)
         row_max = np.nanmax(data, axis=-1, keepdims=True)

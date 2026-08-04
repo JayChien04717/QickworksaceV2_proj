@@ -42,12 +42,16 @@ INVERSE_TABLE_OFFSET = CLIFFORD_COUNT * CLIFFORD_COUNT
 LONG_RB_DMEM_WORDS = INVERSE_TABLE_OFFSET + CLIFFORD_COUNT
 
 
-# ---------------------------------------------------------------------------
 # Small, regular lookup tables shared by Python and the tProc
-# ---------------------------------------------------------------------------
 
 def _build_clifford_tables() -> tuple[np.ndarray, np.ndarray]:
-    """Build tables for ``new_state = C_gate @ C_state`` and inversion."""
+    """Build tables for ``new_state = C_gate @ C_state`` and inversion.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Result of the operation.
+    """
     multiplication = np.empty((CLIFFORD_COUNT, CLIFFORD_COUNT), dtype=np.int32)
     for gate_index, gate in enumerate(clifford_matrices):
         for state_index, state in enumerate(clifford_matrices):
@@ -65,6 +69,23 @@ CLIFFORD_MULTIPLICATION_TABLE, CLIFFORD_INVERSE_TABLE = _build_clifford_tables()
 
 
 def _interleaved_clifford_index(label: str | None) -> int | None:
+    """Return the interleaved clifford index result.
+
+    Parameters
+    ----------
+    label : str | None
+        Value for ``label``.
+
+    Returns
+    -------
+    int | None
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     if label is None:
         return None
     if label not in INTERLEAVE_GATES:
@@ -75,7 +96,18 @@ def _interleaved_clifford_index(label: str | None) -> int | None:
 
 
 def _xorshift32_step(state: int) -> int:
-    """Python reference for the exact PRNG implemented by the tProc macros."""
+    """Python reference for the exact PRNG implemented by the tProc macros.
+
+    Parameters
+    ----------
+    state : int
+        Value for ``state``.
+
+    Returns
+    -------
+    int
+        Result of the operation.
+    """
     value = int(state) & 0xFFFFFFFF
     value ^= (value << 13) & 0xFFFFFFFF
     value ^= value >> 17
@@ -84,6 +116,25 @@ def _xorshift32_step(state: int) -> int:
 
 
 def _iter_clifford_indices(seed: int, depth: int):
+    """Return the iter clifford indices result.
+
+    Parameters
+    ----------
+    seed : int
+        Value for ``seed``.
+    depth : int
+        Value for ``depth``.
+
+    Yields
+    ------
+    Any
+        Values produced by the iterator.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     if depth < 0:
         raise ValueError("depth must be non-negative")
     state = int(seed) & 0xFFFFFFFF
@@ -101,8 +152,20 @@ def _iter_clifford_indices(seed: int, depth: int):
 def clifford_indices_from_seed(seed: int, depth: int) -> list[int]:
     """Reproduce the tProc Clifford stream for validation and metadata.
 
-    Five low PRNG bits are used with rejection sampling, making all indices
-    0..23 equiprobable (up to xorshift32's excluded all-zero state).
+            Five low PRNG bits are used with rejection sampling, making all indices
+            0..23 equiprobable (up to xorshift32's excluded all-zero state).
+
+    Parameters
+    ----------
+    seed : int
+        Value for ``seed``.
+    depth : int
+        Value for ``depth``.
+
+    Returns
+    -------
+    list[int]
+        Result of the operation.
     """
     return list(_iter_clifford_indices(seed, depth))
 
@@ -112,7 +175,22 @@ def verify_long_rb_sequence(
     depth: int,
     interleaved_gate: str | None = None,
 ) -> bool:
-    """Verify in Python that the hardware table selects a valid recovery."""
+    """Verify in Python that the hardware table selects a valid recovery.
+
+    Parameters
+    ----------
+    seed : int
+        Value for ``seed``.
+    depth : int
+        Value for ``depth``.
+    interleaved_gate : str | None, default: None
+        Value for ``interleaved_gate``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     state = 0
     interleaved_index = _interleaved_clifford_index(interleaved_gate)
     for clifford_index in _iter_clifford_indices(seed, depth):
@@ -123,14 +201,29 @@ def verify_long_rb_sequence(
     return int(CLIFFORD_MULTIPLICATION_TABLE[recovery, state]) == 0
 
 
-# ---------------------------------------------------------------------------
 # The only low-level helper we need from the tProc assembler
-# ---------------------------------------------------------------------------
 
 class _RegAlu(Macro):
     """Write ``dst = lhs OP rhs`` using a full tProc-v2 ALU operation."""
 
     def expand(self, prog):
+        """Return the expand result.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         dst = prog._get_reg(self.dst)
         lhs = prog._get_reg(self.lhs)
         if isinstance(self.rhs, Integral):
@@ -152,14 +245,26 @@ class _RegAlu(Macro):
         ]
 
 
-# ---------------------------------------------------------------------------
 # Hardware program
-# ---------------------------------------------------------------------------
 
 class LongerRBProgram(BaseProgram):
     """Constant-memory RB program using an on-tProc deterministic PRNG."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         depth = int(cfg["rb_depth"])
         seed = int(cfg["rb_seed"])
         if depth < 1:
@@ -201,6 +306,13 @@ class LongerRBProgram(BaseProgram):
         self._add_dispatch_subroutine(cfg)
 
     def compile_datamem(self):
+        """Return the compile datamem result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return np.concatenate(
             (
                 CLIFFORD_MULTIPLICATION_TABLE.reshape(-1),
@@ -209,10 +321,24 @@ class LongerRBProgram(BaseProgram):
         ).astype(np.int32, copy=False)
 
     def _reg_alu(self, dst: str, lhs: str, op: str, rhs: int | str):
+        """Return the reg alu result.
+
+        Parameters
+        ----------
+        dst : str
+            Value for ``dst``.
+        lhs : str
+            Value for ``lhs``.
+        op : str
+            Value for ``op``.
+        rhs : int | str
+            Value for ``rhs``.
+        """
         self.append_macro(_RegAlu(dst=dst, lhs=lhs, op=op, rhs=rhs))
 
     def _xorshift32(self):
         # x ^= x << 13
+        """Return the xorshift32 result."""
         self.write_reg("rb_tmp", "rb_rng")
         self._reg_alu("rb_tmp", "rb_tmp", "SL", 13)
         self._reg_alu("rb_rng", "rb_rng", "XOR", "rb_tmp")
@@ -230,6 +356,7 @@ class LongerRBProgram(BaseProgram):
         self._reg_alu("rb_rng", "rb_rng", "XOR", "rb_tmp")
 
     def _generate_clifford_index(self):
+        """Return the generate clifford index result."""
         self.label("RB_RANDOM_RETRY")
         self._xorshift32()
         self._reg_alu("rb_candidate", "rb_rng", "AND", 0x1F)
@@ -244,6 +371,13 @@ class LongerRBProgram(BaseProgram):
         self.label("RB_RANDOM_ACCEPT")
 
     def _update_group_state(self, gate_index: int | str):
+        """Update group state.
+
+        Parameters
+        ----------
+        gate_index : int | str
+            Value for ``gate_index``.
+        """
         if isinstance(gate_index, Integral):
             self.write_reg("rb_candidate", int(gate_index))
             gate_reg = "rb_candidate"
@@ -261,6 +395,13 @@ class LongerRBProgram(BaseProgram):
         self.read_dmem("rb_group_state", "rb_dmem_addr")
 
     def _dispatch(self, index: int | str):
+        """Return the dispatch result.
+
+        Parameters
+        ----------
+        index : int | str
+            Position of the target item.
+        """
         if isinstance(index, Integral):
             self.write_reg("rb_dispatch_index", int(index))
         else:
@@ -268,6 +409,13 @@ class LongerRBProgram(BaseProgram):
         self.call("RB_DISPATCH")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.cooling_body(cfg)
@@ -295,6 +443,13 @@ class LongerRBProgram(BaseProgram):
         self.measure(cfg)
 
     def _add_dispatch_subroutine(self, cfg):
+        """Add dispatch subroutine.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         dispatch = AsmV2()
         self._emit_dispatch_tree(dispatch, tuple(range(CLIFFORD_COUNT)), "RB_D")
 
@@ -328,6 +483,17 @@ class LongerRBProgram(BaseProgram):
         indices: tuple[int, ...],
         label: str,
     ):
+        """Return the emit dispatch tree result.
+
+        Parameters
+        ----------
+        dispatch : AsmV2
+            Value for ``dispatch``.
+        indices : tuple[int, ...]
+            Value for ``indices``.
+        label : str
+            Value for ``label``.
+        """
         dispatch.label(label)
         if len(indices) == 1:
             dispatch.jump(f"RB_CLIFFORD_{indices[0]}")
@@ -350,9 +516,7 @@ class LongerRBProgram(BaseProgram):
         cls._emit_dispatch_tree(dispatch, right, right_label)
 
 
-# ---------------------------------------------------------------------------
 # Notebook-facing experiment
-# ---------------------------------------------------------------------------
 
 class RandomizedBenchmarkingLonger(RandomizedBenchmarking):
     """Single-qubit RB/IRB whose tProc memory use is independent of depth.
@@ -376,6 +540,41 @@ class RandomizedBenchmarkingLonger(RandomizedBenchmarking):
         iq_process: str = "abs",
         randomize_depth_order: bool = False,
     ) -> ExperimentData:
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        max_circuit_depth : int
+            Value for ``max_circuit_depth``.
+        delta_clifford : int
+            Value for ``delta_clifford``.
+        number_sample : int
+            Value for ``number_sample``.
+        interleaved_gate : str | None, default: None
+            Value for ``interleaved_gate``.
+        seed : int | None, default: None
+            Value for ``seed``.
+        prefix : str, default: 'ge'
+            Value for ``prefix``.
+        iq_process : str, default: 'abs'
+            IQ processing mode.
+        randomize_depth_order : bool, default: False
+            Value for ``randomize_depth_order``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         if py_avg < 1 or number_sample < 1:
             raise ValueError("py_avg and number_sample must be at least 1")
         if delta_clifford < 1 or max_circuit_depth <= 1:

@@ -14,12 +14,18 @@ from ...tools.system_tool import hdf5_generator, get_next_filename_labber, confi
 from .singleshot_utils import general_hist, hist, histogram_metrics, plot_hist
 
 
-# ── Programs ──────────────────────────────────────────────────────────────────
 
 class SingleShotProgram_gef(BaseProgram):
     """QICK program for g/e/f single-shot readout with multi-trigger body."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, 'ge')
         self.setup_qubit_gen(cfg, 'ef')
@@ -28,6 +34,13 @@ class SingleShotProgram_gef(BaseProgram):
         self.setup_qb_pulse(cfg, 'ef', name="qb_ef_pulse", gain_key="pi_gain_ef")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
         self.trigger(ros=[cfg["ro_ch"]], pins=[0], t=cfg["trig_time"])
@@ -50,6 +63,13 @@ class SingleShotOptProgram(BaseProgram):
     """QICK program for single-shot readout optimization (g/e/f states)."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("shotloop", cfg["shots"])
@@ -59,6 +79,13 @@ class SingleShotOptProgram(BaseProgram):
             self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse", gain_key="pi_gain_ef")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
         self.trigger(ros=[cfg["ro_ch"]], pins=[0], t=cfg["trig_time"])
@@ -77,12 +104,23 @@ class SingleShotOptProgram(BaseProgram):
             self.trigger(ros=[cfg["ro_ch"]], pins=[0], t=cfg["trig_time"])
 
 
-# ── Experiment: SingleShot_gef ────────────────────────────────────────────────
 
 class SingleShot_gef:
     """Single-shot readout for g/e/f state discrimination."""
 
     def __init__(self, config):
+        """Initialize the SingleShot_gef instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from ...core.base_experiment import BaseExperiment
         if BaseExperiment._soc is None:
             raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
@@ -91,6 +129,20 @@ class SingleShot_gef:
         self.cfg = config
 
     def run(self, SHOTS, shot_f=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        SHOTS : Any
+            Value for ``SHOTS``.
+        shot_f : Any, default: False
+            Value for ``shot_f``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.cfg["shots"] = SHOTS
         self.cfg["shot_f"] = shot_f
         prog = SingleShotProgram_gef(
@@ -129,6 +181,22 @@ class SingleShot_gef:
         return self.data
 
     def plot(self, fid_avg=False, verbose=True, *, plot_analysis=True):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        fid_avg : Any, default: False
+            Value for ``fid_avg``.
+        verbose : Any, default: True
+            Value for ``verbose``.
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         analyzed = hist(self.data, plot=True, verbose=verbose, fid_avg=fid_avg)
         if getattr(self, "result", None) is not None:
             fidelity = float(analyzed[0][0])
@@ -157,6 +225,24 @@ class SingleShot_gef:
         return analyzed
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None, filename_mode="random"):
+        """Save Labber.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        filename_mode : Any, default: 'random'
+            Value for ``filename_mode``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from ...core.base_experiment import BaseExperiment
         has_f = "If" in self.data
         expt_name = ("s000_singleshot_gef" if has_f else "s000_singleshot_ge") + f"_{qb_idx}"
@@ -185,12 +271,23 @@ class SingleShot_gef:
         return str(saved_path)
 
 
-# ── Experiment: SingleShot_ge_opt ─────────────────────────────────────────────
 
 class SingleShot_ge_opt:
     """Grid search + GP optimization for single-shot readout parameters."""
 
     def __init__(self, config):
+        """Initialize the SingleShot_ge_opt instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from ...core.base_experiment import BaseExperiment
         if BaseExperiment._soc is None:
             raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
@@ -199,6 +296,17 @@ class SingleShot_ge_opt:
         self.cfg = config
 
     def run(self, SHOTS, sweep_para: dict, shot_f=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        SHOTS : Any
+            Value for ``SHOTS``.
+        sweep_para : dict
+            Value for ``sweep_para``.
+        shot_f : Any, default: False
+            Value for ``shot_f``.
+        """
         self.cfg["shots"] = SHOTS
         self.cfg["shot_f"] = shot_f
         self._shot_f = shot_f
@@ -288,6 +396,18 @@ class SingleShot_ge_opt:
 
     @staticmethod
     def _is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
+        """Return whether is pareto efficient.
+
+        Parameters
+        ----------
+        costs : np.ndarray
+            Value for ``costs``.
+
+        Returns
+        -------
+        np.ndarray
+            Result of the operation.
+        """
         is_eff = np.ones(len(costs), dtype=bool)
         for i, c in enumerate(costs):
             if is_eff[i]:
@@ -298,6 +418,24 @@ class SingleShot_ge_opt:
 
     @staticmethod
     def _expected_improvement(gp, X_candidates: np.ndarray, y_best: float, xi: float = 0.01) -> np.ndarray:
+        """Return the expected improvement result.
+
+        Parameters
+        ----------
+        gp : Any
+            Value for ``gp``.
+        X_candidates : np.ndarray
+            Value for ``X_candidates``.
+        y_best : float
+            Value for ``y_best``.
+        xi : float, default: 0.01
+            Value for ``xi``.
+
+        Returns
+        -------
+        np.ndarray
+            Result of the operation.
+        """
         from scipy.stats import norm as sp_norm
         mu, sigma = gp.predict(X_candidates, return_std=True)
         sigma = sigma.reshape(-1)
@@ -308,6 +446,24 @@ class SingleShot_ge_opt:
         return ei
 
     def _acquire_single_point(self, length, gain, freq, SHOTS):
+        """Return the acquire single point result.
+
+        Parameters
+        ----------
+        length : Any
+            Value for ``length``.
+        gain : Any
+            Value for ``gain``.
+        freq : Any
+            Value for ``freq``.
+        SHOTS : Any
+            Value for ``SHOTS``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg_update = {"steps": SHOTS}
         if length is not None:
             cfg_update["ro_length"] = length
@@ -333,6 +489,26 @@ class SingleShot_ge_opt:
 
     def analyze(self, leakage_threshold=0.20, thermal_threshold=0.10,
                 bo_n_iter=0, bo_xi=0.01, pareto=True):
+        """Return the analyze result.
+
+        Parameters
+        ----------
+        leakage_threshold : Any, default: 0.2
+            Value for ``leakage_threshold``.
+        thermal_threshold : Any, default: 0.1
+            Value for ``thermal_threshold``.
+        bo_n_iter : Any, default: 0
+            Value for ``bo_n_iter``.
+        bo_xi : Any, default: 0.01
+            Value for ``bo_xi``.
+        pareto : Any, default: True
+            Value for ``pareto``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
             from sklearn.gaussian_process import GaussianProcessRegressor
             from sklearn.gaussian_process.kernels import Matern, WhiteKernel
@@ -497,8 +673,7 @@ class SingleShot_ge_opt:
         return return_L, return_G, return_F
 
     def plot_grid_analysis(self):
-        """
-        Six-panel heatmap overview of all grid metrics, followed by a full
+        """Six-panel heatmap overview of all grid metrics, followed by a full
         hist() IQ plot for the best feasible grid point.
         """
         if not hasattr(self, "fid_Array"):
@@ -516,6 +691,18 @@ class SingleShot_ge_opt:
         best_f = np.argmax(fid_arr, axis=2)
 
         def _take(arr):
+            """Return the take result.
+
+            Parameters
+            ----------
+            arr : Any
+                Value for ``arr``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return np.take_along_axis(arr, best_f[:, :, None], axis=2)[:, :, 0]
 
         fid_2d = _take(fid_arr)
@@ -531,6 +718,18 @@ class SingleShot_ge_opt:
             feasible_2d = np.ones((len_L, len_G), dtype=bool)
 
         def _labels(sweep):
+            """Return the labels result.
+
+            Parameters
+            ----------
+            sweep : Any
+                Value for ``sweep``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             if sweep[0] is None:
                 return [str(i) for i in range(len(sweep))]
             return [f"{v:.3g}" for v in sweep]
@@ -550,6 +749,29 @@ class SingleShot_ge_opt:
             cbar_label="",
             mark_infeasible=False,
         ):
+            """Return the imshow result.
+
+            Parameters
+            ----------
+            ax : Any
+                Matplotlib axes on which to draw.
+            data : Any
+                Input data to process.
+            title : Any
+                Value for ``title``.
+            cmap : Any
+                Value for ``cmap``.
+            vmin : Any, default: None
+                Value for ``vmin``.
+            vmax : Any, default: None
+                Value for ``vmax``.
+            fmt : Any, default: '.3f'
+                Value for ``fmt``.
+            cbar_label : Any, default: ''
+                Value for ``cbar_label``.
+            mark_infeasible : Any, default: False
+                Value for ``mark_infeasible``.
+            """
             im = ax.imshow(
                 data, cmap=cmap, vmin=vmin, vmax=vmax, origin="upper", aspect="auto"
             )
@@ -601,6 +823,20 @@ class SingleShot_ge_opt:
         fig.tight_layout(rect=[0, 0, 1, 0.96])
 
         def _val_str(sweep, idx):
+            """Return the val str result.
+
+            Parameters
+            ----------
+            sweep : Any
+                Value for ``sweep``.
+            idx : Any
+                Value for ``idx``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             v = sweep[idx]
             return f"{v:.4g}" if v is not None else str(idx)
 
@@ -730,7 +966,15 @@ class SingleShot_ge_opt:
         plt.show()
 
     def plot_top_fidelity_histograms(self, top_n=9, feasible_only=True):
-        """IQ hexbin plots for the top-N grid points by GMM fidelity."""
+        """IQ hexbin plots for the top-N grid points by GMM fidelity.
+
+        Parameters
+        ----------
+        top_n : Any, default: 9
+            Value for ``top_n``.
+        feasible_only : Any, default: True
+            Value for ``feasible_only``.
+        """
         if not hasattr(self, "fid_Array"):
             print("Running analyze() to generate fidelity data...")
             self.analyze()

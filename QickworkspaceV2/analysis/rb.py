@@ -22,6 +22,13 @@ class RBAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitrb, rb_func
@@ -63,6 +70,13 @@ class AllXYAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.raw_iq is None:
             return
         # AllXY ideal values for the 21 sequences: pattern of 0, 0.5, 1

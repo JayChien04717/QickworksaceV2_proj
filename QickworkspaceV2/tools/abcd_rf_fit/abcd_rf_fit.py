@@ -12,6 +12,22 @@ from .resonators import *
 
 def get_abcd(freq, signal, rec_depth=0):
 
+    """Return abcd.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    rec_depth : Any, default: 0
+        Value for ``rec_depth``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     freq_center = np.mean(freq)
 
     x_design = np.ones((2, freq.size))
@@ -48,6 +64,20 @@ def get_abcd(freq, signal, rec_depth=0):
 
 def abcd2params(abcd, geometry):
 
+    """Return the abcd2params result.
+
+    Parameters
+    ----------
+    abcd : Any
+        Value for ``abcd``.
+    geometry : Any
+        Value for ``geometry``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     a, b, c, d = abcd
 
     if resonator_dict[geometry] == reflection:
@@ -121,6 +151,22 @@ def abcd2params(abcd, geometry):
 
 def meta_fit_edelay(freq, signal, rec_depth=0):
 
+    """Return the meta fit edelay result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    rec_depth : Any, default: 0
+        Value for ``rec_depth``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     quick_fit = get_abcd
 
     guess_edelay = guess_edelay_from_gradient(freq, signal)
@@ -151,6 +197,34 @@ def fit_signal(
     rec_depth=1,
     api_warning=True,
 ):
+    """Fit signal.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    geometry : Any
+        Value for ``geometry``.
+    fit_amplitude : Any, default: True
+        Value for ``fit_amplitude``.
+    fit_edelay : Any, default: True
+        Value for ``fit_edelay``.
+    final_ls_opti : Any, default: True
+        Value for ``final_ls_opti``.
+    allow_mismatch : Any, default: True
+        Value for ``allow_mismatch``.
+    rec_depth : Any, default: 1
+        Value for ``rec_depth``.
+    api_warning : Any, default: True
+        Value for ``api_warning``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if api_warning:
         warnings.warn("fit_signal() is deprecated, please use analyze() instead, and analyze().plot() to display data.", UserWarning)
 
@@ -198,6 +272,32 @@ def analyze(
     allow_mismatch=True,
     rec_depth=1,
 ):
+    """Return the analyze result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    geometry : Any
+        Value for ``geometry``.
+    fit_amplitude : Any, default: True
+        Value for ``fit_amplitude``.
+    fit_edelay : Any, default: True
+        Value for ``fit_edelay``.
+    final_ls_opti : Any, default: True
+        Value for ``final_ls_opti``.
+    allow_mismatch : Any, default: True
+        Value for ``allow_mismatch``.
+    rec_depth : Any, default: 1
+        Value for ``rec_depth``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return fit_signal(
         freq,
         signal,

@@ -56,11 +56,34 @@ class ExperimentRuntime:
     session_name: Optional[str] = None
 
     def configure(self, soc, soccfg, data_path: str) -> None:
+        """Return the configure result.
+
+        Parameters
+        ----------
+        soc : Any
+            Value for ``soc``.
+        soccfg : Any
+            Value for ``soccfg``.
+        data_path : str
+            Directory used for experiment data.
+        """
         self.soc = soc
         self.soccfg = soccfg
         self.data_path = data_path
 
     def require_hardware(self) -> tuple[Any, Any]:
+        """Return the require hardware result.
+
+        Returns
+        -------
+        tuple[Any, Any]
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.soc is None:
             raise RuntimeError(
                 "QICK session not initialised. Call BaseExperiment.connect_pyro4(...) "
@@ -69,6 +92,18 @@ class ExperimentRuntime:
         return self.soc, self.soccfg
 
     def require_data_path(self) -> str:
+        """Return the require data path result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.data_path is None or str(self.data_path).strip() == "":
             raise RuntimeError("BaseExperiment data path is not configured.")
         return str(self.data_path)
@@ -78,6 +113,22 @@ class SweepDefinition:
     """Resolve an experiment program's x/y sweep axes."""
 
     def resolve(self, experiment, prog, ctx: RunContext) -> SweepAxes:
+        """Return the resolve result.
+
+        Parameters
+        ----------
+        experiment : Any
+            Value for ``experiment``.
+        prog : Any
+            Value for ``prog``.
+        ctx : RunContext
+            Value for ``ctx``.
+
+        Returns
+        -------
+        SweepAxes
+            Result of the operation.
+        """
         steps = experiment.cfg.get("steps") if hasattr(experiment.cfg, "get") else None
         x_vals = experiment._resolve_axis(experiment._extract_sweep_axis(prog), steps)
         yoko_value = ctx.kwargs.get("yoko_value")
@@ -94,12 +145,50 @@ class AcquisitionRunner:
     """Dispatch live or direct execution with a shared readout mode."""
 
     def acquire(self, experiment, prog, axes: SweepAxes, ctx: RunContext) -> AcquisitionResult:
+        """Acquire experiment data.
+
+        Parameters
+        ----------
+        experiment : Any
+            Value for ``experiment``.
+        prog : Any
+            Value for ``prog``.
+        axes : SweepAxes
+            Value for ``axes``.
+        ctx : RunContext
+            Value for ``ctx``.
+
+        Returns
+        -------
+        AcquisitionResult
+            Result of the operation.
+        """
         threshold = experiment._get_readout_threshold()
         if ctx.liveplot:
             return self._liveplot(experiment, prog, axes, ctx, threshold)
         return self._direct(experiment, prog, axes, ctx, threshold)
 
     def _liveplot(self, experiment, prog, axes, ctx, threshold) -> AcquisitionResult:
+        """Update the live experiment plot.
+
+        Parameters
+        ----------
+        experiment : Any
+            Value for ``experiment``.
+        prog : Any
+            Value for ``prog``.
+        axes : Any
+            Value for ``axes``.
+        ctx : Any
+            Value for ``ctx``.
+        threshold : Any
+            Value for ``threshold``.
+
+        Returns
+        -------
+        AcquisitionResult
+            Result of the operation.
+        """
         from ..plotter.liveplot import liveplotfun
 
         instrument_manager, yoko_name = self._resolve_yoko(ctx)
@@ -119,7 +208,31 @@ class AcquisitionRunner:
         return self._result(iqdata, interrupted, avg_count, threshold)
 
     def _direct(self, experiment, prog, axes, ctx, threshold) -> AcquisitionResult:
-        """Acquire without importing or entering the live-plot subsystem."""
+        """Acquire without importing or entering the live-plot subsystem.
+
+        Parameters
+        ----------
+        experiment : Any
+            Value for ``experiment``.
+        prog : Any
+            Value for ``prog``.
+        axes : Any
+            Value for ``axes``.
+        ctx : Any
+            Value for ``ctx``.
+        threshold : Any
+            Value for ``threshold``.
+
+        Returns
+        -------
+        AcquisitionResult
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         instrument_manager, yoko_name = self._resolve_yoko(ctx)
         if instrument_manager is not None and yoko_name is not None:
             if axes.y is None:
@@ -147,6 +260,23 @@ class AcquisitionRunner:
 
     @staticmethod
     def _resolve_yoko(ctx: RunContext) -> tuple[Any, Any]:
+        """Resolve yoko.
+
+        Parameters
+        ----------
+        ctx : RunContext
+            Value for ``ctx``.
+
+        Returns
+        -------
+        tuple[Any, Any]
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         if ctx.kwargs.get("yoko_inst_addr") is not None:
             raise ValueError(
                 "Direct yoko_inst_addr support has been removed. Register the Yoko "
@@ -169,6 +299,24 @@ class AcquisitionRunner:
     def _result(
         iqdata, interrupted: bool, avg_count: int, threshold
     ) -> AcquisitionResult:
+        """Return the result result.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        interrupted : bool
+            Value for ``interrupted``.
+        avg_count : int
+            Value for ``avg_count``.
+        threshold : Any
+            Value for ``threshold``.
+
+        Returns
+        -------
+        AcquisitionResult
+            Result of the operation.
+        """
         if iqdata is None:
             return AcquisitionResult(
                 interrupted=True, quality=QualityFlag.BAD,
@@ -205,6 +353,24 @@ class ResultBuilder:
     """Construct ``ExperimentData`` from acquisition and fit state."""
 
     def build(self, experiment, acq: AcquisitionResult, axes: SweepAxes, ctx: RunContext) -> ExperimentData:
+        """Build the operation.
+
+        Parameters
+        ----------
+        experiment : Any
+            Value for ``experiment``.
+        acq : AcquisitionResult
+            Value for ``acq``.
+        axes : SweepAxes
+            Value for ``axes``.
+        ctx : RunContext
+            Value for ``ctx``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         metadata = {"iq_process": ctx.iq_process, **acq.metadata}
         required_keys = getattr(experiment.Analysis, "REQUIRED_CONFIG_KEYS", ())
         if required_keys:

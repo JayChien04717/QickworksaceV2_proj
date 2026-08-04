@@ -8,7 +8,6 @@ import matplotlib.gridspec as gridspec
 
 from .theme import COLORS, style_axes, style_figure
 
-# ── Quality → colour mapping ──────────────────────────────────────────────────
 
 _QUALITY_COLOR = {
     "good": COLORS["green"],
@@ -17,7 +16,6 @@ _QUALITY_COLOR = {
     "no_information": COLORS["muted"],
 }
 
-# ── Style constants ───────────────────────────────────────────────────────────
 
 _DATA_KW = dict(
     marker="o", ms=4.2, markeredgewidth=0, alpha=0.78,
@@ -26,7 +24,6 @@ _DATA_KW = dict(
 _FIT_KW = dict(lw=2.35, color=COLORS["orange"], zorder=5)
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
 
 def plot_fit_result(
     xpts: np.ndarray,
@@ -55,6 +52,13 @@ def plot_fit_result(
     quality     : ``"good" | "warning" | "bad" | "no_information"``.
     extra_lines : list of dicts passed to ``ax.axvline()`` in every panel,
                   e.g. ``[{"x": 0.5, "color": "r", "ls": "--", "label": "π"}]``.
+    fit_channel : str
+        Channel used for the primary fit panel.
+
+    Returns
+    -------
+    plt.Figure
+        Result of the operation.
     """
     channels = {
         "Amplitude": np.abs(iq_data),

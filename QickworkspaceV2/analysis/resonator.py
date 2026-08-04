@@ -23,6 +23,13 @@ class ResonatorSpecAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
@@ -54,10 +61,16 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             data.scalar_result = f0 / 1e6  # MHz
 
         except Exception as exc:
-            # Fall back to Lorentzian
             self._lorentzian_fallback(data, freqs, iq, exc)
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         import matplotlib.pyplot as plt
 
         if data.x_axis is None or data.raw_iq is None:
@@ -73,7 +86,6 @@ class ResonatorSpecAnalysis(BaseAnalysis):
         if f0:    title += f"  |  f_res = {f0:.4f} MHz"
         if kappa: title += f",  κ = {kappa:.3f} MHz"
 
-        # ── Preferred: native ABCD circle-fit plot ────────────────────────────
         # Lorentzian fallback (data.fit_params set) → use our standard panel
         if data.fit_params is None:
             try:
@@ -93,7 +105,6 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             except Exception:
                 pass  # fall through to Lorentzian panel
 
-        # ── Fallback: standard Lorentzian 2×3 panel ──────────────────────────
         from ..tools.fitting import lorfunc
 
         if data.fit_params is not None:
@@ -120,7 +131,19 @@ class ResonatorSpecAnalysis(BaseAnalysis):
         )
 
     def _lorentzian_fallback(self, data, freqs, iq, original_exc):
-        """Fit a Lorentzian if circle fit fails."""
+        """Fit a Lorentzian if circle fit fails.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+        freqs : Any
+            Value for ``freqs``.
+        iq : Any
+            Value for ``iq``.
+        original_exc : Any
+            Value for ``original_exc``.
+        """
         try:
             from ..tools.fitting import fitlor
 
@@ -147,6 +170,13 @@ class DispersiveShiftAnalysis(BaseAnalysis):
     thresholds = {}
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         traces = np.asarray(data.raw_iq)
         if data.x_axis is None or traces.ndim < 2 or traces.shape[0] != 2:
             data.quality = QualityFlag.BAD
@@ -192,6 +222,13 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         data.scalar_result = shift / 2
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         import matplotlib.pyplot as plt
 
         traces = np.asarray(data.raw_iq)
@@ -225,6 +262,13 @@ class ResonatorPunchoutAnalysis(BaseAnalysis):
 
     def _run(self, data: ExperimentData) -> None:
         # Punchout is primarily visual; store the 2D array summary
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.raw_iq is not None:
             data.fit_result = {"status": ("punchout_acquired", None)}
 
@@ -237,6 +281,13 @@ class LorentzianAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitlor, lorfunc
@@ -261,6 +312,13 @@ class LorentzianAnalysis(BaseAnalysis):
             data.quality_message = f"Lorentzian fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import lorfunc

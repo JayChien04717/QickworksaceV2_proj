@@ -50,6 +50,15 @@ class BatchExperiment:
         stop_on_bad: bool = False,
     ):
         # Accept both bare experiments and (name, expt) tuples
+        """Initialize the BatchExperiment instance.
+
+        Parameters
+        ----------
+        experiments : List
+            Value for ``experiments``.
+        stop_on_bad : bool, default: False
+            Value for ``stop_on_bad``.
+        """
         self._named: List = []
         for item in experiments:
             if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
@@ -62,14 +71,13 @@ class BatchExperiment:
         self._parent_id: Optional[str] = None
 
     def run(self, py_avg: int, **kwargs) -> Dict[str, ExperimentData]:
-        """
-        Run all experiments in order.
+        """Run all experiments in order.
 
         Parameters
         ----------
         py_avg : int
             Software averages forwarded to every experiment.
-        **kwargs
+        **kwargs : Any
             Additional keyword arguments forwarded to each ``run()`` call.
 
         Returns
@@ -136,6 +144,15 @@ class ParallelExperiment:
         max_workers: Optional[int] = None,
     ):
         # Accept both bare experiments and (name, expt) tuples
+        """Initialize the ParallelExperiment instance.
+
+        Parameters
+        ----------
+        experiments : List
+            Value for ``experiments``.
+        max_workers : Optional[int]
+            Value for ``max_workers``.
+        """
         self._named: List = []
         for item in experiments:
             if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
@@ -147,7 +164,20 @@ class ParallelExperiment:
         self.results: Dict[str, ExperimentData] = {}
 
     def run(self, py_avg: int, **kwargs) -> Dict[str, ExperimentData]:
-        """Run all experiments concurrently, return collected results."""
+        """Run all experiments concurrently, return collected results.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Dict[str, ExperimentData]
+            Result of the operation.
+        """
         from concurrent.futures import ThreadPoolExecutor, as_completed
         from ..tools.hdf5_store import generate_experiment_id
 

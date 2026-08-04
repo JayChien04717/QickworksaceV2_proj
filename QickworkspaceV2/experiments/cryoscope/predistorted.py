@@ -17,6 +17,18 @@ class PredistortedCryoscopeProgram(CryoscopeProgramBase):
     """Play normalized samples produced by the FIR/IIR design functions."""
 
     def _add_flux_pulse(self, cfg):
+        """Add flux pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         ch = cfg["flux_ch"]
         supplied = np.asarray(cfg["predistorted_waveform"], dtype=float)
         active_samples = int(cfg.get("predistorted_active_samples", supplied.size))
@@ -59,6 +71,13 @@ class PredistortedCryoscope(CryoscopeExperimentBase):
     X_SAVE_SCALE = 1.0
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return PredistortedCryoscopeProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -67,11 +86,45 @@ class PredistortedCryoscope(CryoscopeExperimentBase):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         applied_ns = prog.flux_active_samples * prog.flux_sample_period_ns
         return np.array([applied_ns])
 
     def run_prefix_sweep(self, sample_counts, py_avg: int, *, acquire_xy=True, **run_kwargs):
-        """Measure prefixes of one compensated waveform in a Python-side loop."""
+        """Measure prefixes of one compensated waveform in a Python-side loop.
+
+        Parameters
+        ----------
+        sample_counts : Any
+            Value for ``sample_counts``.
+        py_avg : int
+            Number of Python-level acquisition averages.
+        acquire_xy : Any, default: True
+            Value for ``acquire_xy``.
+        **run_kwargs : Any
+            Value for ``run_kwargs``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
 
         results = {}
         waveform = np.asarray(self.cfg["predistorted_waveform"], dtype=float)

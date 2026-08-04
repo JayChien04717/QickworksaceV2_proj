@@ -13,6 +13,13 @@ class SpinEchoProgram(BaseProgram):
     """QICK program for Hahn echo: π/2 — wait/2 — π — wait/2 — π/2."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
@@ -26,6 +33,13 @@ class SpinEchoProgram(BaseProgram):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -54,6 +68,13 @@ class SpinEcho(BaseExperiment):
     Analysis = SpinEchoAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return SpinEchoProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -62,12 +83,36 @@ class SpinEcho(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.delay_times = prog.get_time_param(
             "wait1", "t", as_array=True
         ) + prog.get_time_param("wait2", "t", as_array=True)
         return self.delay_times
 
     def _save_comment(self, dict_val):
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.result is not None:
             T2 = self.result.fit_result.get("T2e_us", (None,))[0]
             if T2 is not None:

@@ -22,6 +22,22 @@ class ActiveResetRabiProgram(BaseProgram):
     """tProc-v2 Power-Rabi program with measurement-based active reset."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        KeyError
+            If the operation cannot be completed.
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         self.setup_resonator(cfg, prefix="ge")
         self.setup_qubit_gen(cfg, prefix="ge")
 
@@ -102,7 +118,13 @@ class ActiveResetRabiProgram(BaseProgram):
         self.write_reg("reset_threshold", threshold_raw)
 
     def _readout(self, cfg):
-        """Play the readout tone and trigger the configured ADC."""
+        """Play the readout tone and trigger the configured ADC.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
         self.trigger(
             ros=[cfg["ro_ch"]],
@@ -111,6 +133,13 @@ class ActiveResetRabiProgram(BaseProgram):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
 
         # Prepare the state swept by the Power-Rabi experiment.
@@ -175,12 +204,26 @@ class ActiveResetRabi(BaseExperiment):
     Analysis = PowerRabiAnalysis
 
     def __init__(self, config):
+        """Initialize the ActiveResetRabi instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.pre_reset_population = None
         self.post_reset_population = None
         self.reset_verification_iq = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return ActiveResetRabiProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -189,14 +232,54 @@ class ActiveResetRabi(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("rabi_pulse", "gain", as_array=True)
 
     def _get_readout_threshold(self):
         # ``threshold`` is used by the on-FPGA feedback logic here.  Do not let
         # BaseExperiment reinterpret it as software population discrimination.
+        """Return readout threshold.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def _acquire(self, prog, axes, ctx):
+        """Acquire experiment data.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+        axes : Any
+            Value for ``axes``.
+        ctx : Any
+            Value for ``ctx``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         self.pre_reset_population = None
         self.post_reset_population = None
         self.reset_verification_iq = None

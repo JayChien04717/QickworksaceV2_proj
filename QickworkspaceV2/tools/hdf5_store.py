@@ -36,6 +36,20 @@ _STRING_DTYPE = h5py.string_dtype(encoding="utf-8")
 
 
 def _encode_crockford(value: int, width: int) -> str:
+    """Return the encode crockford result.
+
+    Parameters
+    ----------
+    value : int
+        Value to apply.
+    width : int
+        Value for ``width``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     chars = []
     for _ in range(width):
         chars.append(_CROCKFORD[value & 31])
@@ -44,6 +58,18 @@ def _encode_crockford(value: int, width: int) -> str:
 
 
 def _as_utc(value: Optional[datetime] = None) -> datetime:
+    """Return the as utc result.
+
+    Parameters
+    ----------
+    value : Optional[datetime]
+        Value to apply.
+
+    Returns
+    -------
+    datetime
+        Result of the operation.
+    """
     value = value or datetime.now(timezone.utc)
     if value.tzinfo is None:
         value = value.replace(tzinfo=LOCAL_TIMEZONE)
@@ -51,18 +77,52 @@ def _as_utc(value: Optional[datetime] = None) -> datetime:
 
 
 def generate_experiment_id(timestamp: Optional[datetime] = None) -> str:
-    """Return a sortable UTC timestamp plus 64 bits of cryptographic randomness."""
+    """Return a sortable UTC timestamp plus 64 bits of cryptographic randomness.
+
+    Parameters
+    ----------
+    timestamp : Optional[datetime]
+        Timestamp associated with the operation.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     stamp = _as_utc(timestamp).strftime("%Y%m%dT%H%M%S%fZ")
     random_part = _encode_crockford(int.from_bytes(secrets.token_bytes(8), "big"), 13)
     return f"{stamp}-{random_part}"
 
 
 def validate_experiment_id(experiment_id: str) -> bool:
-    """Return whether *experiment_id* follows the v1 public ID format."""
+    """Return whether *experiment_id* follows the v1 public ID format.
+
+    Parameters
+    ----------
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     return bool(_ID_RE.fullmatch(str(experiment_id or "")))
 
 
 def _json_default(value: Any):
+    """Return the json default result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -81,6 +141,18 @@ def _json_default(value: Any):
 
 
 def _json_object_hook(value: dict):
+    """Return the json object hook result.
+
+    Parameters
+    ----------
+    value : dict
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     marker = value.get("__complex__")
     if isinstance(marker, list) and len(marker) == 2:
         return complex(marker[0], marker[1])
@@ -88,10 +160,36 @@ def _json_object_hook(value: dict):
 
 
 def _json_dumps(value: Any) -> str:
+    """Return the json dumps result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     return json.dumps(value, ensure_ascii=False, default=_json_default, separators=(",", ":"))
 
 
 def _json_loads(value: Any, default=None):
+    """Return the json loads result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+    default : Any, default: None
+        Value for ``default``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if value is None:
         return default
     if isinstance(value, bytes):
@@ -103,10 +201,42 @@ def _json_loads(value: Any, default=None):
 
 
 def _write_text(group: h5py.Group, name: str, value: Any) -> h5py.Dataset:
+    """Write text.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    name : str
+        Name of the target object.
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    h5py.Dataset
+        Result of the operation.
+    """
     return group.create_dataset(name, data=str(value or ""), dtype=_STRING_DTYPE)
 
 
 def _read_text(group: h5py.Group, name: str, default: str = "") -> str:
+    """Return text.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    name : str
+        Name of the target object.
+    default : str, default: ''
+        Value for ``default``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     if name not in group:
         return default
     value = group[name][()]
@@ -114,12 +244,36 @@ def _read_text(group: h5py.Group, name: str, default: str = "") -> str:
 
 
 def _dataset_options(array: np.ndarray) -> dict:
+    """Return the dataset options result.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Value for ``array``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     if array.ndim == 0 or array.size < 64 or array.dtype.kind in {"O", "U", "S"}:
         return {}
     return {"chunks": True, "compression": "gzip", "compression_opts": 4, "shuffle": True}
 
 
 def _normalise_dataset_payload(value: Any):
+    """Normalize dataset payload.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(value, dict) and "values" in value:
         attrs = {key: value.get(key) for key in ("dims", "unit", "label", "description", "scale")}
         return value["values"], attrs
@@ -127,6 +281,17 @@ def _normalise_dataset_payload(value: Any):
 
 
 def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> None:
+    """Write tree.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    values : Any
+        Values to process.
+    dataset_name : str, default: 'value'
+        Name of the dataset.
+    """
     if values is None:
         return
     is_payload = isinstance(values, dict) and "values" in values
@@ -160,6 +325,20 @@ def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> 
 
 
 def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False):
+    """Return tree.
+
+    Parameters
+    ----------
+    node : h5py.Group | h5py.Dataset
+        Value for ``node``.
+    preserve_attrs : bool, default: False
+        Value for ``preserve_attrs``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(node, h5py.Dataset):
         value = node[()]
         if node.attrs.get("encoding") == "json":
@@ -184,6 +363,20 @@ def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False)
 
 
 def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list[str]]:
+    """Return the collect dataset dims result.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    prefix : str, default: ''
+        Value for ``prefix``.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Result of the operation.
+    """
     dims = {}
     for name, node in group.items():
         path = f"{prefix}/{name}" if prefix else name
@@ -196,6 +389,22 @@ def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list
 
 
 def _decorate_tree_with_dims(values: Any, dims: dict[str, list[str]], prefix: str = ""):
+    """Return the decorate tree with dims result.
+
+    Parameters
+    ----------
+    values : Any
+        Values to process.
+    dims : dict[str, list[str]]
+        Value for ``dims``.
+    prefix : str, default: ''
+        Value for ``prefix``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(values, dict) and "values" in values:
         if "dims" not in values and prefix in dims:
             return {**values, "dims": dims[prefix]}
@@ -215,11 +424,35 @@ def _decorate_tree_with_dims(values: Any, dims: dict[str, list[str]], prefix: st
 
 
 def _quality_value(result) -> str:
+    """Return the quality value result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     quality = getattr(result, "quality", "no_information")
     return str(getattr(quality, "value", quality))
 
 
 def _normalise_tags(tags: Iterable[str] | str | None) -> list[str]:
+    """Normalize tags.
+
+    Parameters
+    ----------
+    tags : Iterable[str] | str | None
+        Value for ``tags``.
+
+    Returns
+    -------
+    list[str]
+        Result of the operation.
+    """
     if tags is None:
         return []
     if isinstance(tags, str):
@@ -228,6 +461,18 @@ def _normalise_tags(tags: Iterable[str] | str | None) -> list[str]:
 
 
 def _qubits_from_result(result) -> list[str]:
+    """Return the qubits from result result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    list[str]
+        Result of the operation.
+    """
     metadata = getattr(result, "metadata", {}) or {}
     config = getattr(result, "config", {}) or {}
     raw = metadata.get("qubit_names") or metadata.get("qubits")
@@ -241,6 +486,18 @@ def _qubits_from_result(result) -> list[str]:
 
 
 def _dispatch_ids(result) -> tuple[str, str, str]:
+    """Return the dispatch ids result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        Result of the operation.
+    """
     experiment_type = str(getattr(result, "experiment_type", "") or "").lower()
     raw = getattr(result, "raw_iq", None)
     ndim = np.asarray(raw).ndim if raw is not None and not isinstance(raw, dict) else 0
@@ -267,6 +524,18 @@ def _dispatch_ids(result) -> tuple[str, str, str]:
 
 
 def _resolve_data_root(data_root: Optional[os.PathLike | str]) -> Path:
+    """Resolve data root.
+
+    Parameters
+    ----------
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     if data_root is not None:
         return Path(data_root).expanduser().resolve()
     try:
@@ -279,11 +548,43 @@ def _resolve_data_root(data_root: Optional[os.PathLike | str]) -> Path:
 
 
 def _safe_filename_part(value: str, fallback: str) -> str:
+    """Return the safe filename part result.
+
+    Parameters
+    ----------
+    value : str
+        Value to apply.
+    fallback : str
+        Value for ``fallback``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value or "")).strip("-_.")
     return cleaned or fallback
 
 
 def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> Path:
+    """Return the auto path result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    result : Any
+        Experiment result to process.
+    local_time : datetime
+        Value for ``local_time``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     experiment = _safe_filename_part(getattr(result, "experiment_type", ""), "experiment")
     qubits = _qubits_from_result(result)
     qubit = _safe_filename_part("-".join(qubits), "all")
@@ -294,6 +595,18 @@ def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> 
 
 
 def _axis_entries(result) -> dict[str, Any]:
+    """Return the axis entries result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     entries = dict(getattr(result, "axes", {}) or {})
     if getattr(result, "x_axis", None) is not None and "x" not in entries:
         entries["x"] = {
@@ -313,6 +626,13 @@ def _axis_entries(result) -> dict[str, Any]:
 
 
 def _provenance() -> dict:
+    """Return the provenance result.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     try:
         from .. import __version__
     except Exception:
@@ -331,6 +651,21 @@ def _provenance() -> dict:
 
 
 def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: datetime) -> None:
+    """Write file.
+
+    Parameters
+    ----------
+    path : Path
+        Filesystem path.
+    result : Any
+        Experiment result to process.
+    comment : str
+        Value for ``comment``.
+    tags : list[str]
+        Value for ``tags``.
+    utc_time : datetime
+        Value for ``utc_time``.
+    """
     local_time = utc_time.astimezone(LOCAL_TIMEZONE)
     data_kind, analysis_id, plot_id = _dispatch_ids(result)
     metadata = dict(getattr(result, "metadata", {}) or {})
@@ -423,7 +758,33 @@ def save_result(
     data_root: Optional[os.PathLike | str] = None,
     catalog: bool = True,
 ) -> Path:
-    """Atomically save one experiment and register it in the local catalog."""
+    """Atomically save one experiment and register it in the local catalog.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+    path : Optional[os.PathLike | str]
+        Filesystem path.
+    comment : str, default: ''
+        Value for ``comment``.
+    tags : Iterable[str] | str, default: ()
+        Value for ``tags``.
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+    catalog : bool, default: True
+        Value for ``catalog``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+
+    Raises
+    ------
+    FileExistsError
+        If the operation cannot be completed.
+    """
     root = _resolve_data_root(data_root)
     explicit_path = path is not None
     utc_time = _as_utc(getattr(result, "timestamp", None))
@@ -467,6 +828,18 @@ def save_result(
 
 
 def _attrs_dict(h5: h5py.File) -> dict:
+    """Return the attrs dict result.
+
+    Parameters
+    ----------
+    h5 : h5py.File
+        Value for ``h5``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     result = {}
     for key, value in h5.attrs.items():
         if isinstance(value, np.generic):
@@ -478,7 +851,18 @@ def _attrs_dict(h5: h5py.File) -> dict:
 
 
 def _native_root(h5: h5py.File | h5py.Group):
-    """Return the native schema root for standalone or Labber-hybrid files."""
+    """Return the native schema root for standalone or Labber-hybrid files.
+
+    Parameters
+    ----------
+    h5 : h5py.File | h5py.Group
+        Value for ``h5``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if h5.attrs.get("schema_name") == SCHEMA_NAME:
         return h5
     for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
@@ -489,7 +873,18 @@ def _native_root(h5: h5py.File | h5py.Group):
 
 
 def inspect_file(path: os.PathLike | str) -> dict:
-    """Read lightweight metadata from standalone or Labber-hybrid files."""
+    """Read lightweight metadata from standalone or Labber-hybrid files.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     path = Path(path).expanduser().resolve()
     with h5py.File(path, "r") as h5:
         root = _native_root(h5)
@@ -535,7 +930,23 @@ def inspect_file(path: os.PathLike | str) -> dict:
         }
 
 def load_result(path: os.PathLike | str):
-    """Load standalone native v1, Labber-hybrid, or the previous local format."""
+    """Load standalone native v1, Labber-hybrid, or the previous local format.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     path = Path(path).expanduser().resolve()
     from ..core.experiment_data import ExperimentData, QualityFlag
 
@@ -632,6 +1043,18 @@ def load_result(path: os.PathLike | str):
         )
 
 def _load_previous_format(h5: h5py.File):
+    """Return previous format.
+
+    Parameters
+    ----------
+    h5 : h5py.File
+        Value for ``h5``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     from ..core.experiment_data import ExperimentData
 
     meta = _json_loads(h5.attrs.get("meta"), {}) or {}
@@ -657,7 +1080,18 @@ class ValidationReport:
 
 
 def validate_file(path: os.PathLike | str) -> ValidationReport:
-    """Validate standalone or embedded native schema and dataset dimensions."""
+    """Validate standalone or embedded native schema and dataset dimensions.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    ValidationReport
+        Result of the operation.
+    """
     errors: list[str] = []
     warnings: list[str] = []
     resolved = str(Path(path).expanduser().resolve())
@@ -688,6 +1122,15 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
                     continue
 
                 def _check_dims(name, node):
+                    """Return the check dims result.
+
+                    Parameters
+                    ----------
+                    name : Any
+                        Name of the target object.
+                    node : Any
+                        Value for ``node``.
+                    """
                     if not isinstance(node, h5py.Dataset) or "dims" not in node.attrs:
                         return
                     dims = list(_json_loads(node.attrs["dims"], []) or [])
@@ -709,11 +1152,37 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
     return ValidationReport(resolved, not errors, errors, warnings)
 
 def _catalog_path(root: Path) -> Path:
+    """Return the catalog path result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     root.mkdir(parents=True, exist_ok=True)
     return root / CATALOG_FILENAME
 
 
 def _catalog_contains_id(root: Path, experiment_id: str) -> bool:
+    """Return the catalog contains id result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     catalog = _catalog_path(root)
     if not catalog.exists():
         return False
@@ -729,6 +1198,20 @@ def _catalog_contains_id(root: Path, experiment_id: str) -> bool:
 
 
 def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
+    """Return the experiment id exists result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     if _catalog_path(root).exists():
         return _catalog_contains_id(root, experiment_id)
     if not root.exists():
@@ -746,6 +1229,18 @@ def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
 
 
 def _connect_catalog(root: Path) -> sqlite3.Connection:
+    """Connect catalog.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+
+    Returns
+    -------
+    sqlite3.Connection
+        Result of the operation.
+    """
     connection = sqlite3.connect(_catalog_path(root), timeout=30.0)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA busy_timeout=30000")
@@ -773,6 +1268,15 @@ def _connect_catalog(root: Path) -> sqlite3.Connection:
 
 
 def _register_file(path: Path, root: Path) -> None:
+    """Register file.
+
+    Parameters
+    ----------
+    path : Path
+        Filesystem path.
+    root : Path
+        Value for ``root``.
+    """
     info = inspect_file(path)
     metadata = info.get("metadata", {}) or {}
     qubits = info.get("qubits") or metadata.get("qubit_names") or []
@@ -814,10 +1318,31 @@ class ExperimentReference:
     path: Path
 
     def load(self):
+        """Return the load result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return load_result(self.path)
 
 
 def _date_boundary(value: Any, *, end: bool = False) -> Optional[str]:
+    """Return the date boundary result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+    end : bool, default: False
+        Value for ``end``.
+
+    Returns
+    -------
+    Optional[str]
+        Result of the operation.
+    """
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -846,7 +1371,34 @@ def find_experiments(
     *,
     data_root: Optional[os.PathLike | str] = None,
 ) -> list[ExperimentReference]:
-    """Search the rebuildable catalog and return lazy experiment references."""
+    """Search the rebuildable catalog and return lazy experiment references.
+
+    Parameters
+    ----------
+    experiment_type : Optional[str]
+        Value for ``experiment_type``.
+    qubit : Optional[str]
+        Qubit identifier.
+    tags : Optional[Iterable[str] | str]
+        Value for ``tags``.
+    quality : Optional[str]
+        Value for ``quality``.
+    start : Any, default: None
+        Value for ``start``.
+    end : Any, default: None
+        Value for ``end``.
+    session_id : Optional[str]
+        Value for ``session_id``.
+    limit : Optional[int]
+        Value for ``limit``.
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+
+    Returns
+    -------
+    list[ExperimentReference]
+        Result of the operation.
+    """
     root = _resolve_data_root(data_root)
     if not _catalog_path(root).exists():
         rebuild_catalog(root)
@@ -894,7 +1446,18 @@ def find_experiments(
 
 
 def rebuild_catalog(data_root: os.PathLike | str) -> int:
-    """Recreate the SQLite catalog from completed native HDF5 files."""
+    """Recreate the SQLite catalog from completed native HDF5 files.
+
+    Parameters
+    ----------
+    data_root : os.PathLike | str
+        Value for ``data_root``.
+
+    Returns
+    -------
+    int
+        Result of the operation.
+    """
     root = _resolve_data_root(data_root)
     catalog = _catalog_path(root)
     if catalog.exists():
@@ -926,7 +1489,29 @@ def convert_labber_file(
     *,
     metadata: Optional[dict] = None,
 ) -> Path:
-    """Best-effort conversion isolated behind the optional Labber dependency."""
+    """Best-effort conversion isolated behind the optional Labber dependency.
+
+    Parameters
+    ----------
+    source : os.PathLike | str
+        Value for ``source``.
+    destination : Optional[os.PathLike | str]
+        Value for ``destination``.
+    metadata : Optional[dict]
+        Value for ``metadata``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+
+    Raises
+    ------
+    ImportError
+        If the operation cannot be completed.
+    ValueError
+        If the operation cannot be completed.
+    """
     try:
         import Labber
     except ImportError as exc:

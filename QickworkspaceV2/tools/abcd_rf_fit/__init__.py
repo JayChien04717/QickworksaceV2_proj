@@ -12,6 +12,23 @@ _LAZY_EXPORTS = {
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     module_name = _LAZY_EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

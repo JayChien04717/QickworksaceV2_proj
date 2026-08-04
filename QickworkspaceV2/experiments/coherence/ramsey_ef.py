@@ -13,6 +13,13 @@ class RamseyEfProgram(BaseProgram):
     """EF Ramsey: ge π → ef π/2 — wait — ef π/2."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_qubit_gen(cfg, "ef")
@@ -27,6 +34,13 @@ class RamseyEfProgram(BaseProgram):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -58,6 +72,13 @@ class RamseyEf(BaseExperiment):
     Analysis = RamseyEfAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return RamseyEfProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -66,11 +87,34 @@ class RamseyEf(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.delay_times = prog.get_time_param("wait", "t", as_array=True)
         return self.delay_times
 
     def correct_detune(self):
-        """Correct qubit ef frequency based on fitted detuning."""
+        """Correct qubit ef frequency based on fitted detuning.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.result is None:
             raise RuntimeError("Run the experiment first.")
         detune = self.result.fit_result.get("detune_MHz", (None,))[0]
@@ -88,6 +132,18 @@ class RamseyEf(BaseExperiment):
             return self.cfg["qb_freq_ef"]
 
     def _save_comment(self, dict_val):
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.result is not None:
             T2 = self.result.fit_result.get("T2r_us", (None,))[0]
             if T2 is not None:

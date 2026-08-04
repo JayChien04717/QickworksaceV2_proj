@@ -1,4 +1,4 @@
-﻿"""
+"""
 QickworkspaceV2 — IBM/IQM-style automated quantum calibration framework.
 
 Quick start
@@ -12,7 +12,7 @@ Quick start
     BaseExperiment.connect_pyro4(
         "192.168.1.100",
         ns_port=8888,
-        data_path=r"D:\Labber_Data\my_experiment",
+        data_path=r"D:\\Labber_Data\\my_experiment",
     )
 
     # --- Config (the source module may live outside this project) ---
@@ -81,6 +81,23 @@ _LAZY_EXPORTS = {
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     module_name = _LAZY_EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -94,30 +111,19 @@ def __getattr__(name):
 __version__ = "1.0.0"
 
 __all__ = [
-    # core
     "ExperimentData", "QualityFlag",
     "BaseAnalysis", "BaseExperiment",
     "BatchExperiment", "ParallelExperiment",
-    # calibration
     "CalibrationStore", "CalibrationGraph", "CalibrationNode",
     "CalibrationMonitor", "AutoCalibrate",
-    # config
     "ExperimentConfig",
-    # experiments — setup
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    # experiments — resonator
     "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
-    # experiments — qubit ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
-    # experiments — coherence
     "Ramsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
-    # experiments — qubit ef
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "QubitTemp",
-    # experiments — characterization
     "AllXY", "RandomizedBenchmarking", "AutoRB", "Tomography",
-    # experiments — cryoscope
     "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
-    # instruments
     "BaseInstrumentManager", "InstrumentManager",
 ]

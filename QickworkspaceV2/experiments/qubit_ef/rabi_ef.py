@@ -19,6 +19,13 @@ class PowerRabiEfProgram(BaseProgram):
     """EF power Rabi: ge pi pulse then sweep ef drive gain."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_qubit_gen(cfg, "ef")
@@ -27,6 +34,13 @@ class PowerRabiEfProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -56,12 +70,31 @@ class PowerRabiEf(BaseExperiment):
     Analysis = PowerRabiAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return PowerRabiEfProgram(
             self.soccfg, reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"], cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("qb_ef_pulse", "gain", as_array=True)
 
 
@@ -73,6 +106,13 @@ class QubitTempProgram(BaseProgram):
     """EF Rabi program used for qubit temperature measurement."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_qubit_gen(cfg, "ef")
@@ -81,6 +121,13 @@ class QubitTempProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -111,12 +158,31 @@ class QubitTemp(BaseExperiment):
     Analysis = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return QubitTempProgram(
             self.soccfg, reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"], cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("qb_ef_pulse", "gain", as_array=True)
 
     def run(
@@ -127,7 +193,26 @@ class QubitTemp(BaseExperiment):
         show_final_plot: bool = False,
         **kwargs,
     ) -> ExperimentData:
-        """Run no-ge-pi and with-ge-pi EF Rabi traces, then fit temperature."""
+        """Run no-ge-pi and with-ge-pi EF Rabi traces, then fit temperature.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        full_model : bool, default: False
+            Value for ``full_model``.
+        iq_process : str | None, default: None
+            IQ processing mode.
+        show_final_plot : bool, default: False
+            Whether to show final plot.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         self._full_model = full_model
 
         print("[Temp] Meas run: ef Rabi only...")
@@ -204,7 +289,18 @@ class QubitTemp(BaseExperiment):
         return result
 
     def _compute_temperature(self, x_vals):
-        """Fit both EF Rabi traces and solve temperature from amplitude ratio."""
+        """Fit both EF Rabi traces and solve temperature from amplitude ratio.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         mag_meas = np.abs(self._iq_meas)
         mag_ref = np.abs(self._iq_ref)
 
@@ -261,10 +357,40 @@ class QubitTemp(BaseExperiment):
         return temp
 
     def _fit_amplitude(self, x_vals, params):
+        """Fit amplitude.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+        params : Any
+            Value for ``params``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         fit = decaysin(x_vals, *params)
         return float((np.max(fit) - np.min(fit)) / 2)
 
     def _fit_amplitude_error(self, x_vals, params, covariance):
+        """Fit amplitude error.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+        params : Any
+            Value for ``params``.
+        covariance : Any
+            Value for ``covariance``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if covariance is None:
             return None
         cov = np.asarray(covariance, dtype=float)
@@ -290,6 +416,13 @@ class QubitTemp(BaseExperiment):
         return float(np.sqrt(variance))
 
     def _ratio_error(self):
+        """Return the ratio error result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self._A_ref == 0:
             return None
         terms = []
@@ -302,6 +435,20 @@ class QubitTemp(BaseExperiment):
         return float(abs(self._ratio) * np.sqrt(sum(terms)))
 
     def _temperature_error(self, ratio, ratio_err):
+        """Return the temperature error result.
+
+        Parameters
+        ----------
+        ratio : Any
+            Value for ``ratio``.
+        ratio_err : Any
+            Value for ``ratio_err``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if ratio_err is None or ratio <= 0:
             return None
         if not self._full_model:
@@ -320,6 +467,13 @@ class QubitTemp(BaseExperiment):
         return float(abs((t_hi - t_lo) / (2 * step)) * ratio_err)
 
     def _temperature_floor(self):
+        """Return the temperature floor result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self._ratio_err_meas_only is None:
             return None
         sigma = float(self.cfg.get("temp_floor_sigma", 1.0))
@@ -327,6 +481,18 @@ class QubitTemp(BaseExperiment):
         return self._solve_temperature_from_ratio(floor_ratio)
 
     def _solve_temperature_from_ratio(self, measured_ratio):
+        """Return the solve temperature from ratio result.
+
+        Parameters
+        ----------
+        measured_ratio : Any
+            Value for ``measured_ratio``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if measured_ratio <= 0 or measured_ratio >= 1:
             return None
         fge_hz = self.cfg["qb_freq_ge"] * 1e6
@@ -336,6 +502,24 @@ class QubitTemp(BaseExperiment):
         return self._solve_temperature_from_ratio_full(measured_ratio, fge_hz, fef_hz)
 
     def _solve_temperature(self, A_meas, A_ref, fge_hz, fef_hz):
+        """Return the solve temperature result.
+
+        Parameters
+        ----------
+        A_meas : Any
+            Value for ``A_meas``.
+        A_ref : Any
+            Value for ``A_ref``.
+        fge_hz : Any
+            Value for ``fge_hz``.
+        fef_hz : Any
+            Value for ``fef_hz``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         measured_ratio = A_meas / A_ref
         if not self._full_model:
             if measured_ratio <= 0 or measured_ratio >= 1:
@@ -346,12 +530,40 @@ class QubitTemp(BaseExperiment):
         return self._solve_temperature_from_ratio_full(measured_ratio, fge_hz, fef_hz)
 
     def _solve_temperature_from_ratio_full(self, measured_ratio, fge_hz, fef_hz):
+        """Return the solve temperature from ratio full result.
+
+        Parameters
+        ----------
+        measured_ratio : Any
+            Value for ``measured_ratio``.
+        fge_hz : Any
+            Value for ``fge_hz``.
+        fef_hz : Any
+            Value for ``fef_hz``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if measured_ratio <= 0 or measured_ratio >= 1:
             return None
         e_ge = _H * fge_hz
         e_gf = _H * (fge_hz + fef_hz)
 
         def residual(temp):
+            """Return the residual result.
+
+            Parameters
+            ----------
+            temp : Any
+                Value for ``temp``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             beta = 1.0 / (_KB * temp)
             p_e_raw = np.exp(-e_ge * beta)
             p_f_raw = np.exp(-e_gf * beta)
@@ -368,6 +580,27 @@ class QubitTemp(BaseExperiment):
 
     def _plot_temperature(self, x_vals, mag_meas, fit_meas, mag_ref, fit_ref,
                           a_meas, a_ref, temp):
+        """Plot temperature.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+        mag_meas : Any
+            Value for ``mag_meas``.
+        fit_meas : Any
+            Value for ``fit_meas``.
+        mag_ref : Any
+            Value for ``mag_ref``.
+        fit_ref : Any
+            Value for ``fit_ref``.
+        a_meas : Any
+            Value for ``a_meas``.
+        a_ref : Any
+            Value for ``a_ref``.
+        temp : Any
+            Value for ``temp``.
+        """
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.plot(x_vals, mag_meas, "o-", color="C0", markersize=5, alpha=0.7, label="Meas data")
         ax.plot(x_vals, fit_meas, color="C0", linewidth=2, label=f"Meas fit (A={a_meas:.4f})")
@@ -390,9 +623,33 @@ class QubitTemp(BaseExperiment):
         plt.show()
 
     def _post_fit(self, x_vals):
+        """Fit the acquired data after acquisition.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def _save_comment(self, dict_val: str) -> str:
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : str
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         base_comment = super()._save_comment(dict_val)
         temp = getattr(self, "_last_T_K", None)
         if temp is not None:
@@ -405,7 +662,24 @@ class QubitTemp(BaseExperiment):
         return base_comment
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
-        """Save meas/ref EF Rabi raw data as a two-state Labber log."""
+        """Save meas/ref EF Rabi raw data as a two-state Labber log.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        title : Any, default: None
+            Value for ``title``.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from ...tools.system_tool import (
             config_to_yaml,
             get_next_filename_labber,

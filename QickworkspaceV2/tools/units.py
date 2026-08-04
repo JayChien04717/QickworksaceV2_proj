@@ -4,7 +4,20 @@ import numpy as np
 
 
 def auto_unit(value, base_unit=""):
-    """Scale numeric values to the most appropriate SI metric prefix."""
+    """Scale numeric values to the most appropriate SI metric prefix.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+    base_unit : Any, default: ''
+        Value for ``base_unit``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     prefixes = {
         -12: "p",
         -9: "n",

@@ -16,6 +16,13 @@ class MuxPowerRabiProgram(AveragerProgramV2):
     """Mux power Rabi: one QICK gainloop, mux readout on active channels."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -109,6 +116,13 @@ class MuxPowerRabiProgram(AveragerProgramV2):
                 )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             self.pulse(ch=cfg["qb_ch"][idx], name=f"{name}_pulse", t=0)
         self.delay_auto(0.05)
@@ -129,10 +143,24 @@ class MuxPowerRabi(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     def __init__(self, config):
+        """Initialize the MuxPowerRabi instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.gain_axis = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         return MuxPowerRabiProgram(
             self.soccfg,
@@ -142,10 +170,36 @@ class MuxPowerRabi(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.gain_axis
 
     @staticmethod
     def _sweep_iq(iq_list, n_trace):
+        """Return the sweep iq result.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -156,6 +210,22 @@ class MuxPowerRabi(BaseExperiment):
         return np.asarray(vals, dtype=complex)
 
     def run(self, py_avg=1, iq_process="abs", plot=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: False
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         prog = MuxPowerRabiProgram(
             self.soccfg,
@@ -256,6 +326,25 @@ class MuxPowerRabi(BaseExperiment):
 
     @staticmethod
     def _fit_power_rabi(gain_axis, trace):
+        """Fit power rabi.
+
+        Parameters
+        ----------
+        gain_axis : Any
+            Value for ``gain_axis``.
+        trace : Any
+            Value for ``trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         try:
             from ..tools.fitting import fitsin, fix_phase
 
@@ -269,6 +358,20 @@ class MuxPowerRabi(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq_process = (iq_process or "abs").lower()
         if iq_process in {"real", "i", "avgi"}:
             return np.real(iqdata)

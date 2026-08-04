@@ -11,6 +11,13 @@ class CryoscopeConstProgram(CryoscopeProgramBase):
     """Sweep a constant-pulse length; all lengths must be at least 3 clocks."""
 
     def _add_flux_pulse(self, cfg):
+        """Add flux pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.add_loop("flux_length_loop", cfg["steps"])
         self.add_pulse(
             ch=cfg["flux_ch"],
@@ -35,6 +42,13 @@ class CryoscopeConst(CryoscopeExperimentBase):
     X_SAVE_SCALE = 1.0
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return CryoscopeConstProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -43,11 +57,40 @@ class CryoscopeConst(CryoscopeExperimentBase):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("flux_pulse", "length", as_array=True)
 
 
 def configure_const_sweep(cfg, start_us: float, stop_us: float, steps: int):
-    """Return a copied config containing the correctly named QICK sweep."""
+    """Return a copied config containing the correctly named QICK sweep.
+
+    Parameters
+    ----------
+    cfg : Any
+        Experiment configuration mapping.
+    start_us : float
+        Value for ``start_us``.
+    stop_us : float
+        Value for ``stop_us``.
+    steps : int
+        Value for ``steps``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
 
     configured = dict(cfg)
     configured["steps"] = int(steps)
