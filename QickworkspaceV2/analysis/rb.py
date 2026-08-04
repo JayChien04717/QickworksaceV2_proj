@@ -57,6 +57,13 @@ class RBAnalysis(BaseAnalysis):
                 "B": (B, err[2]),
             }
             data.scalar_result = fidelity
+            fit_curve = rb_func(x, *popt)
+            data.metadata.update({"fit_model": "rb_decay", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": y, "dims": ["x"]},
+                "fit_curve": {"values": fit_curve, "dims": ["x"]},
+                "residual": {"values": y - fit_curve, "dims": ["x"]},
+            })
         except Exception as exc:
             data.quality = QualityFlag.BAD
             data.quality_message = f"RB fit failed: {exc}"

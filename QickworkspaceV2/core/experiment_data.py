@@ -18,6 +18,37 @@ from typing import Any, Optional
 import numpy as np
 
 
+def _json_value(value):
+    """Recursively convert scientific Python values to JSON-native values."""
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _json_value(value.tolist())
+    if isinstance(value, np.generic):
+        return _json_value(value.item())
+    if isinstance(value, complex):
+        return {"__complex__": [value.real, value.imag]}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _restore_json_value(value):
+    """Restore values encoded by :func:`_json_value`."""
+    if isinstance(value, dict):
+        if set(value) == {"__complex__"}:
+            real, imag = value["__complex__"]
+            return complex(real, imag)
+        return {key: _restore_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_json_value(item) for item in value]
+    return value
+
+
 def _new_experiment_id() -> str:
     """Return the new experiment id result.
 
@@ -244,37 +275,26 @@ class ExperimentData:
             Result of the operation.
         """
 
-        def _arr(v):
-            """Return the arr result.
-
-            Parameters
-            ----------
-            v : Any
-                Value for ``v``.
-
-            Returns
-            -------
-            Any
-                Result of the operation.
-            """
-            return v.tolist() if isinstance(v, np.ndarray) else v
-
-        return {
+        payload = {
             "experiment_type": self.experiment_type,
             "experiment_id": self.experiment_id,
             "timestamp": self.timestamp.isoformat(),
-            "fit_params": _arr(self.fit_params),
-            "fit_errors": _arr(self.fit_errors),
-            "fit_result": {
-                k: (list(v) if isinstance(v, (tuple, list, np.ndarray)) else v)
-                for k, v in self.fit_result.items()
-            },
+            "raw_iq": self.raw_iq,
+            "x_axis": self.x_axis,
+            "y_axis": self.y_axis,
+            "axes": self.axes,
+            "raw_data": self.raw_data,
+            "analysis_data": self.analysis_data,
+            "fit_params": self.fit_params,
+            "fit_errors": self.fit_errors,
+            "fit_result": self.fit_result,
             "scalar_result": self.scalar_result,
             "quality": self.quality.value,
             "quality_message": self.quality_message,
             "config": self.config,
             "metadata": self.metadata,
             "parent_id": self.parent_id,
+            "children": self.children,
             "x_name": self.x_name,
             "x_unit": self.x_unit,
             "x_scale": self.x_scale,
@@ -291,6 +311,7 @@ class ExperimentData:
             "session_id": self.session_id,
             "dataset_dims": self.dataset_dims,
         }
+        return _json_value(payload)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentData":
@@ -306,10 +327,17 @@ class ExperimentData:
         'ExperimentData'
             Result of the operation.
         """
+        d = _restore_json_value(d)
         obj = cls(
             experiment_type=d.get("experiment_type", ""),
             experiment_id=d.get("experiment_id") or _new_experiment_id(),
             timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(timezone.utc),
+            raw_iq=np.asarray(d["raw_iq"]) if isinstance(d.get("raw_iq"), list) else d.get("raw_iq"),
+            x_axis=np.asarray(d["x_axis"]) if d.get("x_axis") is not None else None,
+            y_axis=np.asarray(d["y_axis"]) if d.get("y_axis") is not None else None,
+            axes=d.get("axes", {}),
+            raw_data=d.get("raw_data", {}),
+            analysis_data=d.get("analysis_data", {}),
             fit_params=np.array(d["fit_params"]) if d.get("fit_params") is not None else None,
             fit_errors=np.array(d["fit_errors"]) if d.get("fit_errors") is not None else None,
             fit_result=d.get("fit_result", {}),
@@ -319,6 +347,7 @@ class ExperimentData:
             config=d.get("config", {}),
             metadata=d.get("metadata", {}),
             parent_id=d.get("parent_id"),
+            children=d.get("children", []),
             x_name=d.get("x_name", ""),
             x_unit=d.get("x_unit", ""),
             x_scale=d.get("x_scale", 1.0),

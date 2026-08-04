@@ -340,7 +340,8 @@ def trace(
     fit = None
     try:
         fit_values, fit_dims = _read_dataset(path, "analysis", "fit_curve")
-        fit = _one_dimensional(np.asarray(fit_values, dtype=float))
+        fit_values, _ = _numeric_channel(np.asarray(fit_values), actual_channel)
+        fit = _one_dimensional(fit_values)
         if fit.size != y.size or (fit_dims and dims and fit_dims[-1] != dims[-1]):
             fit = None
     except (KeyError, ValueError, TypeError):

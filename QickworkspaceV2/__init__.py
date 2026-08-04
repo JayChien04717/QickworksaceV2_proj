@@ -29,10 +29,6 @@ Quick start
     auto.run()
     auto.summary()
 
-    # --- REST service ---
-    from .service import create_app
-    app = create_app(cal_store=store, config_all=cfg_all)
-    # uvicorn .service.api:app --host 0.0.0.0 --port 8000
 """
 
 from .core.experiment_data import ExperimentData, QualityFlag

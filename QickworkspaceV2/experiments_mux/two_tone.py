@@ -9,7 +9,8 @@ import numpy as np
 from qick.asm_v2 import AveragerProgramV2, QickSweep1D
 
 from ..core.base_experiment import BaseExperiment
-from ..core.experiment_data import ExperimentData, QualityFlag
+from ..core.experiment_data import ExperimentData
+from ._common import fit_quality, fit_snr, project_iq
 
 
 class MuxTwoToneProgram(AveragerProgramV2):
@@ -299,6 +300,10 @@ class MuxTwoTone(BaseExperiment):
             plt.show()
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
+        model_fit_count = sum(method == "lorentzian" for method in fit_method.values())
+        quality, quality_message = fit_quality(
+            has_data, model_fit_count, trace_count, "Mux two-tone"
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
@@ -317,10 +322,8 @@ class MuxTwoTone(BaseExperiment):
                 "points_acquired": int(cfg["steps"]) if has_data else 0,
             },
             figures=figures,
-            quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux two-tone acquired."
-            if has_data
-            else "No data acquired.",
+            quality=quality,
+            quality_message=quality_message,
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,
@@ -352,7 +355,7 @@ class MuxTwoTone(BaseExperiment):
             If the operation cannot be completed.
         """
         try:
-            from ..tools.fitting import fitlor
+            from ..tools.fitting import fitlor, lorfunc
 
             popt, pcov, _ = fitlor(freq_axis_mhz, trace)
             f0 = float(popt[2])
@@ -362,6 +365,8 @@ class MuxTwoTone(BaseExperiment):
                 or f0 > np.max(freq_axis_mhz)
             ):
                 raise RuntimeError("Lorentzian fit returned invalid f0")
+            if fit_snr(trace, lorfunc(freq_axis_mhz, *popt)) < 3.0:
+                raise RuntimeError("Lorentzian fit has insufficient SNR")
             return f0, "lorentzian"
         except Exception:
             min_idx = int(np.argmin(trace))
@@ -388,14 +393,7 @@ class MuxTwoTone(BaseExperiment):
         Any
             Result of the operation.
         """
-        iq_process = (iq_process or "abs").lower()
-        if iq_process in {"real", "i", "avgi"}:
-            return np.real(iqdata)
-        if iq_process in {"imag", "q", "avgq"}:
-            return np.imag(iqdata)
-        if iq_process == "phase":
-            return np.unwrap(np.angle(iqdata), axis=-1)
-        return np.abs(iqdata)
+        return project_iq(iqdata, iq_process)
 
 
 __all__ = ["MuxTwoTone", "MuxTwoToneProgram"]

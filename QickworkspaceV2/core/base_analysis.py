@@ -83,6 +83,78 @@ class BaseAnalysis(ABC):
         """
         pass
 
+    def render(self, data: "ExperimentData") -> None:
+        """Render analysis output, falling back to raw IQ when fitting failed.
+
+        A fit that completed but failed a quality threshold still goes through
+        :meth:`plot`, so users can inspect both the measured data and its poor
+        fit. The raw-only fallback is reserved for a genuine fitting failure:
+        BAD quality, no fit parameters, and no fit result.
+        """
+        from .experiment_data import QualityFlag
+
+        fit_failed = (
+            data.quality is QualityFlag.BAD
+            and data.fit_params is None
+            and not data.fit_result
+        )
+        if fit_failed:
+            self._show_raw(data)
+            return
+        self.plot(data)
+
+    def _show_raw(
+        self,
+        data: "ExperimentData",
+        *,
+        xlabel: Optional[str] = None,
+    ) -> None:
+        """Show a raw-IQ dashboard with the fitting failure reason."""
+        from ..plotter.plot_utils import plot_fit_result
+
+        trace = self._raw_plot_trace(data)
+        if trace is None:
+            return
+
+        x, raw_iq, reduced = trace
+        message = data.quality_message or "Fit failed; showing raw data."
+        if reduced:
+            message = f"{message}\n{reduced}"
+        if xlabel is None:
+            xlabel = data.x_name or "x"
+            if data.x_unit:
+                xlabel = f"{xlabel} ({data.x_unit})"
+        plot_fit_result(
+            x,
+            raw_iq,
+            lambda values, *_: np.zeros_like(values, dtype=float),
+            None,
+            x_label=xlabel,
+            title=f"{data.experiment_type or 'Analysis'} | Raw data (fit failed)",
+            result_text=message,
+            quality=data.quality.value,
+            fit_channel=data.metadata.get("fit_channel", "abs"),
+        )
+
+    @staticmethod
+    def _raw_plot_trace(data: "ExperimentData"):
+        """Return ``(x, iq, note)`` suitable for a one-dimensional raw plot."""
+        if data.x_axis is None or data.raw_iq is None:
+            return None
+
+        x = np.asarray(data.x_axis).reshape(-1)
+        iq = np.asarray(data.raw_iq)
+        if iq.ndim == 1 and iq.size == x.size:
+            return x, iq, ""
+        if iq.size == x.size:
+            return x, iq.reshape(-1), ""
+        if iq.ndim > 1 and iq.shape[-1] == x.size:
+            rows = iq.reshape(-1, x.size)
+            return x, np.nanmean(rows, axis=0), (
+                f"Raw IQ averaged over {rows.shape[0]} traces for display."
+            )
+        return None
+
 
     @staticmethod
     def _config_value(data: "ExperimentData", key: str, default=None):
@@ -235,7 +307,9 @@ class BaseAnalysis(ABC):
         if data.x_axis is None or data.raw_iq is None:
             raise ValueError("Missing x_axis or raw_iq")
 
-        requested = str(data.config.get("fit_channel", "auto")).lower()
+        requested_value = self._config_value(data, "fit_channel", "auto")
+        requested = requested_value.lower() if isinstance(requested_value, str) else "auto"
+        requested = requested or "auto"
         if requested == "auto":
             channels = channels or ("abs", "real", "imag", "phase")
         else:

@@ -38,7 +38,6 @@ QickworkspaceV2/
   experiments_mux/   Multiplexed-readout experiments
   instruments/       PyVISA drivers and instrument manager
   plotter/           Live plotting and plot utilities
-  service/           Experimental FastAPI REST service
   tools/             Configuration, fitting, data, scoring, and RF helpers
 
 example/             Example data and viewer scripts
@@ -314,25 +313,6 @@ result = expt.run(
 
 See [`QickworkspaceV2/instruments/README.md`](QickworkspaceV2/instruments/README.md)
 for driver and manager details.
-
-## REST service status
-
-The FastAPI layer exposes an experiment catalog, job endpoints, calibration
-store endpoints, and an auto-calibration endpoint:
-
-```bash
-uvicorn QickworkspaceV2.service.api:app --host 0.0.0.0 --port 8000
-```
-
-The module-level default app is created without `CalibrationStore` or
-`ExperimentConfig`, so calibration endpoints return `503` until an application
-is created with `create_app(cal_store=..., config_all=...)`. Experiment jobs
-also require a `BaseExperiment` hardware session in the service process.
-
-The service is currently experimental: completed experiment jobs reference a
-serializer module that is not present in this repository, job state is
-in-memory only, and there is no hardware queue/cancellation API. Use the Python
-API for production measurements until those gaps are resolved.
 
 ## Development and validation
 

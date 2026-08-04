@@ -11,7 +11,8 @@ from qick.asm_v2 import AveragerProgramV2
 from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
-from ..core.experiment_data import ExperimentData, QualityFlag
+from ..core.experiment_data import ExperimentData
+from ._common import fit_quality, fit_snr, project_iq
 
 
 class MuxOneToneProgram(AveragerProgramV2):
@@ -362,6 +363,10 @@ class MuxOneTone(BaseExperiment):
                 plt.close(final_fig)
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
+        model_fit_count = sum(method == "lorentzian" for method in fit_method.values())
+        quality, quality_message = fit_quality(
+            has_data, model_fit_count, trace_count, "Mux one-tone"
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
@@ -379,10 +384,8 @@ class MuxOneTone(BaseExperiment):
                 "LO_ext": cfg0.get("LO_ext"),
             },
             figures=figures,
-            quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux one-tone acquired."
-            if has_data
-            else "No data acquired.",
+            quality=quality,
+            quality_message=quality_message,
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,
@@ -408,8 +411,21 @@ class MuxOneTone(BaseExperiment):
         Any
             Result of the operation.
         """
-        idx = int(np.nanargmin(plot_trace))
-        return float(np.asarray(freq_axis_mhz, dtype=float)[idx]), "mag_min"
+        frequency = np.asarray(freq_axis_mhz, dtype=float)
+        trace = np.asarray(plot_trace, dtype=float)
+        try:
+            from ..tools.fitting import fitlor, lorfunc
+
+            popt, _, _ = fitlor(frequency, trace)
+            f0 = float(popt[2])
+            if not np.isfinite(f0) or not frequency.min() <= f0 <= frequency.max():
+                raise RuntimeError("Lorentzian fit returned invalid f0")
+            if fit_snr(trace, lorfunc(frequency, *popt)) < 3.0:
+                raise RuntimeError("Lorentzian fit has insufficient SNR")
+            return f0, "lorentzian"
+        except (RuntimeError, ValueError, FloatingPointError):
+            idx = int(np.nanargmin(trace))
+            return float(frequency[idx]), "mag_min"
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
@@ -427,14 +443,7 @@ class MuxOneTone(BaseExperiment):
         Any
             Result of the operation.
         """
-        iq_process = (iq_process or "abs").lower()
-        if iq_process in {"real", "i", "avgi"}:
-            return np.real(iqdata)
-        if iq_process in {"imag", "q", "avgq"}:
-            return np.imag(iqdata)
-        if iq_process == "phase":
-            return np.unwrap(np.angle(iqdata), axis=-1)
-        return np.abs(iqdata)
+        return project_iq(iqdata, iq_process)
 
 
 __all__ = ["MuxOneTone", "MuxOneToneProgram"]

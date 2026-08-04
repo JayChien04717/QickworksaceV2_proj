@@ -355,7 +355,8 @@ class BaseExperiment:
             analysis_inst = self.Analysis()
             result = analysis_inst.run(result)
             if ctx.plot_analysis:
-                analysis_inst.plot(result)
+                renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+                renderer(result)
             self.result = result
 
         return result
@@ -415,7 +416,8 @@ class BaseExperiment:
         analysis_inst = self.Analysis()
         result = analysis_inst.run(result)
         self.result = result
-        analysis_inst.plot(result)
+        renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+        renderer(result)
         return result
 
     def _plot_raw_result(self, result: ExperimentData) -> None:

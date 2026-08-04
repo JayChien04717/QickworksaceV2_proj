@@ -59,6 +59,11 @@ class ResonatorSpecAnalysis(BaseAnalysis):
                 "kappa_MHz": (round(kappa * 1e-6, 4), None),
             }
             data.scalar_result = f0 / 1e6  # MHz
+            data.metadata.update({"fit_model": f"abcd:{solve_type}", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": np.asarray(iq), "dims": ["x"]},
+                "fit_curve": {"values": np.asarray(fit(freqs * 1e6)), "dims": ["x"]},
+            })
 
         except Exception as exc:
             self._lorentzian_fallback(data, freqs, iq, exc)
@@ -153,9 +158,18 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             data.fit_errors = err
             data.fit_result = {
                 "f0_MHz": (popt[2], err[2]),
-                "kappa_MHz": (abs(popt[1]), err[1]),
+                "kappa_MHz": (2 * abs(popt[3]), 2 * err[3]),
             }
             data.scalar_result = popt[2]
+            from ..tools.fitting import lorfunc
+
+            fit_curve = lorfunc(freqs, *popt)
+            data.metadata.update({"fit_model": "lorentzian", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": np.abs(iq), "dims": ["x"]},
+                "fit_curve": {"values": np.asarray(fit_curve), "dims": ["x"]},
+                "residual": {"values": np.abs(iq) - fit_curve, "dims": ["x"]},
+            })
             data.quality_message = (
                 f"circle fit failed ({original_exc}); used Lorentzian"
             )
@@ -278,6 +292,7 @@ class LorentzianAnalysis(BaseAnalysis):
 
     thresholds = {
         "linewidth_MHz": {"max": 100.0},
+        "fit_channel_snr": {"min": 3.0},
     }
 
     def _run(self, data: ExperimentData) -> None:
@@ -301,8 +316,9 @@ class LorentzianAnalysis(BaseAnalysis):
             data.fit_errors = err
             data.fit_result = {
                 "f0_MHz": (popt[2], err[2]),
-                "linewidth_MHz": (abs(popt[1]), err[1]),
-                "amplitude": (popt[0], err[0]),
+                "linewidth_MHz": (2 * abs(popt[3]), 2 * err[3]),
+                "amplitude": (popt[1], err[1]),
+                "offset": (popt[0], err[0]),
                 "fit_channel": (channel, None),
                 "fit_channel_snr": (score, None),
             }
@@ -319,9 +335,17 @@ class LorentzianAnalysis(BaseAnalysis):
         data : ExperimentData
             Input data to process.
         """
-        if data.fit_params is None:
-            return
         from ..tools.fitting import lorfunc
+        if data.fit_params is None:
+            self._show_fit(
+                data,
+                lorfunc,
+                None,
+                xlabel="Frequency (MHz)",
+                title="Qubit Spectroscopy | Fit unavailable",
+                result_text=data.quality_message or "Lorentzian fit unavailable",
+            )
+            return
         f0    = data.fit_result.get("f0_MHz",        (None,))[0]
         kappa = data.fit_result.get("linewidth_MHz",  (None,))[0]
         title = "Qubit Spectroscopy"

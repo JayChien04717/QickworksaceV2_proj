@@ -6,7 +6,11 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+import tempfile
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from threading import RLock
 from typing import Any
 
 import numpy as np
@@ -63,6 +67,7 @@ class CalibrationStore:
         self._path = path
         self._default_max_age = timedelta(hours=default_max_age_hours)
         self._store: dict[str, dict[str, Any]] = {}
+        self._lock = RLock()
         self._load()
 
 
@@ -70,16 +75,31 @@ class CalibrationStore:
         """Return the load result."""
         if os.path.exists(self._path):
             try:
-                with open(self._path, "r") as f:
+                with open(self._path, "r", encoding="utf-8") as f:
                     self._store = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                self._store = {}
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Calibration store is not valid JSON: {self._path}") from exc
 
     def save(self):
         """Flush the in-memory store to disk."""
-        os.makedirs(os.path.dirname(os.path.abspath(self._path)), exist_ok=True)
-        with open(self._path, "w") as f:
-            json.dump(self._store, f, indent=2, cls=_NumpyEncoder)
+        path = Path(self._path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock:
+            descriptor, temporary = tempfile.mkstemp(
+                prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+            )
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                    json.dump(self._store, stream, indent=2, cls=_NumpyEncoder)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, path)
+            except Exception:
+                try:
+                    os.unlink(temporary)
+                except OSError:
+                    pass
+                raise
 
 
     def set(self, qubit: str, key: str, value: Any, *, autosave: bool = True):
@@ -96,14 +116,15 @@ class CalibrationStore:
         autosave : bool, default: True
             Value for ``autosave``.
         """
-        if qubit not in self._store:
-            self._store[qubit] = {}
-        self._store[qubit][key] = {
-            "value": value if not isinstance(value, np.ndarray) else value.tolist(),
-            "timestamp": datetime.now().isoformat(),
-        }
-        if autosave:
-            self.save()
+        with self._lock:
+            if qubit not in self._store:
+                self._store[qubit] = {}
+            self._store[qubit][key] = {
+                "value": value if not isinstance(value, np.ndarray) else value.tolist(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            if autosave:
+                self.save()
 
     def get(self, qubit: str, key: str, default: Any = None) -> Any:
         """Retrieve the stored value (without timestamp metadata).
@@ -123,7 +144,8 @@ class CalibrationStore:
             Result of the operation.
         """
         try:
-            return self._store[qubit][key]["value"]
+            with self._lock:
+                return deepcopy(self._store[qubit][key]["value"])
         except KeyError:
             return default
 
@@ -143,7 +165,8 @@ class CalibrationStore:
             Result of the operation.
         """
         try:
-            return self._store[qubit][key]
+            with self._lock:
+                return deepcopy(self._store[qubit][key])
         except KeyError:
             return None
 
@@ -191,7 +214,9 @@ class CalibrationStore:
         if ts is None:
             return True
         threshold = timedelta(hours=max_age_hours) if max_age_hours is not None else self._default_max_age
-        return datetime.now() - ts > threshold
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - ts > threshold
 
     def all_keys(self, qubit: str) -> list[str]:
         """Return all parameter keys stored for *qubit*.
@@ -262,10 +287,11 @@ class CalibrationStore:
         autosave : bool, default: True
             Value for ``autosave``.
         """
-        for key, value in params.items():
-            self.set(qubit, key, value, autosave=False)
-        if autosave:
-            self.save()
+        with self._lock:
+            for key, value in params.items():
+                self.set(qubit, key, value, autosave=False)
+            if autosave:
+                self.save()
 
     def to_flat_dict(self, qubit: str) -> dict[str, Any]:
         """Return all values for *qubit* as a plain ``{key: value}`` dict.

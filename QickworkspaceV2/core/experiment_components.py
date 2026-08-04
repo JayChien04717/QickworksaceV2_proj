@@ -372,13 +372,16 @@ class ResultBuilder:
             Result of the operation.
         """
         metadata = {"iq_process": ctx.iq_process, **acq.metadata}
-        required_keys = getattr(experiment.Analysis, "REQUIRED_CONFIG_KEYS", ())
+        required_keys = dict.fromkeys((
+            "fit_channel",
+            *getattr(experiment.Analysis, "REQUIRED_CONFIG_KEYS", ()),
+        ))
         if required_keys:
             analysis_context = dict(metadata.get("analysis_context", {}))
             for key in required_keys:
                 try:
-                    value = experiment.cfg[key]
-                except (KeyError, IndexError, TypeError):
+                    value = experiment.cfg.get(key)
+                except (AttributeError, TypeError):
                     continue
                 if value is not None:
                     analysis_context[key] = value
@@ -406,8 +409,24 @@ class ResultBuilder:
         if not result.fit_result and result.fit_params is not None:
             result.fit_result = experiment._build_fit_result()
         raw = np.asarray(acq.raw_iq)
-        if axes.y is not None and raw.ndim >= 2:
-            result.dataset_dims["iq"] = ["y", "x"]
-        elif axes.x is not None and raw.ndim == 1:
-            result.dataset_dims["iq"] = ["x"]
+        result.dataset_dims["iq"] = _infer_iq_dims(raw.shape, axes)
         return result
+
+
+def _infer_iq_dims(shape: tuple[int, ...], axes: SweepAxes) -> list[str]:
+    """Infer names without claiming fewer dimensions than the data has."""
+    rank = len(shape)
+    if rank == 0:
+        return []
+    if axes.y is not None and rank >= 2:
+        trailing = ["y", "x"]
+    elif axes.x is not None:
+        trailing = ["x"]
+    else:
+        trailing = []
+    leading_count = rank - len(trailing)
+    leading = [
+        "readout" if leading_count == 1 else f"dim_{index}"
+        for index in range(leading_count)
+    ]
+    return [*leading, *trailing]

@@ -49,21 +49,21 @@ class AcquisitionRunnerTests(unittest.TestCase):
         prog = Mock()
         prog.acquire.return_value = [[np.array([[1.0, 2.0], [3.0, 4.0]])]]
         module_name = "QickworkspaceV2.plotter.liveplot"
-        sys.modules.pop(module_name, None)
-
-        result = runner.acquire(
-            _Experiment(),
-            prog,
-            SweepAxes(x=np.array([0.0, 1.0]), y=None),
-            _context(liveplot=False, py_avg=7),
-        )
+        with patch.dict(sys.modules):
+            sys.modules.pop(module_name, None)
+            result = runner.acquire(
+                _Experiment(),
+                prog,
+                SweepAxes(x=np.array([0.0, 1.0]), y=None),
+                _context(liveplot=False, py_avg=7),
+            )
+            self.assertNotIn(module_name, sys.modules)
 
         prog.acquire.assert_called_once_with(
             _Experiment.soc, rounds=7, progress=True
         )
         np.testing.assert_array_equal(result.raw_iq, np.array([1 + 2j, 3 + 4j]))
         self.assertEqual(result.avg_count, 7)
-        self.assertNotIn(module_name, sys.modules)
 
     def test_liveplot_true_keeps_liveplot_path(self):
         runner = AcquisitionRunner()

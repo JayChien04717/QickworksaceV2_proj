@@ -25,8 +25,6 @@ experiments/ → core/ → QICK/Pyro4 hardware
            analysis/ + tools/ + plotter/
                 ↓
           calibration/ (store, graph, pipeline)
-                ↓
-           service/ (FastAPI REST)
 ```
 
 ### Core Run/Fit/Save Flow
@@ -98,13 +96,3 @@ Never use `from qick_workspace...` anywhere in `QickworkspaceV2/`. The fallback 
 3. Define `class MyExperiment(BaseExperiment)` with the class attributes above
 4. Export from `QickworkspaceV2/experiments/<family>/__init__.py`
 5. Optionally add an `Analysis` subclass in `QickworkspaceV2/analysis/`
-
-### REST Service
-
-```bash
-uvicorn QickworkspaceV2.service.api:app --host 0.0.0.0 --port 8000
-```
-
-Jobs run async in background threads. Key endpoints: `POST /experiments/run`, `GET /experiments/{id}/result`, `POST /calibrate/{qubit}/run`.
-
-The service is experimental: the default app has no calibration store/config, job state is in-memory, there is no hardware queue/cancellation, and completed experiment jobs currently reference a missing `QickworkspaceV2.data.serializer` module.
