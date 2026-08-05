@@ -9,6 +9,18 @@ cm = 1/2.54  # centimeters in inches
 column_width = 12.4*cm
 
 def get_ax_ratio(ax):
+    """Return ax ratio.
+
+    Parameters
+    ----------
+    ax : Any
+        Matplotlib axes on which to draw.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     bbox = ax.get_window_extent().transformed(ax.get_figure().dpi_scale_trans.inverted())
     screen_width, screen_height = bbox.width, bbox.height
     
@@ -27,6 +39,34 @@ def grid_spec_inches(fig,
                  wspace=0.2*cm,
                  hspace=0.2*cm):
     
+    """Return the grid spec inches result.
+
+    Parameters
+    ----------
+    fig : Any
+        Matplotlib figure to update.
+    width_ratios : Any, default: (1,)
+        Value for ``width_ratios``.
+    height_ratios : Any, default: (1,)
+        Value for ``height_ratios``.
+    left : Any, default: 1.2 * cm
+        Value for ``left``.
+    right : Any, default: 1.2 * cm
+        Value for ``right``.
+    bottom : Any, default: 1.2 * cm
+        Value for ``bottom``.
+    top : Any, default: 0.0
+        Value for ``top``.
+    wspace : Any, default: 0.2 * cm
+        Value for ``wspace``.
+    hspace : Any, default: 0.2 * cm
+        Value for ``hspace``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if type(width_ratios) in (int, float):
         width_ratios = [width_ratios]
     if type(height_ratios) in (int, float):
@@ -57,6 +97,17 @@ def grid_spec_inches(fig,
                             hspace=hspace)
 
 def format_fig(fig, ignored_axes=None, cbar_axes = None):
+    """Format fig.
+
+    Parameters
+    ----------
+    fig : Any
+        Matplotlib figure to update.
+    ignored_axes : Any, default: None
+        Value for ``ignored_axes``.
+    cbar_axes : Any, default: None
+        Value for ``cbar_axes``.
+    """
     if ignored_axes is None:
         ignored_axes = []
     if cbar_axes is None:
@@ -93,6 +144,41 @@ def plot(
     title=None,
 ):
 
+    """Plot the operation.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    fit : Any, default: None
+        Value for ``fit``.
+    fig : Any, default: None
+        Matplotlib figure to update.
+    params : Any, default: None
+        Value for ``params``.
+    fit_params : Any, default: None
+        Value for ``fit_params``.
+    plot_not_corrected : Any, default: True
+        Value for ``plot_not_corrected``.
+    font_size : Any, default: None
+        Value for ``font_size``.
+    plot_circle : Any, default: True
+        Value for ``plot_circle``.
+    center_freq : Any, default: False
+        Value for ``center_freq``.
+    only_f_and_kappa : Any, default: False
+        Value for ``only_f_and_kappa``.
+    precision : Any, default: 2
+        Value for ``precision``.
+    alpha_fit : Any, default: 1.0
+        Value for ``alpha_fit``.
+    style : Any, default: 'Normal'
+        Value for ``style``.
+    title : Any, default: None
+        Value for ``title``.
+    """
     if fit_params is not None and fit_params.edelay is not None:
         corrected_signal = signal * np.exp(-2j * np.pi * freq * fit_params.edelay)
         if fit is not None:

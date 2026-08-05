@@ -18,6 +18,18 @@ class MuxTOFProgram(AveragerProgramV2):
     """QICK program for mux TOF acquire_decimated measurements."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = cfg.get("active_ro_chs", cfg.get("ro_chs"))
         active_slots = cfg.get("active_slots", list(range(len(ro_chs))))
@@ -52,6 +64,13 @@ class MuxTOFProgram(AveragerProgramV2):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         trigger_chs = cfg.get("trigger_ro_chs", cfg.get("active_ro_chs", cfg["ro_chs"]))
         self.trigger(ros=trigger_chs, pins=[0], t=0, ddr4=False)
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
@@ -70,11 +89,25 @@ class MuxTOF(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     def __init__(self, config):
+        """Initialize the MuxTOF instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.iq_list = None
         self.t = None
 
     def _normalized_cfg(self):
+        """Normalize d cfg.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         if "ro_len" not in cfg and "ro_length" in cfg:
             cfg["ro_len"] = cfg["ro_length"]
@@ -87,6 +120,13 @@ class MuxTOF(BaseExperiment):
         return cfg
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = self._normalized_cfg()
         return MuxTOFProgram(
             self.soccfg,
@@ -96,12 +136,54 @@ class MuxTOF(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_time_axis(ro_index=0)
 
     def run(self, py_avg=1, **kwargs) -> ExperimentData:
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         return self.liveplot(py_avg=py_avg, **kwargs)
 
     def liveplot(self, py_avg=1, threshold=1.5, plot=True) -> ExperimentData:
+        """Update the live experiment plot.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        threshold : Any, default: 1.5
+            Value for ``threshold``.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         cfg = self._normalized_cfg()
         prog = self._create_program()
         self._last_prog = prog

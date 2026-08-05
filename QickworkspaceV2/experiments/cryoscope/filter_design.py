@@ -51,7 +51,18 @@ class InverseIIRDesign:
 
 
 def as_complex_iq(iq) -> np.ndarray:
-    """Accept complex IQ or QICK's final ``[..., I, Q]`` representation."""
+    """Accept complex IQ or QICK's final ``[..., I, Q]`` representation.
+
+    Parameters
+    ----------
+    iq : Any
+        Value for ``iq``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     values = np.asarray(iq)
     if np.iscomplexobj(values):
@@ -62,7 +73,27 @@ def as_complex_iq(iq) -> np.ndarray:
 
 
 def project_iq_to_expectation(iq, iq_ground: complex, iq_excited: complex) -> np.ndarray:
-    """Project resonator IQ onto the calibrated g-e axis and return <sigma_z>."""
+    """Project resonator IQ onto the calibrated g-e axis and return <sigma_z>.
+
+    Parameters
+    ----------
+    iq : Any
+        Value for ``iq``.
+    iq_ground : complex
+        Value for ``iq_ground``.
+    iq_excited : complex
+        Value for ``iq_excited``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
 
     iq = as_complex_iq(iq)
     calibration_vector = complex(iq_excited) - complex(iq_ground)
@@ -77,8 +108,23 @@ def project_iq_to_expectation(iq, iq_ground: complex, iq_excited: complex) -> np
 def merge_xy_segments(*segments):
     """Merge ``(time_ns, x, y)`` segments and average duplicate time points.
 
-    A normal workflow passes the zero reference, zero-padded short points, and
-    the longer const sweep as three segments.
+            A normal workflow passes the zero reference, zero-padded short points, and
+            the longer const sweep as three segments.
+
+    Parameters
+    ----------
+    *segments : Any
+        Value for ``segments``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     if not segments:
@@ -115,6 +161,27 @@ def merge_xy_segments(*segments):
 
 
 def _odd_window(requested: int, length: int, polyorder: int) -> int:
+    """Return the odd window result.
+
+    Parameters
+    ----------
+    requested : int
+        Value for ``requested``.
+    length : int
+        Value for ``length``.
+    polyorder : int
+        Value for ``polyorder``.
+
+    Returns
+    -------
+    int
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     window = min(int(requested), length if length % 2 else length - 1)
     minimum = polyorder + 2
     if minimum % 2 == 0:
@@ -136,8 +203,33 @@ def trace_from_xy(
 ) -> CryoscopeTrace:
     """Convert Bloch X/Y traces into phase, detuning, and a unit step response.
 
-    ``x`` and ``y`` are expectation-value traces, not raw resonator IQ.  Use
-    :func:`project_iq_to_expectation` first when starting from QICK IQ data.
+            ``x`` and ``y`` are expectation-value traces, not raw resonator IQ.  Use
+            :func:`project_iq_to_expectation` first when starting from QICK IQ data.
+
+    Parameters
+    ----------
+    time_ns : Any
+        Value for ``time_ns``.
+    x : Any
+        Independent-variable values.
+    y : Any
+        Dependent-variable values.
+    smooth_window : int, default: 15
+        Value for ``smooth_window``.
+    polyorder : int, default: 3
+        Value for ``polyorder``.
+    tail_points : int, default: 10
+        Value for ``tail_points``.
+
+    Returns
+    -------
+    CryoscopeTrace
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     time_ns = np.asarray(time_ns, dtype=float)
@@ -175,9 +267,28 @@ def trace_from_xy(
 def normalize_step_response(step_response, *, head_points=0, tail_points=10) -> np.ndarray:
     """Scale a step response to one, optionally removing pre-step baseline.
 
-    The default assumes the caller already supplied a zero-referenced response,
-    as :func:`trace_from_xy` does.  Set ``head_points`` to the number of known
-    pre-step samples when a baseline still needs to be removed.
+            The default assumes the caller already supplied a zero-referenced response,
+            as :func:`trace_from_xy` does.  Set ``head_points`` to the number of known
+            pre-step samples when a baseline still needs to be removed.
+
+    Parameters
+    ----------
+    step_response : Any
+        Value for ``step_response``.
+    head_points : Any, default: 0
+        Value for ``head_points``.
+    tail_points : Any, default: 10
+        Value for ``tail_points``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     step = np.asarray(step_response, dtype=float)
@@ -194,7 +305,18 @@ def normalize_step_response(step_response, *, head_points=0, tail_points=10) -> 
 
 
 def impulse_from_step(step_response) -> np.ndarray:
-    """Convert a normalized discrete step response into an impulse response."""
+    """Convert a normalized discrete step response into an impulse response.
+
+    Parameters
+    ----------
+    step_response : Any
+        Value for ``step_response``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     step = normalize_step_response(step_response)
     return np.diff(step, prepend=0.0)
@@ -211,9 +333,34 @@ def design_inverse_fir(
 ) -> InverseFIRDesign:
     """Design a causal regularized FIR inverse by least squares.
 
-    The convolution of the measured line impulse with the returned taps is
-    fitted to a delayed unit impulse.  The delay makes a causal approximation
-    possible; the two regularizers prevent noisy, alternating large taps.
+            The convolution of the measured line impulse with the returned taps is
+            fitted to a delayed unit impulse.  The delay makes a causal approximation
+            possible; the two regularizers prevent noisy, alternating large taps.
+
+    Parameters
+    ----------
+    step_response : Any
+        Value for ``step_response``.
+    taps : int, default: 64
+        Value for ``taps``.
+    delay_samples : int | None, default: None
+        Value for ``delay_samples``.
+    regularization : float, default: 0.001
+        Value for ``regularization``.
+    smoothness : float, default: 0.01
+        Value for ``smoothness``.
+    impulse_samples : int | None, default: None
+        Value for ``impulse_samples``.
+
+    Returns
+    -------
+    InverseFIRDesign
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     taps = int(taps)
@@ -265,9 +412,32 @@ def fit_inverse_iir(
 ) -> InverseIIRDesign:
     """Fit an ARX line model to a measured step and invert its coefficients.
 
-    Exact IIR inversion is safe only for a minimum-phase fitted line.  When a
-    fitted line has a zero on or outside the unit circle, its inverse has an
-    unstable pole and this function raises unless ``allow_unstable=True``.
+            Exact IIR inversion is safe only for a minimum-phase fitted line.  When a
+            fitted line has a zero on or outside the unit circle, its inverse has an
+            unstable pole and this function raises unless ``allow_unstable=True``.
+
+    Parameters
+    ----------
+    step_response : Any
+        Value for ``step_response``.
+    numerator_order : int, default: 1
+        Value for ``numerator_order``.
+    denominator_order : int, default: 2
+        Value for ``denominator_order``.
+    ridge : float, default: 1e-08
+        Value for ``ridge``.
+    allow_unstable : bool, default: False
+        Value for ``allow_unstable``.
+
+    Returns
+    -------
+    InverseIIRDesign
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     step = normalize_step_response(step_response)
@@ -320,7 +490,22 @@ def fit_inverse_iir(
 
 
 def apply_inverse_fir(target, design: InverseFIRDesign, *, keep_tail=True) -> np.ndarray:
-    """Apply a designed FIR inverse to an ideal normalized flux waveform."""
+    """Apply a designed FIR inverse to an ideal normalized flux waveform.
+
+    Parameters
+    ----------
+    target : Any
+        Value for ``target``.
+    design : InverseFIRDesign
+        Value for ``design``.
+    keep_tail : Any, default: True
+        Value for ``keep_tail``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     target = np.asarray(target, dtype=float)
     mode = "full" if keep_tail else "same"
@@ -328,7 +513,20 @@ def apply_inverse_fir(target, design: InverseFIRDesign, *, keep_tail=True) -> np
 
 
 def apply_inverse_iir(target, design: InverseIIRDesign) -> np.ndarray:
-    """Apply a stable exact IIR inverse to an ideal normalized waveform."""
+    """Apply a stable exact IIR inverse to an ideal normalized waveform.
+
+    Parameters
+    ----------
+    target : Any
+        Value for ``target``.
+    design : InverseIIRDesign
+        Value for ``design``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     return lfilter(design.inverse_b, design.inverse_a, np.asarray(target, dtype=float))
 
@@ -336,8 +534,25 @@ def apply_inverse_iir(target, design: InverseIIRDesign) -> np.ndarray:
 def scale_waveform(waveform, *, max_abs: float = 0.95):
     """Scale, never clip, a predistorted waveform to a requested safe peak.
 
-    Returns ``(scaled_waveform, scale_factor)``.  Multiply the intended physical
-    flux amplitude by the inverse factor when interpreting the result.
+            Returns ``(scaled_waveform, scale_factor)``.  Multiply the intended physical
+            flux amplitude by the inverse factor when interpreting the result.
+
+    Parameters
+    ----------
+    waveform : Any
+        Value for ``waveform``.
+    max_abs : float, default: 0.95
+        Value for ``max_abs``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     waveform = np.asarray(waveform, dtype=float)
@@ -351,7 +566,20 @@ def scale_waveform(waveform, *, max_abs: float = 0.95):
 
 
 def predict_corrected_output(predistorted_waveform, step_response) -> np.ndarray:
-    """Convolve a candidate waveform with the measured line impulse."""
+    """Convolve a candidate waveform with the measured line impulse.
+
+    Parameters
+    ----------
+    predistorted_waveform : Any
+        Value for ``predistorted_waveform``.
+    step_response : Any
+        Value for ``step_response``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     impulse = impulse_from_step(step_response)
     return np.convolve(np.asarray(predistorted_waveform, dtype=float), impulse)

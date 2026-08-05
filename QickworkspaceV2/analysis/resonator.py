@@ -23,6 +23,13 @@ class ResonatorSpecAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
@@ -52,12 +59,23 @@ class ResonatorSpecAnalysis(BaseAnalysis):
                 "kappa_MHz": (round(kappa * 1e-6, 4), None),
             }
             data.scalar_result = f0 / 1e6  # MHz
+            data.metadata.update({"fit_model": f"abcd:{solve_type}", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": np.asarray(iq), "dims": ["x"]},
+                "fit_curve": {"values": np.asarray(fit(freqs * 1e6)), "dims": ["x"]},
+            })
 
         except Exception as exc:
-            # Fall back to Lorentzian
             self._lorentzian_fallback(data, freqs, iq, exc)
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         import matplotlib.pyplot as plt
 
         if data.x_axis is None or data.raw_iq is None:
@@ -73,7 +91,6 @@ class ResonatorSpecAnalysis(BaseAnalysis):
         if f0:    title += f"  |  f_res = {f0:.4f} MHz"
         if kappa: title += f",  κ = {kappa:.3f} MHz"
 
-        # ── Preferred: native ABCD circle-fit plot ────────────────────────────
         # Lorentzian fallback (data.fit_params set) → use our standard panel
         if data.fit_params is None:
             try:
@@ -93,7 +110,6 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             except Exception:
                 pass  # fall through to Lorentzian panel
 
-        # ── Fallback: standard Lorentzian 2×3 panel ──────────────────────────
         from ..tools.fitting import lorfunc
 
         if data.fit_params is not None:
@@ -120,7 +136,19 @@ class ResonatorSpecAnalysis(BaseAnalysis):
         )
 
     def _lorentzian_fallback(self, data, freqs, iq, original_exc):
-        """Fit a Lorentzian if circle fit fails."""
+        """Fit a Lorentzian if circle fit fails.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+        freqs : Any
+            Value for ``freqs``.
+        iq : Any
+            Value for ``iq``.
+        original_exc : Any
+            Value for ``original_exc``.
+        """
         try:
             from ..tools.fitting import fitlor
 
@@ -130,9 +158,18 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             data.fit_errors = err
             data.fit_result = {
                 "f0_MHz": (popt[2], err[2]),
-                "kappa_MHz": (abs(popt[1]), err[1]),
+                "kappa_MHz": (2 * abs(popt[3]), 2 * err[3]),
             }
             data.scalar_result = popt[2]
+            from ..tools.fitting import lorfunc
+
+            fit_curve = lorfunc(freqs, *popt)
+            data.metadata.update({"fit_model": "lorentzian", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": np.abs(iq), "dims": ["x"]},
+                "fit_curve": {"values": np.asarray(fit_curve), "dims": ["x"]},
+                "residual": {"values": np.abs(iq) - fit_curve, "dims": ["x"]},
+            })
             data.quality_message = (
                 f"circle fit failed ({original_exc}); used Lorentzian"
             )
@@ -147,6 +184,13 @@ class DispersiveShiftAnalysis(BaseAnalysis):
     thresholds = {}
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         traces = np.asarray(data.raw_iq)
         if data.x_axis is None or traces.ndim < 2 or traces.shape[0] != 2:
             data.quality = QualityFlag.BAD
@@ -192,6 +236,13 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         data.scalar_result = shift / 2
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         import matplotlib.pyplot as plt
 
         traces = np.asarray(data.raw_iq)
@@ -225,6 +276,13 @@ class ResonatorPunchoutAnalysis(BaseAnalysis):
 
     def _run(self, data: ExperimentData) -> None:
         # Punchout is primarily visual; store the 2D array summary
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.raw_iq is not None:
             data.fit_result = {"status": ("punchout_acquired", None)}
 
@@ -234,9 +292,17 @@ class LorentzianAnalysis(BaseAnalysis):
 
     thresholds = {
         "linewidth_MHz": {"max": 100.0},
+        "fit_channel_snr": {"min": 3.0},
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitlor, lorfunc
@@ -250,8 +316,9 @@ class LorentzianAnalysis(BaseAnalysis):
             data.fit_errors = err
             data.fit_result = {
                 "f0_MHz": (popt[2], err[2]),
-                "linewidth_MHz": (abs(popt[1]), err[1]),
-                "amplitude": (popt[0], err[0]),
+                "linewidth_MHz": (2 * abs(popt[3]), 2 * err[3]),
+                "amplitude": (popt[1], err[1]),
+                "offset": (popt[0], err[0]),
                 "fit_channel": (channel, None),
                 "fit_channel_snr": (score, None),
             }
@@ -261,9 +328,24 @@ class LorentzianAnalysis(BaseAnalysis):
             data.quality_message = f"Lorentzian fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
-        if data.fit_params is None:
-            return
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         from ..tools.fitting import lorfunc
+        if data.fit_params is None:
+            self._show_fit(
+                data,
+                lorfunc,
+                None,
+                xlabel="Frequency (MHz)",
+                title="Qubit Spectroscopy | Fit unavailable",
+                result_text=data.quality_message or "Lorentzian fit unavailable",
+            )
+            return
         f0    = data.fit_result.get("f0_MHz",        (None,))[0]
         kappa = data.fit_result.get("linewidth_MHz",  (None,))[0]
         title = "Qubit Spectroscopy"

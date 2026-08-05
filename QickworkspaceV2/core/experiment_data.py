@@ -18,7 +18,45 @@ from typing import Any, Optional
 import numpy as np
 
 
+def _json_value(value):
+    """Recursively convert scientific Python values to JSON-native values."""
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _json_value(value.tolist())
+    if isinstance(value, np.generic):
+        return _json_value(value.item())
+    if isinstance(value, complex):
+        return {"__complex__": [value.real, value.imag]}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _restore_json_value(value):
+    """Restore values encoded by :func:`_json_value`."""
+    if isinstance(value, dict):
+        if set(value) == {"__complex__"}:
+            real, imag = value["__complex__"]
+            return complex(real, imag)
+        return {key: _restore_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_json_value(item) for item in value]
+    return value
+
+
 def _new_experiment_id() -> str:
+    """Return the new experiment id result.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     from ..tools.hdf5_store import generate_experiment_id
 
     return generate_experiment_id()
@@ -52,12 +90,10 @@ class ExperimentData:
     * ``ExperimentData.load(path)`` — HDF5 load
     """
 
-    # Identity
     experiment_type: str = ""
     experiment_id: str = field(default_factory=_new_experiment_id)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # Raw data
     raw_iq: Any = None
     x_axis: Optional[np.ndarray] = None
     y_axis: Optional[np.ndarray] = None
@@ -69,7 +105,6 @@ class ExperimentData:
     analysis_data: dict = field(default_factory=dict)
     dataset_dims: dict = field(default_factory=dict)
 
-    # Fit results (backward-compat arrays)
     fit_params: Optional[np.ndarray] = None
     fit_errors: Optional[np.ndarray] = None
 
@@ -79,10 +114,8 @@ class ExperimentData:
     # Scalar result for experiments that return a single number (e.g. frequency)
     scalar_result: Optional[float] = None
 
-    # Figures (matplotlib Figure objects)
     figures: list = field(default_factory=list)
 
-    # Quality
     quality: QualityFlag = QualityFlag.NO_INFORMATION
     quality_message: str = ""
 
@@ -99,11 +132,9 @@ class ExperimentData:
     tags: list = field(default_factory=list)
     session_id: Optional[str] = None
 
-    # Composite / lineage
     parent_id: Optional[str] = None
     children: list = field(default_factory=list)
 
-    # Axis save info
     x_name: str = ""
     x_unit: str = ""
     x_scale: float = 1.0
@@ -111,21 +142,39 @@ class ExperimentData:
     y_unit: str = ""
     y_scale: float = 1.0
 
-    # Acquisition info
     interrupted: bool = False
     avg_count: int = 0
 
-    # ── Backward-compat dunder methods ──────────────────────────────────────
 
     def __iter__(self):
-        """Support ``fit_params, error = result``."""
+        """Support ``fit_params, error = result``.
+
+        Yields
+        ------
+        Any
+            Values produced by the iterator.
+        """
         yield self.fit_params
         yield self.fit_errors
 
     def __getitem__(self, idx):
-        """
-        String key  → ``result['pi_gain']``  shortcut for ``fit_result['pi_gain'][0]``.
-        Integer idx → ``result[0]`` (fit_params), ``result[1]`` (fit_errors).
+        """String key  → ``result['pi_gain']``  shortcut for ``fit_result['pi_gain'][0]``.
+                        Integer idx → ``result[0]`` (fit_params), ``result[1]`` (fit_errors).
+
+        Parameters
+        ----------
+        idx : Any
+            Value for ``idx``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        KeyError
+            If the operation cannot be completed.
         """
         if isinstance(idx, str):
             entry = self.fit_result.get(idx)
@@ -137,7 +186,18 @@ class ExperimentData:
         return (self.fit_params, self.fit_errors)[idx]
 
     def __float__(self):
-        """Support ``freq = float(result)`` for single-value experiments."""
+        """Support ``freq = float(result)`` for single-value experiments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
+        """
         if self.scalar_result is not None:
             return float(self.scalar_result)
         if self.fit_params is not None and len(self.fit_params) > 0:
@@ -145,52 +205,96 @@ class ExperimentData:
         raise TypeError(f"ExperimentData '{self.experiment_type}' has no scalar result")
 
     def __bool__(self):
-        """True when data was acquired and fit succeeded."""
+        """True when data was acquired and fit succeeded.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.raw_iq is not None and self.fit_params is not None
 
-    # ── Convenience ─────────────────────────────────────────────────────────
 
     def is_good(self) -> bool:
+        """Return whether is good.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         return self.quality == QualityFlag.GOOD
 
     def get_param(self, name: str, default=None):
-        """Return named fit result value, or default."""
+        """Return named fit result value, or default.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        default : Any, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         entry = self.fit_result.get(name)
         if entry is None:
             return default
         return entry[0] if isinstance(entry, (tuple, list)) else entry
 
     def get_error(self, name: str, default=None):
-        """Return named fit result uncertainty, or default."""
+        """Return named fit result uncertainty, or default.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        default : Any, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         entry = self.fit_result.get(name)
         if isinstance(entry, (tuple, list)) and len(entry) > 1:
             return entry[1]
         return default
 
-    # ── Serialisation ───────────────────────────────────────────────────────
 
     def to_dict(self) -> dict:
-        """Return a JSON-serialisable dict (numpy arrays → lists)."""
+        """Return a JSON-serialisable dict (numpy arrays → lists).
 
-        def _arr(v):
-            return v.tolist() if isinstance(v, np.ndarray) else v
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
 
-        return {
+        payload = {
             "experiment_type": self.experiment_type,
             "experiment_id": self.experiment_id,
             "timestamp": self.timestamp.isoformat(),
-            "fit_params": _arr(self.fit_params),
-            "fit_errors": _arr(self.fit_errors),
-            "fit_result": {
-                k: (list(v) if isinstance(v, (tuple, list, np.ndarray)) else v)
-                for k, v in self.fit_result.items()
-            },
+            "raw_iq": self.raw_iq,
+            "x_axis": self.x_axis,
+            "y_axis": self.y_axis,
+            "axes": self.axes,
+            "raw_data": self.raw_data,
+            "analysis_data": self.analysis_data,
+            "fit_params": self.fit_params,
+            "fit_errors": self.fit_errors,
+            "fit_result": self.fit_result,
             "scalar_result": self.scalar_result,
             "quality": self.quality.value,
             "quality_message": self.quality_message,
             "config": self.config,
             "metadata": self.metadata,
             "parent_id": self.parent_id,
+            "children": self.children,
             "x_name": self.x_name,
             "x_unit": self.x_unit,
             "x_scale": self.x_scale,
@@ -207,13 +311,33 @@ class ExperimentData:
             "session_id": self.session_id,
             "dataset_dims": self.dataset_dims,
         }
+        return _json_value(payload)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentData":
+        """Return the from dict result.
+
+        Parameters
+        ----------
+        d : dict
+            Value for ``d``.
+
+        Returns
+        -------
+        'ExperimentData'
+            Result of the operation.
+        """
+        d = _restore_json_value(d)
         obj = cls(
             experiment_type=d.get("experiment_type", ""),
             experiment_id=d.get("experiment_id") or _new_experiment_id(),
             timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(timezone.utc),
+            raw_iq=np.asarray(d["raw_iq"]) if isinstance(d.get("raw_iq"), list) else d.get("raw_iq"),
+            x_axis=np.asarray(d["x_axis"]) if d.get("x_axis") is not None else None,
+            y_axis=np.asarray(d["y_axis"]) if d.get("y_axis") is not None else None,
+            axes=d.get("axes", {}),
+            raw_data=d.get("raw_data", {}),
+            analysis_data=d.get("analysis_data", {}),
             fit_params=np.array(d["fit_params"]) if d.get("fit_params") is not None else None,
             fit_errors=np.array(d["fit_errors"]) if d.get("fit_errors") is not None else None,
             fit_result=d.get("fit_result", {}),
@@ -223,6 +347,7 @@ class ExperimentData:
             config=d.get("config", {}),
             metadata=d.get("metadata", {}),
             parent_id=d.get("parent_id"),
+            children=d.get("children", []),
             x_name=d.get("x_name", ""),
             x_unit=d.get("x_unit", ""),
             x_scale=d.get("x_scale", 1.0),
@@ -250,7 +375,26 @@ class ExperimentData:
         data_root: Optional[str] = None,
         catalog: bool = True,
     ):
-        """Save through the native HDF5 v1 writer and update its catalog."""
+        """Save through the native HDF5 v1 writer and update its catalog.
+
+        Parameters
+        ----------
+        filepath : Optional[str]
+            Value for ``filepath``.
+        comment : str, default: ''
+            Value for ``comment``.
+        tags : Any, default: ()
+            Value for ``tags``.
+        data_root : Optional[str]
+            Value for ``data_root``.
+        catalog : bool, default: True
+            Value for ``catalog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from ..tools.hdf5_store import save_result
 
         return save_result(
@@ -264,12 +408,30 @@ class ExperimentData:
 
     @classmethod
     def load(cls, filepath: str) -> "ExperimentData":
-        """Load native v1 or the previous local ExperimentData HDF5 format."""
+        """Load native v1 or the previous local ExperimentData HDF5 format.
+
+        Parameters
+        ----------
+        filepath : str
+            Value for ``filepath``.
+
+        Returns
+        -------
+        'ExperimentData'
+            Result of the operation.
+        """
         from ..tools.hdf5_store import load_result
 
         return load_result(filepath)
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         status = "interrupted" if self.interrupted else "complete"
         return (
             f"ExperimentData(type={self.experiment_type!r}, "

@@ -22,6 +22,13 @@ class RBAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitrb, rb_func
@@ -50,6 +57,13 @@ class RBAnalysis(BaseAnalysis):
                 "B": (B, err[2]),
             }
             data.scalar_result = fidelity
+            fit_curve = rb_func(x, *popt)
+            data.metadata.update({"fit_model": "rb_decay", "fit_channel": "abs"})
+            data.analysis_data.update({
+                "fit_input": {"values": y, "dims": ["x"]},
+                "fit_curve": {"values": fit_curve, "dims": ["x"]},
+                "residual": {"values": y - fit_curve, "dims": ["x"]},
+            })
         except Exception as exc:
             data.quality = QualityFlag.BAD
             data.quality_message = f"RB fit failed: {exc}"
@@ -63,6 +77,13 @@ class AllXYAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.raw_iq is None:
             return
         # AllXY ideal values for the 21 sequences: pattern of 0, 0.5, 1

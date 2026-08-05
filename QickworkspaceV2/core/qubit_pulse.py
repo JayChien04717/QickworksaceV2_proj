@@ -27,7 +27,20 @@ STANDARD_GATES = (
 
 
 def resolve_gate(name, prefix="ge"):
-    """Resolve a shorthand gate name to its transition-qualified pulse name."""
+    """Resolve a shorthand gate name to its transition-qualified pulse name.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+    prefix : Any, default: 'ge'
+        Value for ``prefix``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if name in ("I", "-I", None, "None"):
         return name
     if name in GATE_ALIAS:
@@ -39,7 +52,15 @@ class QubitPulseMixin:
     """Add transition-aware qubit pulse helpers to a QICK program."""
 
     def setup_qubit_gen(self, cfg, prefix="ge"):
-        """Declare the qubit generator for a given transition prefix."""
+        """Declare the qubit generator for a given transition prefix.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        prefix : Any, default: 'ge'
+            Value for ``prefix``.
+        """
         if prefix == "ge":
             ch, nqz_key, mixer_key = cfg["qb_ch"], "nqz_qb", "qb_mixer"
         else:
@@ -69,7 +90,36 @@ class QubitPulseMixin:
         ch=None,
         length_mult=5,
     ):
-        """Add a transition-aware qubit pulse to the QICK pulse library."""
+        """Add a transition-aware qubit pulse to the QICK pulse library.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        prefix : Any, default: 'ge'
+            Value for ``prefix``.
+        pulse_type : Any, default: None
+            Value for ``pulse_type``.
+        shape : Any, default: 'gauss'
+            Value for ``shape``.
+        name : Any, default: 'qb_pulse'
+            Name of the target object.
+        phase : Any, default: None
+            Value for ``phase``.
+        gain_key : Any, default: None
+            Value for ``gain_key``.
+        gain_override : Any, default: None
+            Value for ``gain_override``.
+        ch : Any, default: None
+            Value for ``ch``.
+        length_mult : Any, default: 5
+            Value for ``length_mult``.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         pulse_type = (
             cfg.get("pulse_type", "arb") if pulse_type is None else pulse_type
         )
@@ -107,7 +157,33 @@ class QubitPulseMixin:
         self.add_pulse(**pulse_params)
 
     def _ensure_qb_envelope(self, cfg, prefix, ch, shape, length_mult):
-        """Create an envelope once per channel and return its QICK name."""
+        """Create an envelope once per channel and return its QICK name.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        prefix : Any
+            Value for ``prefix``.
+        ch : Any
+            Value for ``ch``.
+        shape : Any
+            Value for ``shape``.
+        length_mult : Any
+            Value for ``length_mult``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        KeyError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         envelope = f"env_{prefix}_{shape}"
         envelope_key = (ch, envelope)
         added_envelopes = self.__dict__.setdefault("_added_envs", set())
@@ -150,7 +226,19 @@ class QubitPulseMixin:
     def setup_standard_gates(
         self, cfg, prefix="ge", pulse_type=None, shape="gauss"
     ):
-        """Register the six standard calibration gates."""
+        """Register the six standard calibration gates.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        prefix : Any, default: 'ge'
+            Value for ``prefix``.
+        pulse_type : Any, default: None
+            Value for ``pulse_type``.
+        shape : Any, default: 'gauss'
+            Value for ``shape``.
+        """
         for gate, phase, gain in STANDARD_GATES:
             self.setup_qb_pulse(
                 cfg,

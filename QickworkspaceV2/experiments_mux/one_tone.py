@@ -11,13 +11,26 @@ from qick.asm_v2 import AveragerProgramV2
 from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
-from ..core.experiment_data import ExperimentData, QualityFlag
+from ..core.experiment_data import ExperimentData
+from ._common import fit_quality, fit_snr, project_iq
 
 
 class MuxOneToneProgram(AveragerProgramV2):
     """Single-frequency mux resonator spectroscopy point."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg.get("active_ro_chs", cfg.get("ro_chs", [])))
         if not ro_chs:
@@ -53,6 +66,13 @@ class MuxOneToneProgram(AveragerProgramV2):
         )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
         self.trigger(ros=cfg["active_ro_chs"], pins=[0], t=cfg["trig_time"])
 
@@ -70,11 +90,30 @@ class MuxOneTone(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     def __init__(self, config):
+        """Initialize the MuxOneTone instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.freq_offsets = None
         self.freq_axes = None
 
     def _normalized_cfg(self, *, freq_offset=0.0):
+        """Normalize d cfg.
+
+        Parameters
+        ----------
+        freq_offset : Any, default: 0.0
+            Value for ``freq_offset``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         cfg.setdefault("active_ro_chs", cfg.get("ro_chs", []))
         cfg.setdefault("active_slots", list(range(len(cfg.get("active_ro_chs", [])))))
@@ -90,6 +129,13 @@ class MuxOneTone(BaseExperiment):
         return cfg
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return MuxOneToneProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -98,9 +144,28 @@ class MuxOneTone(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.freq_offsets
 
     def _configured_offsets(self):
+        """Return the configured offsets result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         sweep = self.cfg.get("res_freq_ge") if hasattr(self.cfg, "get") else None
         if sweep is None:
             return None
@@ -120,6 +185,20 @@ class MuxOneTone(BaseExperiment):
 
     @staticmethod
     def _point_iq(iq_list, n_trace):
+        """Return the point iq result.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -130,6 +209,26 @@ class MuxOneTone(BaseExperiment):
         return np.asarray(vals, dtype=complex)
 
     def run(self, py_avg=1, span=20.0, steps=101, iq_process="abs", plot=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        span : Any, default: 20.0
+            Value for ``span``.
+        steps : Any, default: 101
+            Value for ``steps``.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: False
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg0 = self._normalized_cfg()
         configured_offsets = self._configured_offsets()
         if configured_offsets is not None:
@@ -264,6 +363,10 @@ class MuxOneTone(BaseExperiment):
                 plt.close(final_fig)
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
+        model_fit_count = sum(method == "lorentzian" for method in fit_method.values())
+        quality, quality_message = fit_quality(
+            has_data, model_fit_count, trace_count, "Mux one-tone"
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
@@ -281,10 +384,8 @@ class MuxOneTone(BaseExperiment):
                 "LO_ext": cfg0.get("LO_ext"),
             },
             figures=figures,
-            quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux one-tone acquired."
-            if has_data
-            else "No data acquired.",
+            quality=quality,
+            quality_message=quality_message,
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,
@@ -296,19 +397,53 @@ class MuxOneTone(BaseExperiment):
 
     @staticmethod
     def _fit_res_freq_mag_min(freq_axis_mhz, plot_trace):
-        idx = int(np.nanargmin(plot_trace))
-        return float(np.asarray(freq_axis_mhz, dtype=float)[idx]), "mag_min"
+        """Fit res freq mag min.
+
+        Parameters
+        ----------
+        freq_axis_mhz : Any
+            Value for ``freq_axis_mhz``.
+        plot_trace : Any
+            Value for ``plot_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        frequency = np.asarray(freq_axis_mhz, dtype=float)
+        trace = np.asarray(plot_trace, dtype=float)
+        try:
+            from ..tools.fitting import fitlor, lorfunc
+
+            popt, _, _ = fitlor(frequency, trace)
+            f0 = float(popt[2])
+            if not np.isfinite(f0) or not frequency.min() <= f0 <= frequency.max():
+                raise RuntimeError("Lorentzian fit returned invalid f0")
+            if fit_snr(trace, lorfunc(frequency, *popt)) < 3.0:
+                raise RuntimeError("Lorentzian fit has insufficient SNR")
+            return f0, "lorentzian"
+        except (RuntimeError, ValueError, FloatingPointError):
+            idx = int(np.nanargmin(trace))
+            return float(frequency[idx]), "mag_min"
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
-        iq_process = (iq_process or "abs").lower()
-        if iq_process in {"real", "i", "avgi"}:
-            return np.real(iqdata)
-        if iq_process in {"imag", "q", "avgq"}:
-            return np.imag(iqdata)
-        if iq_process == "phase":
-            return np.unwrap(np.angle(iqdata), axis=-1)
-        return np.abs(iqdata)
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        return project_iq(iqdata, iq_process)
 
 
 __all__ = ["MuxOneTone", "MuxOneToneProgram"]

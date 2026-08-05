@@ -3,21 +3,32 @@ from scipy.optimize import least_squares
 
 
 def complex_fit(f, xdata, ydata, p0=None, weights=None, **kwargs):
-    """
-    Wrapper around scipy least_square for complex functions
+    """Wrapper around scipy least_square for complex functions.
 
-    Args:
-        f: The model function, f(x, …). It must take the independent variable
-            as the first argument and the parameters to fit as separate
-            remaining arguments.
-        xdata: The independent variable where the data is measured.
-        ydata: The dependent data.
-        p0: Initial guess on independent variables.
-        weights: Optional weighting in the calculation of the cost function.
-        kwargs: passed to the leas_square function
+    Parameters
+    ----------
+    f : Any
+        Value for ``f``.
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    p0 : Any, default: None
+        Value for ``p0``.
+    weights : Any, default: None
+        Value for ``weights``.
+    **kwargs : Any
+        Additional keyword arguments.
 
-    Returns:
-        A tuple with the optimal parameters and the covariance matrix
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     if (np.array(ydata).size - len(p0)) <= 0:
@@ -26,7 +37,22 @@ def complex_fit(f, xdata, ydata, p0=None, weights=None, **kwargs):
         )
 
     def residuals(params, x, y):
-        """ Computes the residual for the least square algorithm"""
+        """Computes the residual for the least square algorithm
+
+        Parameters
+        ----------
+        params : Any
+            Value for ``params``.
+        x : Any
+            Independent-variable values.
+        y : Any
+            Dependent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if weights is not None:
             diff = weights * f(x, *params) - y
         else:
@@ -54,6 +80,22 @@ def complex_fit(f, xdata, ydata, p0=None, weights=None, **kwargs):
 
 def guess_edelay_from_gradient(freq, signal, n=-1):
 
+    """Return the guess edelay from gradient result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    signal : Any
+        Value for ``signal``.
+    n : Any, default: -1
+        Value for ``n``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     dtheta = np.mean(np.angle(signal[-n:] / zeros2eps(signal[:n])))
     df = np.mean(np.diff(freq))
 
@@ -61,7 +103,35 @@ def guess_edelay_from_gradient(freq, signal, n=-1):
 
 
 def smooth_gradient(signal):
+    """Return the smooth gradient result.
+
+    Parameters
+    ----------
+    signal : Any
+        Value for ``signal``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     def dnormaldx(x, x_0, sigma):
+        """Return the dnormaldx result.
+
+        Parameters
+        ----------
+        x : Any
+            Independent-variable values.
+        x_0 : Any
+            Value for ``x_0``.
+        sigma : Any
+            Value for ``sigma``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return -(x - x_0) * np.exp(-0.5 * ((x - x_0) / sigma) ** 2)
 
     conv_kernel_size = max(min(100, signal.size // 20), 2)
@@ -88,14 +158,23 @@ eps = np.finfo(float).eps
 
 def zeros2eps(x):
 
-    """
-    args:
-        x: float, complex, or numpy array
-    
-    return:
-        y: numpy array
+    """args:
+                x: float, complex, or numpy array
 
-    replace the zeros of a float or numpy array bien the smallest float number
+            return:
+                y: numpy array
+
+            replace the zeros of a float or numpy array bien the smallest float number
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
     """
 
     y = np.array(x)
@@ -106,16 +185,52 @@ def zeros2eps(x):
 
 def dB(x):
 
+    """Return the dB result.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return 20 * np.log10(np.abs(x))
 
 
 def deg(x):
 
+    """Return the deg result.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return np.angle(x) * 180 / np.pi
 
 
 def get_prefix(x):
 
+    """Return prefix.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     prefix = [
         "y",  # yocto
         "z",  # zepto
@@ -150,5 +265,19 @@ def get_prefix(x):
 
 def get_prefix_str(x, precision=2):
 
+    """Return prefix str.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    precision : Any, default: 2
+        Value for ``precision``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return "%.{}f %s".format(precision) % get_prefix(x)
 

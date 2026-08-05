@@ -13,17 +13,72 @@ try:
     from IPython.display import clear_output, display, update_display
 except ImportError:
     def display(*args, **kwargs):
+        """Return the display result.
+
+        Parameters
+        ----------
+        *args : Any
+            Additional positional arguments.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def clear_output(*args, **kwargs):
+        """Return the clear output result.
+
+        Parameters
+        ----------
+        *args : Any
+            Additional positional arguments.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def update_display(*args, **kwargs):
+        """Update display.
+
+        Parameters
+        ----------
+        *args : Any
+            Additional positional arguments.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
 
 def _process_iq(iqdata, iq_process):
-    """Select the plotted IQ channel."""
+    """Select the plotted IQ channel.
+
+    Parameters
+    ----------
+    iqdata : Any
+        Value for ``iqdata``.
+    iq_process : Any
+        IQ processing mode.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     iq_process = (iq_process or "abs").lower()
     if iq_process in {"real", "i", "avgi"}:
         return np.real(iqdata)
@@ -35,6 +90,18 @@ def _process_iq(iqdata, iq_process):
 
 
 def _process_label(iq_process):
+    """Process label.
+
+    Parameters
+    ----------
+    iq_process : Any
+        IQ processing mode.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     iq_process = (iq_process or "abs").lower()
     labels = {
         "real": "ADC Units (Real)",
@@ -56,16 +123,50 @@ def _process_label(iq_process):
 
 
 def _is_all_iq(iq_process):
+    """Return whether is all iq.
+
+    Parameters
+    ----------
+    iq_process : Any
+        IQ processing mode.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return str(iq_process or "abs").lower() in {"all", "iq", "channels", "multi"}
 
 
 def _single_channel_iq_process(iq_process):
-    """Fallback multi-channel requests to abs for heatmap-style plots."""
+    """Fallback multi-channel requests to abs for heatmap-style plots.
+
+    Parameters
+    ----------
+    iq_process : Any
+        IQ processing mode.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return "abs" if _is_all_iq(iq_process) else iq_process
 
 
 def _iq_channel_dict(iqdata):
-    """Return all real-valued IQ views used by live plots."""
+    """Return all real-valued IQ views used by live plots.
+
+    Parameters
+    ----------
+    iqdata : Any
+        Value for ``iqdata``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return {
         "Abs": np.abs(iqdata),
         "Phase": np.unwrap(np.angle(iqdata)),
@@ -75,7 +176,20 @@ def _iq_channel_dict(iqdata):
 
 
 def _safe_limits(data, pad_fraction=0.1):
-    """Return padded finite axis/color limits for partially filled live data."""
+    """Return padded finite axis/color limits for partially filled live data.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    pad_fraction : Any, default: 0.1
+        Value for ``pad_fraction``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     arr = np.asarray(data, dtype=float)
     arr = arr[np.isfinite(arr)]
     if arr.size == 0:
@@ -91,7 +205,18 @@ def _safe_limits(data, pad_fraction=0.1):
 
 
 def _normalize_rows(data):
-    """Normalize each 2D row independently for contrast in live plots."""
+    """Normalize each 2D row independently for contrast in live plots.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     row_mins = data.min(axis=1, keepdims=True)
     row_maxs = data.max(axis=1, keepdims=True)
     ranges = row_maxs - row_mins
@@ -100,7 +225,15 @@ def _normalize_rows(data):
 
 
 def _style_live_axes(fig, axes) -> None:
-    """Style a live-plot canvas while leaving its data artists untouched."""
+    """Style a live-plot canvas while leaving its data artists untouched.
+
+    Parameters
+    ----------
+    fig : Any
+        Matplotlib figure to update.
+    axes : Any
+        Value for ``axes``.
+    """
     style_figure(fig)
     for axis in np.asarray(axes, dtype=object).reshape(-1):
         style_axes(axis)
@@ -112,6 +245,23 @@ class SoftwareAverageRunner:
     def __init__(
         self, prog, soc, py_avg, y_axis_vals=None, iq_process="all", threshold=None
     ):
+        """Initialize the SoftwareAverageRunner instance.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+        soc : Any
+            Value for ``soc``.
+        py_avg : Any
+            Number of Python-level acquisition averages.
+        y_axis_vals : Any, default: None
+            Value for ``y_axis_vals``.
+        iq_process : Any, default: 'all'
+            IQ processing mode.
+        threshold : Any, default: None
+            Value for ``threshold``.
+        """
         self.prog = prog
         self.soc = soc
         self.py_avg = py_avg
@@ -121,6 +271,18 @@ class SoftwareAverageRunner:
         self.current_iq = None
 
     def run(self, on_update: Callable[[int, Any], None]):
+        """Run the operation.
+
+        Parameters
+        ----------
+        on_update : Callable[[int, Any], None]
+            Value for ``on_update``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq = 0
         iqdata = None
         completed_count = 0
@@ -159,7 +321,38 @@ def run_software_average_liveplot(
     iq_process="all",
     threshold=None,
 ):
-    """Compatibility wrapper for the single software-average implementation."""
+    """Compatibility wrapper for the single software-average implementation.
+
+    Parameters
+    ----------
+    prog : Any
+        Value for ``prog``.
+    soc : Any
+        Value for ``soc``.
+    py_avg : Any
+        Number of Python-level acquisition averages.
+    x_axis_vals : Any
+        Value for ``x_axis_vals``.
+    y_axis_vals : Any, default: None
+        Value for ``y_axis_vals``.
+    x_label : Any, default: 'X Axis'
+        Value for ``x_label``.
+    y_label : Any, default: 'Y Axis'
+        Value for ``y_label``.
+    title_prefix : Any, default: 'Experiment'
+        Value for ``title_prefix``.
+    show_final_plot : Any, default: False
+        Whether to show final plot.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if threshold is not None and _is_all_iq(iq_process):
         iq_process = "real"
     return _liveplot_sw_avg(
@@ -199,27 +392,74 @@ def liveplotfun(
     iq_process="all",
     threshold=None,
 ):
-    """
-    General-purpose live plotter (Facade pattern).
+    """General-purpose live plotter (Facade pattern).
 
-    Dispatches to one of four specialized internal routines based on the
-    combination of arguments supplied:
+            Dispatches to one of four specialized internal routines based on the
+            combination of arguments supplied:
 
-    - **Yoko sweep** (``instrument_manager`` and ``yoko_name`` are set): outer
-      loop steps a Yokogawa source while the inner QICK program sweeps
-      ``x_axis_vals``.
-    - **2D parameter scan** (``scan_x_axis`` and ``scan_y_axis`` both set):
-      a callback generates a fresh program for every (x, y) grid point.
-    - **1D parameter scan** (only ``scan_x_axis`` set): a callback generates
-      a fresh program for each x point.
-    - **Software averaging** (default): repeats a fixed program ``py_avg``
-      times and accumulates a running average.
+            - **Yoko sweep** (``instrument_manager`` and ``yoko_name`` are set): outer
+              loop steps a Yokogawa source while the inner QICK program sweeps
+              ``x_axis_vals``.
+            - **2D parameter scan** (``scan_x_axis`` and ``scan_y_axis`` both set):
+              a callback generates a fresh program for every (x, y) grid point.
+            - **1D parameter scan** (only ``scan_x_axis`` set): a callback generates
+              a fresh program for each x point.
+            - **Software averaging** (default): repeats a fixed program ``py_avg``
+              times and accumulates a running average.
+
+    Parameters
+    ----------
+    prog : Any, default: None
+        Value for ``prog``.
+    soc : Any, default: None
+        Value for ``soc``.
+    py_avg : Any, default: 1
+        Number of Python-level acquisition averages.
+    x_axis_vals : Any, default: None
+        Value for ``x_axis_vals``.
+    y_axis_vals : Any, default: None
+        Value for ``y_axis_vals``.
+    x_label : Any, default: 'X Axis'
+        Value for ``x_label``.
+    y_label : Any, default: 'Y Axis'
+        Value for ``y_label``.
+    title_prefix : Any, default: 'Experiment'
+        Value for ``title_prefix``.
+    instrument_manager : Any, default: None
+        Value for ``instrument_manager``.
+    yoko_name : Any, default: None
+        Name of the yoko.
+    yoko_mode : Any, default: 'current'
+        Value for ``yoko_mode``.
+    yoko_voltage_ramp_step : Any, default: 1e-05
+        Value for ``yoko_voltage_ramp_step``.
+    yoko_current_ramp_step : Any, default: 1e-08
+        Value for ``yoko_current_ramp_step``.
+    yoko_ramp_interval : Any, default: 0.01
+        Value for ``yoko_ramp_interval``.
+    scan_x_axis : Any, default: None
+        Value for ``scan_x_axis``.
+    scan_y_axis : Any, default: None
+        Value for ``scan_y_axis``.
+    get_prog_callback : Any, default: None
+        Callable invoked when the operation completes.
+    show_final_plot : Any, default: True
+        Whether to show final plot.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
 
     Returns
     -------
     iqdata : np.ndarray
     interrupted : bool
     n_done : int
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
     if threshold is not None and _is_all_iq(iq_process):
         iq_process = "real"
@@ -306,6 +546,38 @@ def _liveplot_sw_avg(
     iq_process="all",
     threshold=None,
 ):
+    """Return the liveplot sw avg result.
+
+    Parameters
+    ----------
+    prog : Any
+        Value for ``prog``.
+    soc : Any
+        Value for ``soc``.
+    py_avg : Any
+        Number of Python-level acquisition averages.
+    x_axis_vals : Any
+        Value for ``x_axis_vals``.
+    y_axis_vals : Any, default: None
+        Value for ``y_axis_vals``.
+    x_label : Any, default: 'X Axis'
+        Value for ``x_label``.
+    y_label : Any, default: 'Y Axis'
+        Value for ``y_label``.
+    title_prefix : Any, default: 'Experiment'
+        Value for ``title_prefix``.
+    show_final_plot : Any, default: False
+        Whether to show final plot.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
 
@@ -367,6 +639,15 @@ def _liveplot_sw_avg(
     )
 
     def on_update(index, data_to_plot):
+        """Return the on update result.
+
+        Parameters
+        ----------
+        index : Any
+            Position of the target item.
+        data_to_plot : Any
+            Value for ``data_to_plot``.
+        """
         if plot_all_iq and not is_2d:
             channel_data = _iq_channel_dict(runner.current_iq)
             for channel_ax, (channel_name, channel_values) in zip(
@@ -460,6 +741,53 @@ def _liveplot_sweep_yoko(
     iq_process="all",
     threshold=None,
 ):
+    """Return the liveplot sweep yoko result.
+
+    Parameters
+    ----------
+    prog : Any
+        Value for ``prog``.
+    soc : Any
+        Value for ``soc``.
+    py_avg : Any
+        Number of Python-level acquisition averages.
+    x_axis_vals : Any
+        Value for ``x_axis_vals``.
+    y_axis_vals_yoko : Any
+        Value for ``y_axis_vals_yoko``.
+    instrument_manager : Any
+        Value for ``instrument_manager``.
+    yoko_name : Any
+        Name of the yoko.
+    yoko_mode : Any, default: 'current'
+        Value for ``yoko_mode``.
+    yoko_voltage_ramp_step : Any, default: 1e-05
+        Value for ``yoko_voltage_ramp_step``.
+    yoko_current_ramp_step : Any, default: 1e-08
+        Value for ``yoko_current_ramp_step``.
+    yoko_ramp_interval : Any, default: 0.01
+        Value for ``yoko_ramp_interval``.
+    x_label : Any, default: 'X Axis'
+        Value for ``x_label``.
+    y_label : Any, default: 'Y Axis'
+        Value for ``y_label``.
+    title_prefix : Any, default: 'Experiment'
+        Value for ``title_prefix``.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 
@@ -605,6 +933,34 @@ def _liveplot_1d_scan(
     iq_process="all",
     threshold=None,
 ):
+    """Return the liveplot 1d scan result.
+
+    Parameters
+    ----------
+    soc : Any
+        Value for ``soc``.
+    py_avg : Any
+        Number of Python-level acquisition averages.
+    scan_x_axis : Any
+        Value for ``scan_x_axis``.
+    get_prog_callback : Any
+        Callable invoked when the operation completes.
+    x_label : Any, default: 'Scan Parameter'
+        Value for ``x_label``.
+    title_prefix : Any, default: '1D Scan'
+        Value for ``title_prefix``.
+    show_final_plot : Any, default: True
+        Whether to show final plot.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     _y_label_proc = _process_label(iq_process)
     plot_all_iq = _is_all_iq(iq_process)
 
@@ -743,6 +1099,38 @@ def _liveplot_2d_scan(
     iq_process="all",
     threshold=None,
 ):
+    """Return the liveplot 2d scan result.
+
+    Parameters
+    ----------
+    soc : Any
+        Value for ``soc``.
+    py_avg : Any
+        Number of Python-level acquisition averages.
+    scan_x_axis : Any
+        Value for ``scan_x_axis``.
+    scan_y_axis : Any
+        Value for ``scan_y_axis``.
+    get_prog_callback : Any
+        Callable invoked when the operation completes.
+    x_label : Any, default: 'X Axis'
+        Value for ``x_label``.
+    y_label : Any, default: 'Y Axis'
+        Value for ``y_label``.
+    title_prefix : Any, default: '2D Scan'
+        Value for ``title_prefix``.
+    show_final_plot : Any, default: True
+        Whether to show final plot.
+    iq_process : Any, default: 'all'
+        IQ processing mode.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     iq_process = _single_channel_iq_process(iq_process)
     _colorbar_label = _process_label(iq_process)
 

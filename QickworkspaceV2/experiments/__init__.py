@@ -18,22 +18,15 @@ from .cryoscope import (
 )
 
 __all__ = [
-    # setup
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    # resonator
     "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
-    # qubit_ge
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
-    # coherence
     "Ramsey", "ACStark", "SpinEcho", "T1",
-    # qubit_ef
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "RamseyEf", "T1Ef", "QubitTemp",
-    # characterization
     "AllXY",
     "RandomizedBenchmarking", "AutoRB",
     "RandomizedBenchmarkingAsm", "AutoRBAsm",
     "Tomography",
-    # cryoscope
     "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
 ]

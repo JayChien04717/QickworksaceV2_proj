@@ -6,6 +6,20 @@ from .abcd_rf_fit import *
 
 def get_background(freq, non_uniform_background=False):
 
+    """Return background.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    non_uniform_background : Any, default: False
+        Value for ``non_uniform_background``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     n_indexs = 5
     indexs = np.random.randint(1, freq.size - 1, size=(n_indexs))
     while len(set(indexs)) < 5:
@@ -31,6 +45,20 @@ def get_background(freq, non_uniform_background=False):
 
 def get_synthetic_resonance(freq, geometry="r"):
 
+    """Return synthetic resonance.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    geometry : Any, default: 'r'
+        Value for ``geometry``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     freq_span = freq[-1] - freq[0]
     kappa_i = (0.001 + 0.29 * np.random.rand()) * freq_span
     kappa_c = (0.1 + 2 * np.random.rand()) * kappa_i
@@ -59,6 +87,18 @@ def get_synthetic_resonance(freq, geometry="r"):
 
 def get_synthetic_signal(geometry="r"):
 
+    """Return synthetic signal.
+
+    Parameters
+    ----------
+    geometry : Any, default: 'r'
+        Value for ``geometry``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     freq_center = np.random.rand() * 6e9 + 2e9
     freq_span = np.random.rand() * 10e6 + 100e3
     n_freq = np.random.randint(201, 2001)

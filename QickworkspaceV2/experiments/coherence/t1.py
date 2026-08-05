@@ -13,12 +13,26 @@ class T1Program(BaseProgram):
     """QICK program for T1: π pulse then swept wait delay."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse", gain_key="pi_gain_ge")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -48,6 +62,13 @@ class T1(BaseExperiment):
     Analysis = T1Analysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return T1Program(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -56,10 +77,34 @@ class T1(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.delay_times = prog.get_time_param("wait", "t", as_array=True)
         return self.delay_times
 
     def _save_comment(self, dict_val):
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.result is not None:
             T1 = self.result.fit_result.get("T1_us", (None,))[0]
             if T1 is not None:

@@ -19,6 +19,13 @@ class MuxTomographyProgram(AveragerProgramV2):
     """One tomography axis for all armed qubits with mux readout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -55,6 +62,17 @@ class MuxTomographyProgram(AveragerProgramV2):
             self._add_standard_gates(cfg, slot, name)
 
     def _add_standard_gates(self, cfg, slot, name):
+        """Add standard gates.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        name : Any
+            Name of the target object.
+        """
         gates = [
             ("x180_ge", 0, "pi_gain_ge"),
             ("y180_ge", 90, "pi_gain_ge"),
@@ -67,6 +85,21 @@ class MuxTomographyProgram(AveragerProgramV2):
             self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
+        """Add gate pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        pulse_name : Any
+            Name of the pulse.
+        phase : Any
+            Value for ``phase``.
+        gain : Any
+            Value for ``gain``.
+        """
         qb_ch = cfg["qb_ch"][slot]
         pulse_type = cfg["pulse_type"][slot]
         if pulse_type == "const":
@@ -118,6 +151,15 @@ class MuxTomographyProgram(AveragerProgramV2):
             )
 
     def _pulse_all(self, cfg, gate):
+        """Return the pulse all result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        gate : Any
+            Value for ``gate``.
+        """
         resolved = resolve_gate(gate)
         if resolved in ("I", "-I", None, "None"):
             return
@@ -125,6 +167,13 @@ class MuxTomographyProgram(AveragerProgramV2):
             self.pulse(ch=cfg["qb_ch"][slot], name=f"{name}_{resolved}", t=0)
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         cal_pulse = cfg.get("cal_pulse")
         prep_pulse = cfg.get("prep_pulse")
         axis = cfg["tomo_axis"]
@@ -156,6 +205,13 @@ class MuxTomography(BaseExperiment):
     TITLE_PREFIX = "Mux Tomography"
 
     def __init__(self, config):
+        """Initialize the MuxTomography instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.iq_g = None
         self.iq_e = None
@@ -170,6 +226,20 @@ class MuxTomography(BaseExperiment):
 
     @staticmethod
     def _extract_iq(iq_list, n_trace):
+        """Extract iq.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -180,6 +250,20 @@ class MuxTomography(BaseExperiment):
         return np.asarray(vals, dtype=complex)
 
     def _acquire_axis(self, cfg, py_avg):
+        """Return the acquire axis result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        py_avg : Any
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         prog = MuxTomographyProgram(
             self.soccfg,
             reps=cfg["reps"],
@@ -190,6 +274,22 @@ class MuxTomography(BaseExperiment):
         return self._extract_iq(iq_list, len(cfg["active_ro_chs"]))
 
     def _project_to_expect(self, iq_data, iq_g, iq_e):
+        """Return the project to expect result.
+
+        Parameters
+        ----------
+        iq_data : Any
+            Value for ``iq_data``.
+        iq_g : Any
+            Value for ``iq_g``.
+        iq_e : Any
+            Value for ``iq_e``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cal_vector = iq_e - iq_g
         data_vector = iq_data - iq_g
         projection = np.real(data_vector * np.conj(cal_vector)) / (np.abs(cal_vector) ** 2 + 1e-12)
@@ -197,6 +297,18 @@ class MuxTomography(BaseExperiment):
 
     @staticmethod
     def _mle_reconstruction(rho_raw):
+        """Return the mle reconstruction result.
+
+        Parameters
+        ----------
+        rho_raw : Any
+            Value for ``rho_raw``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         eig_vals, eig_vecs = np.linalg.eigh(rho_raw)
         eig_vals = np.maximum(0, eig_vals)
         trace = np.sum(eig_vals)
@@ -204,6 +316,22 @@ class MuxTomography(BaseExperiment):
         return eig_vecs @ np.diag(eig_vals) @ np.conj(eig_vecs.T)
 
     def run(self, py_avg=1, prep_pulse_name=None, plot=True):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        prep_pulse_name : Any, default: None
+            Name of the prep pulse.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         qubit_names = list(cfg["qubit_names"])
         self.prep_pulse_name = prep_pulse_name

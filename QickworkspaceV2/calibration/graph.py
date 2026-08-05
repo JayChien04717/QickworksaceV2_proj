@@ -11,12 +11,32 @@ class CalibrationNode:
     """Single node in the calibration DAG."""
 
     def __init__(self, name: str, run_fn: Callable, provides: list[str], requires: list[str] | None = None):
+        """Initialize the CalibrationNode instance.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        run_fn : Callable
+            Value for ``run_fn``.
+        provides : list[str]
+            Value for ``provides``.
+        requires : list[str] | None, default: None
+            Value for ``requires``.
+        """
         self.name = name
         self.run_fn = run_fn
         self.provides: list[str] = provides
         self.requires: list[str] = requires or []
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return f"CalibrationNode({self.name!r}, provides={self.provides}, requires={self.requires})"
 
 
@@ -44,20 +64,53 @@ class CalibrationGraph:
     """
 
     def __init__(self, store, qubit: str):
+        """Initialize the CalibrationGraph instance.
+
+        Parameters
+        ----------
+        store : Any
+            Value for ``store``.
+        qubit : str
+            Qubit identifier.
+        """
         self._store = store
         self._qubit = qubit
         self._nodes: dict[str, CalibrationNode] = {}
 
     def add(self, node: CalibrationNode):
+        """Return the add result.
+
+        Parameters
+        ----------
+        node : CalibrationNode
+            Value for ``node``.
+        """
         self._nodes[node.name] = node
 
     def remove(self, name: str):
+        """Return the remove result.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        """
         self._nodes.pop(name, None)
 
-    # ── Topological sort (Kahn's algorithm) ──────────────────────────────────
 
     def _topological_order(self) -> list[str]:
-        """Return node names in a valid execution order."""
+        """Return node names in a valid execution order.
+
+        Returns
+        -------
+        list[str]
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         # Build adjacency: required_param → node_name(s) that provide it
         provided_by: dict[str, str] = {}
         for name, node in self._nodes.items():
@@ -89,19 +142,30 @@ class CalibrationGraph:
             raise RuntimeError("Cycle detected in CalibrationGraph")
         return order
 
-    # ── Stale detection ───────────────────────────────────────────────────────
 
     def _node_is_stale(self, node: CalibrationNode, max_age_hours: float | None = None) -> bool:
+        """Return the node is stale result.
+
+        Parameters
+        ----------
+        node : CalibrationNode
+            Value for ``node``.
+        max_age_hours : float | None, default: None
+            Value for ``max_age_hours``.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         return any(
             self._store.is_stale(self._qubit, p, max_age_hours)
             for p in node.provides
         )
 
-    # ── Execution ─────────────────────────────────────────────────────────────
 
     def run_stale(self, max_age_hours: float | None = None, dry_run: bool = False) -> list[str]:
-        """
-        Run all nodes whose outputs are stale, in dependency order.
+        """Run all nodes whose outputs are stale, in dependency order.
 
         Parameters
         ----------
@@ -134,7 +198,18 @@ class CalibrationGraph:
         return ran
 
     def run_all(self, dry_run: bool = False) -> list[str]:
-        """Force-run every node regardless of staleness."""
+        """Force-run every node regardless of staleness.
+
+        Parameters
+        ----------
+        dry_run : bool, default: False
+            Value for ``dry_run``.
+
+        Returns
+        -------
+        list[str]
+            Result of the operation.
+        """
         order = self._topological_order()
         for name in order:
             if dry_run:
@@ -145,7 +220,13 @@ class CalibrationGraph:
         return order
 
     def status(self) -> str:
-        """Return a human-readable staleness summary for all nodes."""
+        """Return a human-readable staleness summary for all nodes.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         order = self._topological_order()
         lines = [f"CalibrationGraph status — qubit {self._qubit}"]
         for name in order:
@@ -155,4 +236,11 @@ class CalibrationGraph:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return f"CalibrationGraph(qubit={self._qubit!r}, nodes={list(self._nodes.keys())})"

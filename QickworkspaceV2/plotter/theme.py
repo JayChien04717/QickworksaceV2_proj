@@ -29,7 +29,17 @@ COLOR_CYCLE = [
 
 
 def style_axes(ax, *, grid: bool = True, panel: bool = False) -> None:
-    """Apply the project figure style to one Axes without changing global rcParams."""
+    """Apply the project figure style to one Axes without changing global rcParams.
+
+    Parameters
+    ----------
+    ax : Any
+        Matplotlib axes on which to draw.
+    grid : bool, default: True
+        Value for ``grid``.
+    panel : bool, default: False
+        Value for ``panel``.
+    """
     ax.set_facecolor(COLORS["panel"] if panel else "white")
     ax.set_prop_cycle(cycler(color=COLOR_CYCLE))
     ax.tick_params(
@@ -53,7 +63,13 @@ def style_axes(ax, *, grid: bool = True, panel: bool = False) -> None:
 
 
 def style_figure(fig) -> None:
-    """Set the neutral canvas used by project figures."""
+    """Set the neutral canvas used by project figures.
+
+    Parameters
+    ----------
+    fig : Any
+        Matplotlib figure to update.
+    """
     fig.patch.set_facecolor("white")
 
 

@@ -46,10 +46,19 @@ class BaseAnalysis(ABC):
     REQUIRED_CONFIG_KEYS: tuple[str, ...] = ()
 
     def run(self, data: "ExperimentData") -> "ExperimentData":
-        """
-        Run analysis on *data* and return the annotated ExperimentData.
+        """Run analysis on *data* and return the annotated ExperimentData.
 
-        Calls :meth:`_run`, then :meth:`_assess_quality`.
+                        Calls :meth:`_run`, then :meth:`_assess_quality`.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
+
+        Returns
+        -------
+        'ExperimentData'
+            Result of the operation.
         """
         if data.raw_iq is None:
             from .experiment_data import QualityFlag
@@ -65,16 +74,106 @@ class BaseAnalysis(ABC):
         return data
 
     def plot(self, data: "ExperimentData") -> None:
-        """
-        Show a fit overlay figure after analysis.  Override in subclasses.
+        """Show a fit overlay figure after analysis.  Override in subclasses.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
         """
         pass
 
-    # ── Helper ───────────────────────────────────────────────────────────────
+    def render(self, data: "ExperimentData") -> None:
+        """Render analysis output, falling back to raw IQ when fitting failed.
+
+        A fit that completed but failed a quality threshold still goes through
+        :meth:`plot`, so users can inspect both the measured data and its poor
+        fit. The raw-only fallback is reserved for a genuine fitting failure:
+        BAD quality, no fit parameters, and no fit result.
+        """
+        from .experiment_data import QualityFlag
+
+        fit_failed = (
+            data.quality is QualityFlag.BAD
+            and data.fit_params is None
+            and not data.fit_result
+        )
+        if fit_failed:
+            self._show_raw(data)
+            return
+        self.plot(data)
+
+    def _show_raw(
+        self,
+        data: "ExperimentData",
+        *,
+        xlabel: Optional[str] = None,
+    ) -> None:
+        """Show a raw-IQ dashboard with the fitting failure reason."""
+        from ..plotter.plot_utils import plot_fit_result
+
+        trace = self._raw_plot_trace(data)
+        if trace is None:
+            return
+
+        x, raw_iq, reduced = trace
+        message = data.quality_message or "Fit failed; showing raw data."
+        if reduced:
+            message = f"{message}\n{reduced}"
+        if xlabel is None:
+            xlabel = data.x_name or "x"
+            if data.x_unit:
+                xlabel = f"{xlabel} ({data.x_unit})"
+        plot_fit_result(
+            x,
+            raw_iq,
+            lambda values, *_: np.zeros_like(values, dtype=float),
+            None,
+            x_label=xlabel,
+            title=f"{data.experiment_type or 'Analysis'} | Raw data (fit failed)",
+            result_text=message,
+            quality=data.quality.value,
+            fit_channel=data.metadata.get("fit_channel", "abs"),
+        )
+
+    @staticmethod
+    def _raw_plot_trace(data: "ExperimentData"):
+        """Return ``(x, iq, note)`` suitable for a one-dimensional raw plot."""
+        if data.x_axis is None or data.raw_iq is None:
+            return None
+
+        x = np.asarray(data.x_axis).reshape(-1)
+        iq = np.asarray(data.raw_iq)
+        if iq.ndim == 1 and iq.size == x.size:
+            return x, iq, ""
+        if iq.size == x.size:
+            return x, iq.reshape(-1), ""
+        if iq.ndim > 1 and iq.shape[-1] == x.size:
+            rows = iq.reshape(-1, x.size)
+            return x, np.nanmean(rows, axis=0), (
+                f"Raw IQ averaged over {rows.shape[0]} traces for display."
+            )
+        return None
+
 
     @staticmethod
     def _config_value(data: "ExperimentData", key: str, default=None):
-        """Read persisted analysis context with legacy config fallback."""
+        """Read persisted analysis context with legacy config fallback.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
+        key : str
+            Lookup key.
+        default : Any, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         context = data.metadata.get("analysis_context") or {}
         if key in context:
             return context[key]
@@ -91,7 +190,25 @@ class BaseAnalysis(ABC):
         result_text: str = "",
         extra_lines=None,
     ) -> None:
-        """Render the shared fit dashboard via plot_utils."""
+        """Render the shared fit dashboard via plot_utils.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
+        simfunc : Any
+            Value for ``simfunc``.
+        fit_params : Any
+            Value for ``fit_params``.
+        xlabel : str, default: 'x'
+            Value for ``xlabel``.
+        title : str, default: ''
+            Value for ``title``.
+        result_text : str, default: ''
+            Value for ``result_text``.
+        extra_lines : Any, default: None
+            Value for ``extra_lines``.
+        """
         from ..plotter.plot_utils import plot_fit_result
 
         if data.x_axis is None or data.raw_iq is None:
@@ -116,7 +233,25 @@ class BaseAnalysis(ABC):
 
     @staticmethod
     def _channel_data(iq_data, channel: str):
-        """Return a real-valued fitting trace from complex IQ data."""
+        """Return a real-valued fitting trace from complex IQ data.
+
+        Parameters
+        ----------
+        iq_data : Any
+            Value for ``iq_data``.
+        channel : str
+            Value for ``channel``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         channel = (channel or "abs").lower()
         aliases = {
             "amp": "abs",
@@ -139,16 +274,42 @@ class BaseAnalysis(ABC):
         raise ValueError(f"Unknown fit_channel '{channel}'")
 
     def _fit_channel(self, data, fitfunc, simfunc, *, fitparams=None, channels=None):
-        """
-        Fit one or more IQ channels and return the best result.
+        """Fit one or more IQ channels and return the best result.
 
-        ``data.config['fit_channel']`` defaults to ``'auto'``.  In auto mode the
-        score is the fitted curve span divided by residual standard deviation.
+                        ``data.config['fit_channel']`` defaults to ``'auto'``.  In auto mode the
+                        score is the fitted curve span divided by residual standard deviation.
+
+        Parameters
+        ----------
+        data : Any
+            Input data to process.
+        fitfunc : Any
+            Value for ``fitfunc``.
+        simfunc : Any
+            Value for ``simfunc``.
+        fitparams : Any, default: None
+            Value for ``fitparams``.
+        channels : Any, default: None
+            Value for ``channels``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
         """
         if data.x_axis is None or data.raw_iq is None:
             raise ValueError("Missing x_axis or raw_iq")
 
-        requested = str(data.config.get("fit_channel", "auto")).lower()
+        requested_value = self._config_value(data, "fit_channel", "auto")
+        requested = requested_value.lower() if isinstance(requested_value, str) else "auto"
+        requested = requested or "auto"
         if requested == "auto":
             channels = channels or ("abs", "real", "imag", "phase")
         else:
@@ -194,21 +355,34 @@ class BaseAnalysis(ABC):
 
     @abstractmethod
     def _run(self, data: "ExperimentData") -> None:
-        """
-        Perform fitting and populate ``data.fit_params``, ``data.fit_errors``,
-        ``data.fit_result``, ``data.scalar_result``, and ``data.figures``.
+        """Perform fitting and populate ``data.fit_params``, ``data.fit_errors``,
+                        ``data.fit_result``, ``data.scalar_result``, and ``data.figures``.
 
-        Mutates *data* in place; return value is ignored.
+                        Mutates *data* in place; return value is ignored.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
         """
         ...
 
     def _assess_quality(self, data: "ExperimentData") -> "QualityFlag":
-        """
-        Compare ``data.fit_result`` against ``self.thresholds``.
+        """Compare ``data.fit_result`` against ``self.thresholds``.
 
-        Returns ``GOOD`` if all thresholds pass, ``BAD`` if any fail,
-        ``WARNING`` if fit is valid but marginal, ``NO_INFORMATION`` if
-        no thresholds are defined.
+                        Returns ``GOOD`` if all thresholds pass, ``BAD`` if any fail,
+                        ``WARNING`` if fit is valid but marginal, ``NO_INFORMATION`` if
+                        no thresholds are defined.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
+
+        Returns
+        -------
+        'QualityFlag'
+            Result of the operation.
         """
         from .experiment_data import QualityFlag
 
@@ -239,4 +413,11 @@ class IdentityAnalysis(BaseAnalysis):
     """No-op analysis — passes data through unchanged."""
 
     def _run(self, data: "ExperimentData") -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : 'ExperimentData'
+            Input data to process.
+        """
         pass
