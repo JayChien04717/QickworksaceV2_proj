@@ -28,12 +28,28 @@ SCHEMA_NAME = "qickworkspace.experiment"
 SCHEMA_VERSION = "1.0"
 LOCAL_TIMEZONE = ZoneInfo("Asia/Taipei")
 CATALOG_FILENAME = "catalog.sqlite"
+EMBEDDED_GROUP = "metagroup"
+LEGACY_EMBEDDED_GROUPS = ("QickworkspaceV2",)
 _ID_RE = re.compile(r"^\d{8}T\d{12}Z-[0-9A-HJKMNP-TV-Z]{13}$")
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _STRING_DTYPE = h5py.string_dtype(encoding="utf-8")
 
 
 def _encode_crockford(value: int, width: int) -> str:
+    """Return the encode crockford result.
+
+    Parameters
+    ----------
+    value : int
+        Value to apply.
+    width : int
+        Value for ``width``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     chars = []
     for _ in range(width):
         chars.append(_CROCKFORD[value & 31])
@@ -42,6 +58,18 @@ def _encode_crockford(value: int, width: int) -> str:
 
 
 def _as_utc(value: Optional[datetime] = None) -> datetime:
+    """Return the as utc result.
+
+    Parameters
+    ----------
+    value : Optional[datetime]
+        Value to apply.
+
+    Returns
+    -------
+    datetime
+        Result of the operation.
+    """
     value = value or datetime.now(timezone.utc)
     if value.tzinfo is None:
         value = value.replace(tzinfo=LOCAL_TIMEZONE)
@@ -49,18 +77,52 @@ def _as_utc(value: Optional[datetime] = None) -> datetime:
 
 
 def generate_experiment_id(timestamp: Optional[datetime] = None) -> str:
-    """Return a sortable UTC timestamp plus 64 bits of cryptographic randomness."""
+    """Return a sortable UTC timestamp plus 64 bits of cryptographic randomness.
+
+    Parameters
+    ----------
+    timestamp : Optional[datetime]
+        Timestamp associated with the operation.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     stamp = _as_utc(timestamp).strftime("%Y%m%dT%H%M%S%fZ")
     random_part = _encode_crockford(int.from_bytes(secrets.token_bytes(8), "big"), 13)
     return f"{stamp}-{random_part}"
 
 
 def validate_experiment_id(experiment_id: str) -> bool:
-    """Return whether *experiment_id* follows the v1 public ID format."""
+    """Return whether *experiment_id* follows the v1 public ID format.
+
+    Parameters
+    ----------
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     return bool(_ID_RE.fullmatch(str(experiment_id or "")))
 
 
 def _json_default(value: Any):
+    """Return the json default result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -79,6 +141,18 @@ def _json_default(value: Any):
 
 
 def _json_object_hook(value: dict):
+    """Return the json object hook result.
+
+    Parameters
+    ----------
+    value : dict
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     marker = value.get("__complex__")
     if isinstance(marker, list) and len(marker) == 2:
         return complex(marker[0], marker[1])
@@ -86,10 +160,36 @@ def _json_object_hook(value: dict):
 
 
 def _json_dumps(value: Any) -> str:
+    """Return the json dumps result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     return json.dumps(value, ensure_ascii=False, default=_json_default, separators=(",", ":"))
 
 
 def _json_loads(value: Any, default=None):
+    """Return the json loads result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+    default : Any, default: None
+        Value for ``default``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if value is None:
         return default
     if isinstance(value, bytes):
@@ -101,10 +201,42 @@ def _json_loads(value: Any, default=None):
 
 
 def _write_text(group: h5py.Group, name: str, value: Any) -> h5py.Dataset:
+    """Write text.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    name : str
+        Name of the target object.
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    h5py.Dataset
+        Result of the operation.
+    """
     return group.create_dataset(name, data=str(value or ""), dtype=_STRING_DTYPE)
 
 
 def _read_text(group: h5py.Group, name: str, default: str = "") -> str:
+    """Return text.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    name : str
+        Name of the target object.
+    default : str, default: ''
+        Value for ``default``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     if name not in group:
         return default
     value = group[name][()]
@@ -112,12 +244,36 @@ def _read_text(group: h5py.Group, name: str, default: str = "") -> str:
 
 
 def _dataset_options(array: np.ndarray) -> dict:
+    """Return the dataset options result.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Value for ``array``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     if array.ndim == 0 or array.size < 64 or array.dtype.kind in {"O", "U", "S"}:
         return {}
     return {"chunks": True, "compression": "gzip", "compression_opts": 4, "shuffle": True}
 
 
 def _normalise_dataset_payload(value: Any):
+    """Normalize dataset payload.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(value, dict) and "values" in value:
         attrs = {key: value.get(key) for key in ("dims", "unit", "label", "description", "scale")}
         return value["values"], attrs
@@ -125,6 +281,17 @@ def _normalise_dataset_payload(value: Any):
 
 
 def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> None:
+    """Write tree.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    values : Any
+        Values to process.
+    dataset_name : str, default: 'value'
+        Name of the dataset.
+    """
     if values is None:
         return
     is_payload = isinstance(values, dict) and "values" in values
@@ -158,6 +325,20 @@ def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> 
 
 
 def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False):
+    """Return tree.
+
+    Parameters
+    ----------
+    node : h5py.Group | h5py.Dataset
+        Value for ``node``.
+    preserve_attrs : bool, default: False
+        Value for ``preserve_attrs``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(node, h5py.Dataset):
         value = node[()]
         if node.attrs.get("encoding") == "json":
@@ -182,6 +363,20 @@ def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False)
 
 
 def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list[str]]:
+    """Return the collect dataset dims result.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Value for ``group``.
+    prefix : str, default: ''
+        Value for ``prefix``.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Result of the operation.
+    """
     dims = {}
     for name, node in group.items():
         path = f"{prefix}/{name}" if prefix else name
@@ -194,6 +389,22 @@ def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list
 
 
 def _decorate_tree_with_dims(values: Any, dims: dict[str, list[str]], prefix: str = ""):
+    """Return the decorate tree with dims result.
+
+    Parameters
+    ----------
+    values : Any
+        Values to process.
+    dims : dict[str, list[str]]
+        Value for ``dims``.
+    prefix : str, default: ''
+        Value for ``prefix``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if isinstance(values, dict) and "values" in values:
         if "dims" not in values and prefix in dims:
             return {**values, "dims": dims[prefix]}
@@ -213,19 +424,122 @@ def _decorate_tree_with_dims(values: Any, dims: dict[str, list[str]], prefix: st
 
 
 def _quality_value(result) -> str:
+    """Return the quality value result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     quality = getattr(result, "quality", "no_information")
     return str(getattr(quality, "value", quality))
 
 
-def _normalise_tags(tags: Iterable[str] | str | None) -> list[str]:
+# Canonical spellings are limited to values emitted by the original
+# saveLabber paths: class-level TAG values plus the few legacy experiments
+# that pass tag directly. T2 is retained for older archives even though
+# current Ramsey and SpinEcho classes use descriptive tags.
+_CANONICAL_TAG_NAMES = (
+    "ACStark",
+    "AllXY",
+    "Chi",
+    "Cryoscope",
+    "Drag",
+    "MuxAllXY",
+    "MuxOneTone",
+    "MuxPowerRabi",
+    "MuxPunchout",
+    "MuxRamsey",
+    "MuxRB",
+    "MuxSingleShotGE",
+    "MuxSingleShotGEOpt",
+    "MuxT1",
+    "MuxTOF",
+    "MuxTomography",
+    "MuxTwoTone",
+    "OneTone",
+    "PowerRabi",
+    "Ramsey",
+    "RB",
+    "SingleShot",
+    "Spin Echo",
+    "T1",
+    "T2",
+    "Temperature",
+    "TimeRabi",
+    "TOF",
+    "Tomography",
+    "TwoTone",
+)
+
+
+def _tag_key(tag: object) -> str:
+    """Return a case- and separator-insensitive lookup key."""
+    return re.sub(r"[^a-z0-9]+", "", str(tag).casefold())
+
+
+_CANONICAL_TAGS = {
+    _tag_key(tag): tag
+    for tag in _CANONICAL_TAG_NAMES
+}
+_CANONICAL_TAGS.update({
+    "allxy": "AllXY",
+    "dragcalibration": "Drag",
+    "rabi": "PowerRabi",
+})
+
+
+def _canonical_tag(tag: object, experiment_type: str = "") -> str:
+    """Return the preferred display spelling for one tag."""
+    text = str(tag).strip()
+    if _tag_key(text) == "rabi" and "timerabi" in _tag_key(experiment_type):
+        return "TimeRabi"
+    return _CANONICAL_TAGS.get(_tag_key(text), text)
+
+
+def _normalise_tags(
+    tags: Iterable[str] | str | None,
+    experiment_type: str = "",
+) -> list[str]:
+    """Normalize tags.
+
+    Parameters
+    ----------
+    tags : Iterable[str] | str | None
+        Value for ``tags``.
+
+    Returns
+    -------
+    list[str]
+        Result of the operation.
+    """
     if tags is None:
         return []
     if isinstance(tags, str):
         tags = [tags]
-    return list(dict.fromkeys(str(tag).strip() for tag in tags if str(tag).strip()))
+    cleaned = (_canonical_tag(tag, experiment_type) for tag in tags)
+    cleaned = (tag for tag in cleaned if tag)
+    return list(dict.fromkeys(cleaned))
 
 
 def _qubits_from_result(result) -> list[str]:
+    """Return the qubits from result result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    list[str]
+        Result of the operation.
+    """
     metadata = getattr(result, "metadata", {}) or {}
     config = getattr(result, "config", {}) or {}
     raw = metadata.get("qubit_names") or metadata.get("qubits")
@@ -239,6 +553,18 @@ def _qubits_from_result(result) -> list[str]:
 
 
 def _dispatch_ids(result) -> tuple[str, str, str]:
+    """Return the dispatch ids result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        Result of the operation.
+    """
     experiment_type = str(getattr(result, "experiment_type", "") or "").lower()
     raw = getattr(result, "raw_iq", None)
     ndim = np.asarray(raw).ndim if raw is not None and not isinstance(raw, dict) else 0
@@ -265,6 +591,18 @@ def _dispatch_ids(result) -> tuple[str, str, str]:
 
 
 def _resolve_data_root(data_root: Optional[os.PathLike | str]) -> Path:
+    """Resolve data root.
+
+    Parameters
+    ----------
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     if data_root is not None:
         return Path(data_root).expanduser().resolve()
     try:
@@ -277,11 +615,43 @@ def _resolve_data_root(data_root: Optional[os.PathLike | str]) -> Path:
 
 
 def _safe_filename_part(value: str, fallback: str) -> str:
+    """Return the safe filename part result.
+
+    Parameters
+    ----------
+    value : str
+        Value to apply.
+    fallback : str
+        Value for ``fallback``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value or "")).strip("-_.")
     return cleaned or fallback
 
 
 def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> Path:
+    """Return the auto path result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    result : Any
+        Experiment result to process.
+    local_time : datetime
+        Value for ``local_time``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     experiment = _safe_filename_part(getattr(result, "experiment_type", ""), "experiment")
     qubits = _qubits_from_result(result)
     qubit = _safe_filename_part("-".join(qubits), "all")
@@ -292,6 +662,18 @@ def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> 
 
 
 def _axis_entries(result) -> dict[str, Any]:
+    """Return the axis entries result.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     entries = dict(getattr(result, "axes", {}) or {})
     if getattr(result, "x_axis", None) is not None and "x" not in entries:
         entries["x"] = {
@@ -311,6 +693,13 @@ def _axis_entries(result) -> dict[str, Any]:
 
 
 def _provenance() -> dict:
+    """Return the provenance result.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     try:
         from .. import __version__
     except Exception:
@@ -329,6 +718,21 @@ def _provenance() -> dict:
 
 
 def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: datetime) -> None:
+    """Write file.
+
+    Parameters
+    ----------
+    path : Path
+        Filesystem path.
+    result : Any
+        Experiment result to process.
+    comment : str
+        Value for ``comment``.
+    tags : list[str]
+        Value for ``tags``.
+    utc_time : datetime
+        Value for ``utc_time``.
+    """
     local_time = utc_time.astimezone(LOCAL_TIMEZONE)
     data_kind, analysis_id, plot_id = _dispatch_ids(result)
     metadata = dict(getattr(result, "metadata", {}) or {})
@@ -421,7 +825,33 @@ def save_result(
     data_root: Optional[os.PathLike | str] = None,
     catalog: bool = True,
 ) -> Path:
-    """Atomically save one experiment and register it in the local catalog."""
+    """Atomically save one experiment and register it in the local catalog.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+    path : Optional[os.PathLike | str]
+        Filesystem path.
+    comment : str, default: ''
+        Value for ``comment``.
+    tags : Iterable[str] | str, default: ()
+        Value for ``tags``.
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+    catalog : bool, default: True
+        Value for ``catalog``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+
+    Raises
+    ------
+    FileExistsError
+        If the operation cannot be completed.
+    """
     root = _resolve_data_root(data_root)
     explicit_path = path is not None
     utc_time = _as_utc(getattr(result, "timestamp", None))
@@ -437,7 +867,10 @@ def save_result(
         result.experiment_id = generate_experiment_id(utc_time)
     result.timestamp = utc_time
     result.comment = str(comment if comment != "" else getattr(result, "comment", ""))
-    result.tags = _normalise_tags(tags if tags else getattr(result, "tags", []))
+    result.tags = _normalise_tags(
+        tags if tags else getattr(result, "tags", []),
+        getattr(result, "experiment_type", ""),
+    )
 
     if explicit_path:
         final_path = Path(path).expanduser().resolve()
@@ -465,6 +898,18 @@ def save_result(
 
 
 def _attrs_dict(h5: h5py.File) -> dict:
+    """Return the attrs dict result.
+
+    Parameters
+    ----------
+    h5 : h5py.File
+        Value for ``h5``.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     result = {}
     for key, value in h5.attrs.items():
         if isinstance(value, np.generic):
@@ -475,20 +920,58 @@ def _attrs_dict(h5: h5py.File) -> dict:
     return result
 
 
+def _native_root(h5: h5py.File | h5py.Group):
+    """Return the native schema root for standalone or Labber-hybrid files.
+
+    Parameters
+    ----------
+    h5 : h5py.File | h5py.Group
+        Value for ``h5``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
+    if h5.attrs.get("schema_name") == SCHEMA_NAME:
+        return h5
+    for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
+        candidate = h5.get(group_name)
+        if isinstance(candidate, h5py.Group) and candidate.attrs.get("schema_name") == SCHEMA_NAME:
+            return candidate
+    return None
+
+
 def inspect_file(path: os.PathLike | str) -> dict:
-    """Read lightweight root/meta information without loading raw arrays."""
+    """Read lightweight metadata from standalone or Labber-hybrid files.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    dict
+        Result of the operation.
+    """
     path = Path(path).expanduser().resolve()
     with h5py.File(path, "r") as h5:
-        attrs = _attrs_dict(h5)
-        if attrs.get("schema_name") != SCHEMA_NAME:
+        root = _native_root(h5)
+        if root is None:
             meta = _json_loads(h5.attrs.get("meta"), {}) or {}
+            meta["tags"] = _normalise_tags(
+                meta.get("tags", []),
+                meta.get("experiment_type", ""),
+            )
             return {
                 "path": str(path),
                 "schema_name": "qickworkspace.legacy",
                 "schema_version": "0",
                 **meta,
             }
-        meta_group = h5.get("meta")
+        attrs = _attrs_dict(root)
+        meta_group = root.get("meta")
         metadata = _json_loads(_read_text(meta_group, "metadata_json"), {}) if meta_group else {}
         config = _json_loads(_read_text(meta_group, "config_json"), {}) if meta_group else {}
         lineage = _json_loads(_read_text(meta_group, "lineage_json"), {}) if meta_group else {}
@@ -497,7 +980,13 @@ def inspect_file(path: os.PathLike | str) -> dict:
         if meta_group is not None:
             comment = _read_text(meta_group, "comment")
             if "tags" in meta_group:
-                tags = [item.decode() if isinstance(item, bytes) else str(item) for item in meta_group["tags"][:]]
+                tags = _normalise_tags(
+                    [
+                        item.decode() if isinstance(item, bytes) else str(item)
+                        for item in meta_group["tags"][:]
+                    ],
+                    str(attrs.get("experiment_type", "")),
+                )
         qubits = (
             (metadata or {}).get("qubit_names")
             or (metadata or {}).get("qubits")
@@ -510,6 +999,7 @@ def inspect_file(path: os.PathLike | str) -> dict:
             qubits = [qubits]
         return {
             "path": str(path),
+            "container_group": root.name if root.name != "/" else "/",
             **attrs,
             "comment": comment,
             "tags": tags,
@@ -519,47 +1009,63 @@ def inspect_file(path: os.PathLike | str) -> dict:
             "qubits": [str(item) for item in qubits],
         }
 
-
 def load_result(path: os.PathLike | str):
-    """Load a native v1 file, with fallback support for the previous local format."""
+    """Load standalone native v1, Labber-hybrid, or the previous local format.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     path = Path(path).expanduser().resolve()
     from ..core.experiment_data import ExperimentData, QualityFlag
 
     with h5py.File(path, "r") as h5:
-        if h5.attrs.get("schema_name") != SCHEMA_NAME:
+        root = _native_root(h5)
+        if root is None:
             return _load_previous_format(h5)
-        if not bool(h5.attrs.get("write_complete", False)):
+        if not bool(root.attrs.get("write_complete", False)):
             raise ValueError(f"Experiment file is incomplete: {path}")
-        experiment_id = str(h5.attrs.get("experiment_id", ""))
+        experiment_id = str(root.attrs.get("experiment_id", ""))
         if not validate_experiment_id(experiment_id):
             raise ValueError(f"Invalid experiment_id in {path}: {experiment_id!r}")
 
-        meta = h5["meta"]
+        meta = root["meta"]
         config = _json_loads(_read_text(meta, "config_json"), {}) or {}
         metadata = _json_loads(_read_text(meta, "metadata_json"), {}) or {}
         lineage = _json_loads(_read_text(meta, "lineage_json"), {}) or {}
-        results = h5["results"]
+        results = root["results"]
         summary = _json_loads(_read_text(results, "summary_json"), {}) or {}
         fit_result = _json_loads(_read_text(results, "fit_result_json"), {}) or {}
-        timestamp = datetime.fromisoformat(str(h5.attrs["timestamp_utc"]))
-        quality_raw = str(h5.attrs.get("quality", "no_information"))
+        timestamp = datetime.fromisoformat(str(root.attrs["timestamp_utc"]))
+        quality_raw = str(root.attrs.get("quality", "no_information"))
         try:
             quality = QualityFlag(quality_raw)
         except ValueError:
             quality = QualityFlag.NO_INFORMATION
 
-        raw_tree = _read_tree(h5["raw"])
-        raw_dims = _collect_dataset_dims(h5["raw"])
+        raw_tree = _read_tree(root["raw"])
+        raw_dims = _collect_dataset_dims(root["raw"])
         if "iq" in raw_tree:
             raw_iq = raw_tree["iq"]
             raw_data = {key: value for key, value in raw_tree.items() if key != "iq"}
         else:
             raw_iq = raw_tree or None
             raw_data = {}
-        analysis_data = _read_tree(h5["analysis"], preserve_attrs=True)
+        analysis_data = _read_tree(root["analysis"], preserve_attrs=True)
         axes = {}
         x_axis = y_axis = None
-        for name, group in h5["axes"].items():
+        for name, group in root["axes"].items():
             values = group["values"][:]
             if values.dtype.kind in {"O", "S"}:
                 values = np.asarray([
@@ -578,9 +1084,15 @@ def load_result(path: os.PathLike | str):
                 scale = float(group.attrs.get("scale", 1.0)) or 1.0
                 y_axis = values / scale
 
-        tags = [item.decode() if isinstance(item, bytes) else str(item) for item in meta["tags"][:]]
-        obj = ExperimentData(
-            experiment_type=str(h5.attrs.get("experiment_type", "")),
+        tags = _normalise_tags(
+            [
+                item.decode() if isinstance(item, bytes) else str(item)
+                for item in meta["tags"][:]
+            ],
+            str(root.attrs.get("experiment_type", "")),
+        )
+        return ExperimentData(
+            experiment_type=str(root.attrs.get("experiment_type", "")),
             experiment_id=experiment_id,
             timestamp=timestamp,
             raw_iq=raw_iq,
@@ -596,33 +1108,44 @@ def load_result(path: os.PathLike | str):
             metadata=metadata,
             parent_id=lineage.get("parent_id"),
             children=lineage.get("children") or [],
-            interrupted=bool(h5.attrs.get("interrupted", False)),
+            interrupted=bool(root.attrs.get("interrupted", False)),
             avg_count=int(summary.get("avg_count", 0)),
-            x_name=str(h5["axes/x"].attrs.get("label", "")) if "x" in h5["axes"] else "",
-            x_unit=str(h5["axes/x"].attrs.get("unit", "")) if "x" in h5["axes"] else "",
-            x_scale=float(h5["axes/x"].attrs.get("scale", 1.0)) if "x" in h5["axes"] else 1.0,
-            y_name=str(h5["axes/y"].attrs.get("label", "")) if "y" in h5["axes"] else "",
-            y_unit=str(h5["axes/y"].attrs.get("unit", "")) if "y" in h5["axes"] else "",
-            y_scale=float(h5["axes/y"].attrs.get("scale", 1.0)) if "y" in h5["axes"] else 1.0,
+            x_name=str(root["axes/x"].attrs.get("label", "")) if "x" in root["axes"] else "",
+            x_unit=str(root["axes/x"].attrs.get("unit", "")) if "x" in root["axes"] else "",
+            x_scale=float(root["axes/x"].attrs.get("scale", 1.0)) if "x" in root["axes"] else 1.0,
+            y_name=str(root["axes/y"].attrs.get("label", "")) if "y" in root["axes"] else "",
+            y_unit=str(root["axes/y"].attrs.get("unit", "")) if "y" in root["axes"] else "",
+            y_scale=float(root["axes/y"].attrs.get("scale", 1.0)) if "y" in root["axes"] else 1.0,
             axes=axes,
             raw_data=raw_data,
             analysis_data=analysis_data,
             dataset_dims=raw_dims,
-            data_kind=str(h5.attrs.get("data_kind", "")),
-            analysis_id=str(h5.attrs.get("analysis_id", "")),
-            plot_id=str(h5.attrs.get("plot_id", "")),
+            data_kind=str(root.attrs.get("data_kind", "")),
+            analysis_id=str(root.attrs.get("analysis_id", "")),
+            plot_id=str(root.attrs.get("plot_id", "")),
             comment=_read_text(meta, "comment"),
             tags=tags,
             session_id=lineage.get("session_id"),
         )
-        return obj
-
 
 def _load_previous_format(h5: h5py.File):
+    """Return previous format.
+
+    Parameters
+    ----------
+    h5 : h5py.File
+        Value for ``h5``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     from ..core.experiment_data import ExperimentData
 
     meta = _json_loads(h5.attrs.get("meta"), {}) or {}
     obj = ExperimentData.from_dict(meta)
+    obj.tags = _normalise_tags(obj.tags, obj.experiment_type)
     if "data" in h5:
         data = h5["data"]
         obj.raw_iq = data["avgi"][:] + 1j * data["avgq"][:]
@@ -644,41 +1167,62 @@ class ValidationReport:
 
 
 def validate_file(path: os.PathLike | str) -> ValidationReport:
-    """Validate schema identity, completion state, ID, and dataset dimensions."""
+    """Validate standalone or embedded native schema and dataset dimensions.
+
+    Parameters
+    ----------
+    path : os.PathLike | str
+        Filesystem path.
+
+    Returns
+    -------
+    ValidationReport
+        Result of the operation.
+    """
     errors: list[str] = []
     warnings: list[str] = []
     resolved = str(Path(path).expanduser().resolve())
     try:
         with h5py.File(resolved, "r") as h5:
-            if h5.attrs.get("schema_name") != SCHEMA_NAME:
+            root = _native_root(h5)
+            if root is None:
                 errors.append("schema_name is not qickworkspace.experiment")
-            if str(h5.attrs.get("schema_version", "")) != SCHEMA_VERSION:
-                errors.append(f"unsupported schema_version {h5.attrs.get('schema_version')!r}")
-            if not bool(h5.attrs.get("write_complete", False)):
+                return ValidationReport(resolved, False, errors, warnings)
+            if str(root.attrs.get("schema_version", "")) != SCHEMA_VERSION:
+                errors.append(f"unsupported schema_version {root.attrs.get('schema_version')!r}")
+            if not bool(root.attrs.get("write_complete", False)):
                 errors.append("write_complete is false")
-            if not validate_experiment_id(str(h5.attrs.get("experiment_id", ""))):
+            if not validate_experiment_id(str(root.attrs.get("experiment_id", ""))):
                 errors.append("experiment_id is invalid")
             for group in ("meta", "axes", "raw", "analysis", "results"):
-                if group not in h5:
+                if group not in root:
                     errors.append(f"missing group: {group}")
-            if "raw" in h5 and len(h5["raw"]) == 0:
+            if "raw" in root and len(root["raw"]) == 0:
                 warnings.append("raw group contains no datasets")
             axis_lengths = {
                 name: int(group["values"].size)
-                for name, group in h5.get("axes", {}).items()
+                for name, group in root.get("axes", {}).items()
                 if "values" in group
             }
             for group_name in ("raw", "analysis"):
-                if group_name not in h5:
+                if group_name not in root:
                     continue
+
                 def _check_dims(name, node):
+                    """Return the check dims result.
+
+                    Parameters
+                    ----------
+                    name : Any
+                        Name of the target object.
+                    node : Any
+                        Value for ``node``.
+                    """
                     if not isinstance(node, h5py.Dataset) or "dims" not in node.attrs:
                         return
                     dims = list(_json_loads(node.attrs["dims"], []) or [])
                     if len(dims) != node.ndim:
-                        errors.append(
-                            f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset"
-                        )
+                        errors.append(f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset")
                         return
                     for index, dim in enumerate(dims):
                         if dim not in axis_lengths:
@@ -688,18 +1232,44 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
                                 f"{group_name}/{name}: shape[{index}]={node.shape[index]} "
                                 f"does not match axis {dim!r} length {axis_lengths[dim]}"
                             )
-                h5[group_name].visititems(_check_dims)
+
+                root[group_name].visititems(_check_dims)
     except Exception as exc:
         errors.append(str(exc))
     return ValidationReport(resolved, not errors, errors, warnings)
 
-
 def _catalog_path(root: Path) -> Path:
+    """Return the catalog path result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+    """
     root.mkdir(parents=True, exist_ok=True)
     return root / CATALOG_FILENAME
 
 
 def _catalog_contains_id(root: Path, experiment_id: str) -> bool:
+    """Return the catalog contains id result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     catalog = _catalog_path(root)
     if not catalog.exists():
         return False
@@ -715,14 +1285,30 @@ def _catalog_contains_id(root: Path, experiment_id: str) -> bool:
 
 
 def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
+    """Return the experiment id exists result.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+    experiment_id : str
+        Value for ``experiment_id``.
+
+    Returns
+    -------
+    bool
+        Result of the operation.
+    """
     if _catalog_path(root).exists():
         return _catalog_contains_id(root, experiment_id)
     if not root.exists():
         return False
-    for path in root.rglob("*.h5"):
+    candidates = list(root.rglob("*.h5")) + list(root.rglob("*.hdf5"))
+    for path in candidates:
         try:
             with h5py.File(path, "r") as h5:
-                if str(h5.attrs.get("experiment_id", "")) == experiment_id:
+                native_root = _native_root(h5)
+                if native_root is not None and str(native_root.attrs.get("experiment_id", "")) == experiment_id:
                     return True
         except OSError:
             continue
@@ -730,6 +1316,18 @@ def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
 
 
 def _connect_catalog(root: Path) -> sqlite3.Connection:
+    """Connect catalog.
+
+    Parameters
+    ----------
+    root : Path
+        Value for ``root``.
+
+    Returns
+    -------
+    sqlite3.Connection
+        Result of the operation.
+    """
     connection = sqlite3.connect(_catalog_path(root), timeout=30.0)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA busy_timeout=30000")
@@ -757,6 +1355,15 @@ def _connect_catalog(root: Path) -> sqlite3.Connection:
 
 
 def _register_file(path: Path, root: Path) -> None:
+    """Register file.
+
+    Parameters
+    ----------
+    path : Path
+        Filesystem path.
+    root : Path
+        Value for ``root``.
+    """
     info = inspect_file(path)
     metadata = info.get("metadata", {}) or {}
     qubits = info.get("qubits") or metadata.get("qubit_names") or []
@@ -798,10 +1405,31 @@ class ExperimentReference:
     path: Path
 
     def load(self):
+        """Return the load result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return load_result(self.path)
 
 
 def _date_boundary(value: Any, *, end: bool = False) -> Optional[str]:
+    """Return the date boundary result.
+
+    Parameters
+    ----------
+    value : Any
+        Value to apply.
+    end : bool, default: False
+        Value for ``end``.
+
+    Returns
+    -------
+    Optional[str]
+        Result of the operation.
+    """
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -830,7 +1458,34 @@ def find_experiments(
     *,
     data_root: Optional[os.PathLike | str] = None,
 ) -> list[ExperimentReference]:
-    """Search the rebuildable catalog and return lazy experiment references."""
+    """Search the rebuildable catalog and return lazy experiment references.
+
+    Parameters
+    ----------
+    experiment_type : Optional[str]
+        Value for ``experiment_type``.
+    qubit : Optional[str]
+        Qubit identifier.
+    tags : Optional[Iterable[str] | str]
+        Value for ``tags``.
+    quality : Optional[str]
+        Value for ``quality``.
+    start : Any, default: None
+        Value for ``start``.
+    end : Any, default: None
+        Value for ``end``.
+    session_id : Optional[str]
+        Value for ``session_id``.
+    limit : Optional[int]
+        Value for ``limit``.
+    data_root : Optional[os.PathLike | str]
+        Value for ``data_root``.
+
+    Returns
+    -------
+    list[ExperimentReference]
+        Result of the operation.
+    """
     root = _resolve_data_root(data_root)
     if not _catalog_path(root).exists():
         rebuild_catalog(root)
@@ -857,7 +1512,10 @@ def find_experiments(
     with _connect_catalog(root) as connection:
         connection.row_factory = sqlite3.Row
         for row in connection.execute(query, params):
-            row_tags = tuple(_json_loads(row["tags_json"], []) or [])
+            row_tags = tuple(_normalise_tags(
+                _json_loads(row["tags_json"], []) or [],
+                row["experiment_type"],
+            ))
             row_qubits = tuple(str(q) for q in (_json_loads(row["qubits_json"], []) or []))
             if qubit is not None and str(qubit) not in row_qubits:
                 continue
@@ -878,7 +1536,18 @@ def find_experiments(
 
 
 def rebuild_catalog(data_root: os.PathLike | str) -> int:
-    """Recreate the SQLite catalog from completed native HDF5 files."""
+    """Recreate the SQLite catalog from completed native HDF5 files.
+
+    Parameters
+    ----------
+    data_root : os.PathLike | str
+        Value for ``data_root``.
+
+    Returns
+    -------
+    int
+        Result of the operation.
+    """
     root = _resolve_data_root(data_root)
     catalog = _catalog_path(root)
     if catalog.exists():
@@ -888,7 +1557,8 @@ def rebuild_catalog(data_root: os.PathLike | str) -> int:
         if sidecar.exists():
             sidecar.unlink()
     count = 0
-    for path in sorted(root.rglob("*.h5")):
+    candidates = sorted(set(root.rglob("*.h5")) | set(root.rglob("*.hdf5")))
+    for path in candidates:
         try:
             info = inspect_file(path)
             if info.get("schema_name") != SCHEMA_NAME or not info.get("write_complete"):
@@ -909,7 +1579,29 @@ def convert_labber_file(
     *,
     metadata: Optional[dict] = None,
 ) -> Path:
-    """Best-effort conversion isolated behind the optional Labber dependency."""
+    """Best-effort conversion isolated behind the optional Labber dependency.
+
+    Parameters
+    ----------
+    source : os.PathLike | str
+        Value for ``source``.
+    destination : Optional[os.PathLike | str]
+        Value for ``destination``.
+    metadata : Optional[dict]
+        Value for ``metadata``.
+
+    Returns
+    -------
+    Path
+        Result of the operation.
+
+    Raises
+    ------
+    ImportError
+        If the operation cannot be completed.
+    ValueError
+        If the operation cannot be completed.
+    """
     try:
         import Labber
     except ImportError as exc:
@@ -951,7 +1643,7 @@ def convert_labber_file(
 
 
 __all__ = [
-    "SCHEMA_NAME", "SCHEMA_VERSION", "ExperimentReference", "ValidationReport",
+    "SCHEMA_NAME", "SCHEMA_VERSION", "EMBEDDED_GROUP", "LEGACY_EMBEDDED_GROUPS", "ExperimentReference", "ValidationReport",
     "generate_experiment_id", "validate_experiment_id", "save_result", "load_result",
     "inspect_file", "validate_file", "find_experiments", "rebuild_catalog",
     "convert_labber_file",

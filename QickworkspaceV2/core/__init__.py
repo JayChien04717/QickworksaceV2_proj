@@ -11,6 +11,23 @@ from .composite import BatchExperiment, ParallelExperiment
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     if name in {"BaseProgram", "GATE_ALIAS", "resolve_gate"}:
         from .base_program import BaseProgram, GATE_ALIAS, resolve_gate
 

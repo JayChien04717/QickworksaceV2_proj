@@ -43,6 +43,13 @@ class MuxAllXYProgram(AveragerProgramV2):
     """One AllXY gate pair applied to all armed qubits with mux readout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -79,6 +86,17 @@ class MuxAllXYProgram(AveragerProgramV2):
             self._add_standard_gates(cfg, slot, name)
 
     def _add_standard_gates(self, cfg, slot, name):
+        """Add standard gates.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        name : Any
+            Name of the target object.
+        """
         gates = [
             ("x180_ge", 0, "pi_gain_ge"),
             ("y180_ge", 90, "pi_gain_ge"),
@@ -91,6 +109,21 @@ class MuxAllXYProgram(AveragerProgramV2):
             self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
+        """Add gate pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        pulse_name : Any
+            Name of the pulse.
+        phase : Any
+            Value for ``phase``.
+        gain : Any
+            Value for ``gain``.
+        """
         qb_ch = cfg["qb_ch"][slot]
         pulse_type = cfg["pulse_type"][slot]
         if pulse_type == "const":
@@ -142,6 +175,15 @@ class MuxAllXYProgram(AveragerProgramV2):
             )
 
     def _pulse_gate(self, cfg, gate):
+        """Return the pulse gate result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        gate : Any
+            Value for ``gate``.
+        """
         resolved = resolve_gate(gate)
         if resolved in ("I", "-I", None, "None"):
             return
@@ -149,6 +191,13 @@ class MuxAllXYProgram(AveragerProgramV2):
             self.pulse(ch=cfg["qb_ch"][slot], name=f"{name}_{resolved}", t=0)
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         gate1, gate2 = cfg["allxy_gates"]
         self._pulse_gate(cfg, gate1)
         self.delay_auto(0.01)
@@ -166,11 +215,32 @@ class MuxAllXY(BaseExperiment):
     TITLE_PREFIX = "Mux AllXY"
 
     def __init__(self, config):
+        """Initialize the MuxAllXY instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.iqdata = None
 
     @staticmethod
     def _extract_iq(iq_list, n_trace):
+        """Extract iq.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -182,6 +252,20 @@ class MuxAllXY(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq_process = (iq_process or "abs").lower()
         if iq_process in {"real", "i", "avgi"}:
             return np.real(iqdata)
@@ -192,6 +276,22 @@ class MuxAllXY(BaseExperiment):
         return np.abs(iqdata)
 
     def run(self, py_avg=1, iq_process="abs", plot=True):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         qubit_names = list(cfg["qubit_names"])
         trace_count = len(cfg["active_ro_chs"])

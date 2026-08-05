@@ -22,19 +22,28 @@ _HDF5_EXPORTS = {
     "convert_labber_file",
 }
 
-_ARCHIVE_EXPORTS = {
-    "ArchiveScanSummary",
-    "CatalogManager",
-    "ExperimentArchive",
-    "ExperimentReader",
-    "ExperimentRecord",
-    "LabeledArray",
-    "PlotRegistry",
-    "default_plot_registry",
-}
+_LABBER_EXPORTS = {"LabberHDF5Saver"}
+
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     if name in _SYSTEM_TOOL_EXPORTS:
         from .system_tool import get_next_filename_labber, hdf5_generator, config_to_yaml, auto_unit
 
@@ -52,13 +61,12 @@ def __getattr__(name):
         value = getattr(hdf5_store, name)
         globals()[name] = value
         return value
-    if name in _ARCHIVE_EXPORTS:
-        from . import data_archive
+    if name in _LABBER_EXPORTS:
+        from .Labber_saver import LabberHDF5Saver
 
-        value = getattr(data_archive, name)
-        globals()[name] = value
-        return value
+        globals()[name] = LabberHDF5Saver
+        return LabberHDF5Saver
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = sorted(_SYSTEM_TOOL_EXPORTS | _HDF5_EXPORTS | _ARCHIVE_EXPORTS)
+__all__ = sorted(_SYSTEM_TOOL_EXPORTS | _HDF5_EXPORTS | _LABBER_EXPORTS)

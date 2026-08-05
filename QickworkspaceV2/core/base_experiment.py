@@ -78,7 +78,6 @@ class BaseExperiment:
        :meth:`_acquire` and return an ``AcquisitionResult``.
     """
 
-    # ── Legacy session state ─────────────────────────────────────────────────
     _soc = None
     _soccfg = None
     _data_path = None
@@ -87,7 +86,17 @@ class BaseExperiment:
 
     @classmethod
     def setup(cls, soc, soccfg, data_path: str):
-        """Initialise shared QICK session (call once at notebook startup)."""
+        """Initialise shared QICK session (call once at notebook startup).
+
+        Parameters
+        ----------
+        soc : Any
+            Value for ``soc``.
+        soccfg : Any
+            Value for ``soccfg``.
+        data_path : str
+            Directory used for experiment data.
+        """
         data_path = cls._validate_data_path(data_path)
         cls._soc = soc
         cls._soccfg = soccfg
@@ -102,7 +111,29 @@ class BaseExperiment:
         proxy_name: str = "myqick",
         data_path: Optional[str] = None,
     ):
-        """Connect to QICK through Pyro4 and activate it for all experiments."""
+        """Connect to QICK through Pyro4 and activate it for all experiments.
+
+        Parameters
+        ----------
+        ns_host : str
+            Value for ``ns_host``.
+        ns_port : int, default: 8888
+            Value for ``ns_port``.
+        proxy_name : str, default: 'myqick'
+            Name of the proxy.
+        data_path : Optional[str]
+            Directory used for experiment data.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ImportError
+            If the operation cannot be completed.
+        """
         data_path = cls._validate_data_path(data_path)
         try:
             import Pyro4
@@ -131,11 +162,35 @@ class BaseExperiment:
 
     @classmethod
     def set_data_path(cls, data_path: str):
+        """Set data path.
+
+        Parameters
+        ----------
+        data_path : str
+            Directory used for experiment data.
+        """
         cls._data_path = cls._validate_data_path(data_path)
         cls._runtime.data_path = cls._data_path
 
     @staticmethod
     def _validate_data_path(data_path: Optional[str]) -> str:
+        """Validate data path.
+
+        Parameters
+        ----------
+        data_path : Optional[str]
+            Directory used for experiment data.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         if data_path is None or str(data_path).strip() == "":
             raise ValueError(
                 "data_path is required. Call BaseExperiment.setup(soc, soccfg, data_path=...) "
@@ -145,6 +200,18 @@ class BaseExperiment:
 
     @classmethod
     def _require_data_path(cls) -> str:
+        """Return the require data path result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if cls._data_path is None or str(cls._data_path).strip() == "":
             raise RuntimeError(
                 "BaseExperiment data path is not configured. Call "
@@ -153,7 +220,6 @@ class BaseExperiment:
             )
         return str(cls._data_path)
 
-    # ── Subclass metadata ────────────────────────────────────────────────────
     EXPT_NAME: str = ""
     TAG: str = ""
     X_LABEL: str = ""
@@ -176,12 +242,11 @@ class BaseExperiment:
     Y_SAVE_UNIT: str = ""
     Y_SAVE_SCALE: float = 1.0
 
-    # ── NEW: link to analysis class ──────────────────────────────────────────
     Analysis: Optional[Type[BaseAnalysis]] = None
 
-    # ────────────────────────────────────────────────────────────────────────
     def __init__(self, config):
-        """
+        """Initialize the BaseExperiment instance.
+
         Parameters
         ----------
         config : dict or ExperimentConfig
@@ -203,12 +268,11 @@ class BaseExperiment:
         self._result_builder = ResultBuilder()
 
     def prog_asm(self, use_last: bool = False):
-        """
-        Build and print the QICK program for this experiment.
+        """Build and print the QICK program for this experiment.
 
-        Useful in notebooks before acquisition:
+                        Useful in notebooks before acquisition:
 
-            prog = expt.prog_asm()
+                            prog = expt.prog_asm()
 
         Parameters
         ----------
@@ -229,9 +293,6 @@ class BaseExperiment:
         print(prog)
         return prog
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Unified entry point
-    # ══════════════════════════════════════════════════════════════════════════
 
     def run(
         self,
@@ -242,11 +303,25 @@ class BaseExperiment:
         plot_analysis: bool = False,
         **kwargs,
     ) -> ExperimentData:
-        """
-        Execute the experiment, run analysis, and return an ExperimentData.
+        """Execute the experiment, run analysis, and return an ExperimentData.
 
-        Analysis plots are intentionally opt-in. Use ``expt.plot()`` after
-        running, or pass ``plot_analysis=True`` for the old one-call behavior.
+                        Analysis plots are intentionally opt-in. Use ``expt.plot()`` after
+                        running, or pass ``plot_analysis=True`` for the old one-call behavior.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        iq_process : Optional[str]
+            IQ processing mode.
+        show_final_plot : bool, default: False
+            Whether to show final plot.
+        liveplot : Optional[bool]
+            Value for ``liveplot``.
+        plot_analysis : bool, default: False
+            Value for ``plot_analysis``.
+        **kwargs : Any
+            Additional keyword arguments.
 
         Returns
         -------
@@ -280,7 +355,8 @@ class BaseExperiment:
             analysis_inst = self.Analysis()
             result = analysis_inst.run(result)
             if ctx.plot_analysis:
-                analysis_inst.plot(result)
+                renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+                renderer(result)
             self.result = result
 
         return result
@@ -291,13 +367,12 @@ class BaseExperiment:
         *,
         plot_analysis: Optional[bool] = None,
     ) -> ExperimentData:
-        """
-        Plot the latest result with this experiment's Analysis class.
+        """Plot the latest result with this experiment's Analysis class.
 
-        This never reacquires hardware data. It only uses ``self.result`` from
-        the most recent :meth:`run`, so it is safe to call from a later cell::
+                        This never reacquires hardware data. It only uses ``self.result`` from
+                        the most recent :meth:`run`, so it is safe to call from a later cell::
 
-            expt.plot(plot_analysis=True)
+                            expt.plot(plot_analysis=True)
 
         Parameters
         ----------
@@ -308,6 +383,18 @@ class BaseExperiment:
         plot_analysis : bool or None, optional
             True reruns analysis and draws its fit plot. False draws only the
             stored measurement data. Defaults to True.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
         """
         if analyze is not None and plot_analysis is not None and analyze != plot_analysis:
             raise ValueError("analyze and plot_analysis specify conflicting values")
@@ -329,11 +416,23 @@ class BaseExperiment:
         analysis_inst = self.Analysis()
         result = analysis_inst.run(result)
         self.result = result
-        analysis_inst.plot(result)
+        renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+        renderer(result)
         return result
 
     def _plot_raw_result(self, result: ExperimentData) -> None:
-        """Plot stored data without fitting or rendering a fit curve."""
+        """Plot stored data without fitting or rendering a fit curve.
+
+        Parameters
+        ----------
+        result : ExperimentData
+            Experiment result to process.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         import matplotlib.pyplot as plt
         from ..plotter.theme import COLORS, style_axes, style_figure
 
@@ -393,6 +492,28 @@ class BaseExperiment:
         plot_analysis: bool,
         kwargs: dict,
     ) -> _RunContext:
+        """Prepare run options.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        iq_process : Optional[str]
+            IQ processing mode.
+        show_final_plot : bool
+            Whether to show final plot.
+        liveplot : Optional[bool]
+            Value for ``liveplot``.
+        plot_analysis : bool
+            Value for ``plot_analysis``.
+        kwargs : dict
+            Additional keyword arguments.
+
+        Returns
+        -------
+        _RunContext
+            Result of the operation.
+        """
         resolved_liveplot = self.LivePlot if liveplot is None else liveplot
         resolved_iq_process = iq_process if iq_process is not None else self.IQ_PROCESS
         self._yoko_mode = kwargs.get("yoko_mode", None)
@@ -409,6 +530,22 @@ class BaseExperiment:
         )
 
     def _acquire(self, prog, axes: _SweepAxes, ctx: _RunContext) -> _AcquisitionResult:
+        """Acquire experiment data.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+        axes : _SweepAxes
+            Value for ``axes``.
+        ctx : _RunContext
+            Value for ``ctx``.
+
+        Returns
+        -------
+        _AcquisitionResult
+            Result of the operation.
+        """
         result = self._acquisition_runner.acquire(self, prog, axes, ctx)
         self.iqdata = result.raw_iq
         if result.raw_iq is None:
@@ -421,6 +558,15 @@ class BaseExperiment:
         return result
 
     def _apply_old_result(self, result: ExperimentData, old_result) -> None:
+        """Apply old result.
+
+        Parameters
+        ----------
+        result : ExperimentData
+            Experiment result to process.
+        old_result : Any
+            Value for ``old_result``.
+        """
         if old_result is None:
             return
         if isinstance(old_result, (int, float, np.integer, np.floating)):
@@ -430,11 +576,27 @@ class BaseExperiment:
         elif isinstance(old_result, dict):
             result.fit_result = {k: (v, None) for k, v in old_result.items()}
 
-    # =========================================================================
-    # Save
-    # =========================================================================
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
-        """Legacy Labber-format HDF5 save (unchanged from original)."""
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None, filename_mode="random"):
+        """Legacy Labber-format HDF5 save (unchanged from original).
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        title : Any, default: None
+            Value for ``title``.
+        filename_mode : Any, default: 'random'
+            Value for ``filename_mode``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from ..tools.system_tool import (
             config_to_yaml,
             get_next_filename_labber,
@@ -470,32 +632,48 @@ class BaseExperiment:
                 "values": self._sweep_vals_y * self.Y_SAVE_SCALE,
             }
 
-        hdf5_generator(
+        saved_path = hdf5_generator(
             filepath=file_path,
             x_info=x_info,
             y_info=y_info,
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
             comment=comment,
             tag=self.TAG,
+            result=self.result,
+            filename_mode=filename_mode,
         )
-        print(f"Data saved to {file_path}")
+        print(f"Data saved to {saved_path}")
+        return str(saved_path)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Internal helpers
-    # ══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
     def _resolve_axis(vals, steps=None):
-        """
-        Convert whatever _extract_sweep_axis returns into a plain float array.
+        """Convert whatever _extract_sweep_axis returns into a plain float array.
 
-        get_pulse_param / get_time_param may return a QickParam sweep object
-        instead of a numpy array, depending on the QICK version.  This method
-        tries every known extraction path and catches RuntimeError from
-        QickParam.__float__.
+                        get_pulse_param / get_time_param may return a QickParam sweep object
+                        instead of a numpy array, depending on the QICK version.  This method
+                        tries every known extraction path and catches RuntimeError from
+                        QickParam.__float__.
 
-        Always call as  BaseExperiment._resolve_axis(vals, steps)  (not via
-        self._resolve_axis) to avoid Python descriptor ambiguity.
+                        Always call as  BaseExperiment._resolve_axis(vals, steps)  (not via
+                        self._resolve_axis) to avoid Python descriptor ambiguity.
+
+        Parameters
+        ----------
+        vals : Any
+            Value for ``vals``.
+        steps : Any, default: None
+            Value for ``steps``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
         """
         if vals is None:
             return None
@@ -590,35 +768,100 @@ class BaseExperiment:
         raise ValueError(f"Cannot resolve sweep axis from {type(vals).__name__}")
 
     def _get_readout_threshold(self):
-        """Return configured readout threshold, or None when disabled."""
+        """Return configured readout threshold, or None when disabled.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if not hasattr(self.cfg, "get"):
             return None
         return self.cfg.get("threshold")
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Subclass MUST override
-    # ══════════════════════════════════════════════════════════════════════════
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Raises
+        ------
+        NotImplementedError
+            If the operation cannot be completed.
+        """
         raise NotImplementedError("Subclass must implement _create_program()")
 
     def _extract_sweep_axis(self, prog) -> np.ndarray:
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        np.ndarray
+            Result of the operation.
+
+        Raises
+        ------
+        NotImplementedError
+            If the operation cannot be completed.
+        """
         raise NotImplementedError("Subclass must implement _extract_sweep_axis()")
 
     def _extract_sweep_axis_y(self, prog) -> Optional[np.ndarray]:
+        """Extract the secondary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Optional[np.ndarray]
+            Result of the operation.
+        """
         return None
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Subclass MAY override
-    # ══════════════════════════════════════════════════════════════════════════
 
     def _post_fit(self, x_vals):
-        """Optional: fit and return old-style value. Should set self.fit_params."""
+        """Optional: fit and return old-style value. Should set self.fit_params.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def _save_comment(self, dict_val: str) -> str:
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : str
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return str(dict_val)
 
     def _build_fit_result(self) -> dict:
-        """Build named fit_result dict from self.fit_params. Override for clarity."""
+        """Build named fit_result dict from self.fit_params. Override for clarity.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return {}

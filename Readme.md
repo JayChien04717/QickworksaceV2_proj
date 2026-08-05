@@ -38,7 +38,6 @@ QickworkspaceV2/
   experiments_mux/   Multiplexed-readout experiments
   instruments/       PyVISA drivers and instrument manager
   plotter/           Live plotting and plot utilities
-  service/           Experimental FastAPI REST service
   tools/             Configuration, fitting, data, scoring, and RF helpers
 
 example/             Example data and viewer scripts
@@ -201,21 +200,18 @@ runs = find_experiments(
 latest_t1 = runs[0].load()
 ```
 
-To browse an entire Data path, use the lazy archive reader. Construction scans
-completed HDF5 metadata into the catalog, but raw arrays are loaded only when
-requested:
+To browse a Data path, query the SQLite catalog and load only the selected
+experiment:
 
 ```python
-from QickworkspaceV2.tools import ExperimentArchive
+from QickworkspaceV2.tools import find_experiments, load_result
 
-archive = ExperimentArchive(r"D:\Labber_Data\Jay\test")
-runs = archive.query(experiment_type="s008_T1_ge", qubit="Q1")
-
-record = runs[0]
-print(record.comment_preview, record.raw_keys(), record.analysis_keys())
-iq = record.load_raw("iq", selection={"delay_us": slice(0, 20)})
-figure = record.plot()              # dispatches through the stored plot_id
-result = record.load()              # explicitly load the complete experiment
+runs = find_experiments(
+    experiment_type="s008_T1_ge",
+    qubit="Q1",
+    data_root=r"D:\Labber_Data\Jay\test",
+)
+result = load_result(runs[0].path)
 ```
 
 The offline examples in [`test/hdf5_reader_demo`](test/hdf5_reader_demo)
@@ -317,25 +313,6 @@ result = expt.run(
 
 See [`QickworkspaceV2/instruments/README.md`](QickworkspaceV2/instruments/README.md)
 for driver and manager details.
-
-## REST service status
-
-The FastAPI layer exposes an experiment catalog, job endpoints, calibration
-store endpoints, and an auto-calibration endpoint:
-
-```bash
-uvicorn QickworkspaceV2.service.api:app --host 0.0.0.0 --port 8000
-```
-
-The module-level default app is created without `CalibrationStore` or
-`ExperimentConfig`, so calibration endpoints return `503` until an application
-is created with `create_app(cal_store=..., config_all=...)`. Experiment jobs
-also require a `BaseExperiment` hardware session in the service process.
-
-The service is currently experimental: completed experiment jobs reference a
-serializer module that is not present in this repository, job state is
-in-memory only, and there is no hardware queue/cancellation API. Use the Python
-API for production measurements until those gaps are resolved.
 
 ## Development and validation
 

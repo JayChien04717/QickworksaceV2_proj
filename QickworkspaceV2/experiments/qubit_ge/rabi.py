@@ -9,18 +9,31 @@ from ...core.base_experiment import BaseExperiment
 from ...analysis.qubit import PowerRabiAnalysis, TimeRabiAnalysis
 
 
-# ── s004 — Time Rabi ──────────────────────────────────────────────────────────
 
 class TimeRabiProgram(BaseProgram):
     """QICK program for time Rabi: sweeps flat-top pulse length."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("lenloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse", pulse_type="flat_top")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -34,7 +47,7 @@ class TimeRabi(BaseExperiment):
     """Time Rabi (ge): sweeps flat-top pulse length, fits decaying sinusoid."""
 
     EXPT_NAME = "s004_time_rabi_ge"
-    TAG = "Rabi"
+    TAG = "TimeRabi"
     X_LABEL = "Pulse Length (us)"
     TITLE_PREFIX = "Qubit Time Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_flat_top_length_ge"]
@@ -45,28 +58,60 @@ class TimeRabi(BaseExperiment):
     Analysis = TimeRabiAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return TimeRabiProgram(
             self.soccfg, reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"], cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("qb_pulse", "length", as_array=True)
 
 
 
-# ── s005 — Power Rabi ─────────────────────────────────────────────────────────
 
 class PowerRabiProgram(BaseProgram):
     """QICK program for power Rabi: sweeps qubit drive gain."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("gainloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -80,7 +125,7 @@ class PowerRabi(BaseExperiment):
     """Power Rabi (ge): sweeps gain, fits sinusoid for pi and pi/2 gains."""
 
     EXPT_NAME = "s005_power_rabi_ge"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ge"]
@@ -91,22 +136,47 @@ class PowerRabi(BaseExperiment):
     Analysis = PowerRabiAnalysis
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return PowerRabiProgram(
             self.soccfg, reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"], cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("qb_pulse", "gain", as_array=True)
 
 
 
-# ── s005b — Power Rabi with Reset ────────────────────────────────────────────
 
 class PowerRabiResetProgram(BaseProgram):
     """Power Rabi with active-reset cooling before each shot."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         if cfg.get("cooling", False):
@@ -115,6 +185,13 @@ class PowerRabiResetProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.cooling_body(cfg)
@@ -127,10 +204,17 @@ class PowerRabiReset(PowerRabi):
     """Power Rabi with active reset (s005b)."""
 
     EXPT_NAME = "s005b_power_rabi_reset_ge"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     TITLE_PREFIX = "Qubit Power Rabi ge (Reset)"
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return PowerRabiResetProgram(
             self.soccfg, reps=self.cfg["reps"],
             final_delay=self.cfg["relax_delay"], cfg=self.cfg,

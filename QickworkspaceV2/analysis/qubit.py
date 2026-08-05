@@ -9,7 +9,6 @@ import numpy as np
 from ..core.base_analysis import BaseAnalysis
 from ..core.experiment_data import ExperimentData, QualityFlag
 
-# ── T1 ────────────────────────────────────────────────────────────────────────
 
 
 class T1Analysis(BaseAnalysis):
@@ -20,6 +19,13 @@ class T1Analysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import expfunc, fitexp
@@ -43,6 +49,13 @@ class T1Analysis(BaseAnalysis):
             data.quality_message = f"T1 fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import expfunc
@@ -61,28 +74,44 @@ class T1Analysis(BaseAnalysis):
         )
 
 
-# ── Ramsey ────────────────────────────────────────────────────────────────────
 
 
 class RamseyAnalysis(BaseAnalysis):
     """Damped sinusoid fit → T2*, frequency detuning."""
+
+    FREQUENCY_KEY = "qb_freq_ge"
+    REQUIRED_CONFIG_KEYS = ("virtual_detune", FREQUENCY_KEY)
 
     thresholds = {
         "T2r_us": {"min": 0.1, "max": 1000.0},
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
-        ramsey_freq = data.config.get("ramsey_freq", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
 
-        if ramsey_freq != 0:
+        if virtual_detune != 0:
             self._fit_decaysin(data)
         else:
             self._fit_exp(data)
 
     def _fit_decaysin(self, data: ExperimentData) -> None:
+        """Fit decaysin.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         from ..tools.fitting import decaysin, fitdecaysin
 
         x = data.x_axis
@@ -94,9 +123,9 @@ class RamseyAnalysis(BaseAnalysis):
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[3]))
             detune = float(popt[1])
-            ramsey_freq = data.config.get("ramsey_freq", 0.0)
-            qb_freq = data.config.get("qb_freq_ge", 0.0)
-            corrected_freq = qb_freq - round(detune - ramsey_freq, 2)
+            virtual_detune = self._config_value(data, "virtual_detune", 0.0)
+            qb_freq = self._config_value(data, self.FREQUENCY_KEY, 0.0)
+            corrected_freq = qb_freq - round(detune - virtual_detune, 2)
 
             data.fit_params = np.array(popt)
             data.fit_errors = err
@@ -114,6 +143,13 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey decaysin fit failed: {exc}"
 
     def _fit_exp(self, data: ExperimentData) -> None:
+        """Fit exp.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         from ..tools.fitting import expfunc, fitexp
 
         x = data.x_axis
@@ -135,10 +171,17 @@ class RamseyAnalysis(BaseAnalysis):
             data.quality_message = f"Ramsey exp fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
-        ramsey_freq = data.config.get("ramsey_freq", 0.0)
-        if ramsey_freq != 0:
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
+        if virtual_detune != 0:
             from ..tools.fitting import decaysin as simfunc
         else:
             from ..tools.fitting import expfunc as simfunc
@@ -167,27 +210,35 @@ class RamseyAnalysis(BaseAnalysis):
         )
 
 
-# ── SpinEcho ──────────────────────────────────────────────────────────────────
 
 
 class SpinEchoAnalysis(BaseAnalysis):
     """Hahn echo fit -- T2E."""
+
+    REQUIRED_CONFIG_KEYS = ("virtual_detune",)
 
     thresholds = {
         "T2e_us": {"min": 0.1, "max": 5000.0},
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
 
-        ramsey_freq = data.config.get("ramsey_freq", 0.0)
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
         x = data.x_axis
         detune = None
         detune_err = None
 
         try:
-            if ramsey_freq != 0:
+            if virtual_detune != 0:
                 from ..tools.fitting import decaysin, fitdecaysin
 
                 _, popt, pcov, channel, score = self._fit_channel(
@@ -221,10 +272,17 @@ class SpinEchoAnalysis(BaseAnalysis):
             data.quality_message = f"SpinEcho fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
-        ramsey_freq = data.config.get("ramsey_freq", 0.0)
-        if ramsey_freq != 0:
+        virtual_detune = self._config_value(data, "virtual_detune", 0.0)
+        if virtual_detune != 0:
             from ..tools.fitting import decaysin as simfunc
         else:
             from ..tools.fitting import expfunc as simfunc
@@ -251,6 +309,13 @@ class SpinEchoAnalysis(BaseAnalysis):
         )
 
 
+class RamseyEfAnalysis(RamseyAnalysis):
+    """Ramsey analysis using the ef transition frequency for correction."""
+
+    FREQUENCY_KEY = "qb_freq_ef"
+    REQUIRED_CONFIG_KEYS = ("virtual_detune", FREQUENCY_KEY)
+
+
 class PowerRabiAnalysis(BaseAnalysis):
     """Decaying sinusoid → π gain and π/2 gain."""
 
@@ -259,6 +324,13 @@ class PowerRabiAnalysis(BaseAnalysis):
     }
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import fitsin, fix_phase, sinfunc
@@ -283,6 +355,13 @@ class PowerRabiAnalysis(BaseAnalysis):
             data.quality_message = f"PowerRabi sine fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import sinfunc
@@ -326,7 +405,6 @@ class PowerRabiAnalysis(BaseAnalysis):
         )
 
 
-# ── TimeRabi ──────────────────────────────────────────────────────────────────
 
 
 class TimeRabiAnalysis(BaseAnalysis):
@@ -335,6 +413,13 @@ class TimeRabiAnalysis(BaseAnalysis):
     thresholds = {}
 
     def _run(self, data: ExperimentData) -> None:
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import decaysin, fitdecaysin
@@ -361,6 +446,13 @@ class TimeRabiAnalysis(BaseAnalysis):
             data.quality_message = f"TimeRabi fit failed: {exc}"
 
     def plot(self, data: ExperimentData) -> None:
+        """Plot the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if data.fit_params is None:
             return
         from ..tools.fitting import decaysin
@@ -376,7 +468,6 @@ class TimeRabiAnalysis(BaseAnalysis):
         )
 
 
-# ── QubitTemp ─────────────────────────────────────────────────────────────────
 
 
 class QubitTempAnalysis(BaseAnalysis):
@@ -388,6 +479,13 @@ class QubitTempAnalysis(BaseAnalysis):
 
     def _run(self, data: ExperimentData) -> None:
         # Population ratio → temperature via Boltzmann
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         n_e = data.fit_result.get("n_excited", (None, None))[0]
         f_ge = data.config.get("qb_freq_ge", 5000.0)  # MHz
 
@@ -403,7 +501,6 @@ class QubitTempAnalysis(BaseAnalysis):
                 data.scalar_result = T_mK
 
 
-# ── SingleShot ────────────────────────────────────────────────────────────────
 
 
 class SingleShotAnalysis(BaseAnalysis):
@@ -416,5 +513,12 @@ class SingleShotAnalysis(BaseAnalysis):
     def _run(self, data: ExperimentData) -> None:
         # Actual analysis is handled inside SingleShot_gef.plot()
         # This class just wraps whatever the experiment already computed.
+        """Run the operation.
+
+        Parameters
+        ----------
+        data : ExperimentData
+            Input data to process.
+        """
         if "fidelity" not in data.fit_result:
             data.quality = QualityFlag.NO_INFORMATION

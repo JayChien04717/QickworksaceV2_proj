@@ -43,11 +43,25 @@ class AllXYProgram(BaseProgram):
     """QICK program for a single AllXY gate-pair measurement."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_standard_gates(cfg, prefix="ge")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -68,14 +82,36 @@ class AllXY(BaseExperiment):
     """AllXY gate error diagnostic (s014): 21 gate-pair sequences."""
 
     EXPT_NAME = "s014_AllXY_ge"
+    TAG = "AllXY"
     Analysis = AllXYAnalysis
 
     def __init__(self, config):
+        """Initialize the AllXY instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.allxy_lst: np.ndarray | None = None
         self._iq_process = "abs"
 
     def run(self, py_avg: int, iq_process: str = "abs") -> ExperimentData:
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        iq_process : str, default: 'abs'
+            IQ processing mode.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         self._iq_process = iq_process
         allxy_lst = []
         for gate in tqdm(ALLXY_SEQUENCE, desc="AllXY"):
@@ -107,6 +143,18 @@ class AllXY(BaseExperiment):
         return result
 
     def plot(self, *, plot_analysis=True):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.allxy_lst is None:
             raise RuntimeError("Call run() first.")
         _proc = np.real if self._iq_process == "real" else np.abs
@@ -128,6 +176,17 @@ class AllXY(BaseExperiment):
         plt.show()
 
     def saveLabber(self, qb_idx, yoko_value=None, config_all=None):
+        """Save Labber.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        """
         from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
         save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, f"{self.EXPT_NAME}_{qb_idx}", yoko_value)
@@ -141,6 +200,7 @@ class AllXY(BaseExperiment):
             x_info={"name": "Sequence", "unit": "None", "values": np.arange(len(ALLXY_SEQUENCE))},
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
             comment=str(config_yaml),
-            tag="ALLXY",
+            tag=self.TAG,
+            result=self.result,
         )
         print(f"Data saved to {file_path}")

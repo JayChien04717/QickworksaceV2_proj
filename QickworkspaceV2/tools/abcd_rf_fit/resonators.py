@@ -19,6 +19,22 @@ else:
 
 def transmission(freq, f_0, kappa):
 
+    """Return the transmission result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_0 : Any
+        Value for ``f_0``.
+    kappa : Any
+        Value for ``kappa``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     num = 1
     den = 2j * (freq - f_0) + kappa
 
@@ -27,6 +43,26 @@ def transmission(freq, f_0, kappa):
 
 def reflection(freq, f_0, kappa, kappa_c_real, phi_0=0):
 
+    """Return the reflection result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_0 : Any
+        Value for ``f_0``.
+    kappa : Any
+        Value for ``kappa``.
+    kappa_c_real : Any
+        Value for ``kappa_c_real``.
+    phi_0 : Any, default: 0
+        Value for ``phi_0``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     num = 2j * (freq - f_0) + kappa - 2*kappa_c_real*(1+1j*np.tan(phi_0))
     den = 2j * (freq - f_0) + kappa
 
@@ -35,11 +71,51 @@ def reflection(freq, f_0, kappa, kappa_c_real, phi_0=0):
 
 def reflection_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
 
+    """Return the reflection mismatched result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_0 : Any
+        Value for ``f_0``.
+    kappa : Any
+        Value for ``kappa``.
+    kappa_c_real : Any
+        Value for ``kappa_c_real``.
+    phi_0 : Any
+        Value for ``phi_0``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return reflection(freq, f_0, kappa, kappa_c_real, phi_0)
 
 
 def hanger(freq, f_0, kappa, kappa_c_real, phi_0=0):
 
+    """Return the hanger result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_0 : Any
+        Value for ``f_0``.
+    kappa : Any
+        Value for ``kappa``.
+    kappa_c_real : Any
+        Value for ``kappa_c_real``.
+    phi_0 : Any, default: 0
+        Value for ``phi_0``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     num = 2j * (freq - f_0) + kappa - kappa_c_real*(1+1j*np.tan(phi_0))
     den = 2j * (freq - f_0) + kappa
 
@@ -48,6 +124,26 @@ def hanger(freq, f_0, kappa, kappa_c_real, phi_0=0):
 
 def hanger_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
 
+    """Return the hanger mismatched result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_0 : Any
+        Value for ``f_0``.
+    kappa : Any
+        Value for ``kappa``.
+    kappa_c_real : Any
+        Value for ``kappa_c_real``.
+    phi_0 : Any
+        Value for ``phi_0``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return hanger(freq, f_0, kappa, kappa_c_real, phi_0)
 
 resonator_dict = {
@@ -64,6 +160,27 @@ resonator_dict = {
 }
 
 def get_fit_function(geometry, amplitude=True, edelay=True):
+    """Return fit function.
+
+    Parameters
+    ----------
+    geometry : Any
+        Value for ``geometry``.
+    amplitude : Any, default: True
+        Value for ``amplitude``.
+    edelay : Any, default: True
+        Value for ``edelay``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    Exception
+        If the operation cannot be completed.
+    """
     if type(geometry) == str:
         resonator_func = resonator_dict[geometry]
     else:
@@ -74,18 +191,54 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
 
     elif amplitude and not edelay:
         def fit_func(*args):
+            """Fit func.
+
+            Parameters
+            ----------
+            *args : Any
+                Additional positional arguments.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return resonator_func(*args[:-2]) * (args[-2] + 1j * args[-1])
 
         return fit_func
 
     elif not amplitude and edelay:
         def fit_func(*args):
+            """Fit func.
+
+            Parameters
+            ----------
+            *args : Any
+                Additional positional arguments.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return resonator_func(*args[:-1]) * np.exp(2j * np.pi * args[-1] * args[0])
 
         return fit_func
 
     elif amplitude and edelay:
         def fit_func(*args):
+            """Fit func.
+
+            Parameters
+            ----------
+            *args : Any
+                Additional positional arguments.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return (
                 resonator_func(*args[:-3])
                 * (args[-3] + 1j * args[-2])
@@ -101,6 +254,19 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
 class ResonatorParams(object):
     def __init__(self, params, geometry, freq = None, signal = None):
 
+        """Initialize the ResonatorParams instance.
+
+        Parameters
+        ----------
+        params : Any
+            Value for ``params``.
+        geometry : Any
+            Value for ``geometry``.
+        freq : Any, default: None
+            Value for ``freq``.
+        signal : Any, default: None
+            Value for ``signal``.
+        """
         self.resonator_func = resonator_dict[geometry]
         self.params = params
 
@@ -138,10 +304,24 @@ class ResonatorParams(object):
                 self.edelay_index = -1
 
     def tolist(self):
+        """Return the tolist result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return np.array(self.params)
 
     @property
     def f_0(self):
+        """Return the f 0 result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "f_0_index"):
             return self.params[self.f_0_index]
         else:
@@ -149,6 +329,13 @@ class ResonatorParams(object):
 
     @property
     def kappa(self):
+        """Return the kappa result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "kappa_index"):
             return self.params[self.kappa_index]
         else:
@@ -156,6 +343,13 @@ class ResonatorParams(object):
 
     @property
     def kappa_i(self):
+        """Return the kappa i result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "kappa_index") and hasattr(self, "kappa_c_real_index"):
             return self.params[self.kappa_index] - self.params[self.kappa_c_real_index]
         else:
@@ -163,6 +357,13 @@ class ResonatorParams(object):
 
     @property
     def kappa_c_real(self):
+        """Return the kappa c real result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "kappa_c_real_index"):
             return self.params[self.kappa_c_real_index]
         else:
@@ -170,10 +371,24 @@ class ResonatorParams(object):
 
     @property
     def kappa_c(self):
+        """Return the kappa c result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.kappa_c_real
 
     @property
     def a_in(self):
+        """Return the a in result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "re_a_in_index") and hasattr(self, "im_a_in_index"):
             return (
                 self.params[self.re_a_in_index] + 1j * self.params[self.im_a_in_index]
@@ -183,6 +398,13 @@ class ResonatorParams(object):
 
     @property
     def re_a_in(self):
+        """Return the re a in result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         a_in = self.a_in
         if a_in is not None:
             return np.real(a_in)
@@ -191,6 +413,13 @@ class ResonatorParams(object):
 
     @property
     def im_a_in(self):
+        """Return the im a in result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         a_in = self.a_in
         if a_in is not None:
             return np.imag(a_in)
@@ -199,6 +428,13 @@ class ResonatorParams(object):
 
     @property
     def edelay(self):
+        """Return the edelay result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "edelay_index"):
             return self.params[self.edelay_index]
         else:
@@ -206,12 +442,41 @@ class ResonatorParams(object):
 
     @property
     def phi_0(self):
+        """Return the phi 0 result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if hasattr(self, "phi_0_index"):
             return self.params[self.phi_0_index]
         else:
             return None
 
     def str(self, latex=False, separator=", ", precision=2, only_f_and_kappa=False, f_precision=2, red_warning = False):
+        """Return the str result.
+
+        Parameters
+        ----------
+        latex : Any, default: False
+            Value for ``latex``.
+        separator : Any, default: ', '
+            Value for ``separator``.
+        precision : Any, default: 2
+            Value for ``precision``.
+        only_f_and_kappa : Any, default: False
+            Value for ``only_f_and_kappa``.
+        f_precision : Any, default: 2
+            Value for ``f_precision``.
+        red_warning : Any, default: False
+            Value for ``red_warning``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         kappa = {False: "kappa/2pi", True: r"$\kappa/2\pi$"}
         kappa_i = {False: "kappa_i/2pi", True: r"$\kappa_i/2\pi$"}
         kappa_c = {False: "kappa_c/2pi", True: r"$\kappa_c/2\pi$"}
@@ -256,12 +521,42 @@ class ResonatorParams(object):
             return f_0_str + kappa_str + phi_0_str + edelay_str
 
     def __str__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.str()
 
     def __repr__(self):
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.str()
 
     def __call__(self, freq, *args, **kwargs):
+        """Return the call result.
+
+        Parameters
+        ----------
+        freq : Any
+            Value for ``freq``.
+        *args : Any
+            Additional positional arguments.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         amplitude = self.a_in is not None
         edelay = self.edelay is not None
 
@@ -296,6 +591,33 @@ class ResonatorParams(object):
             title = None,
             params = None,
         ):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        fig : Any, default: None
+            Matplotlib figure to update.
+        plot_not_corrected : Any, default: True
+            Value for ``plot_not_corrected``.
+        font_size : Any, default: None
+            Value for ``font_size``.
+        plot_circle : Any, default: True
+            Value for ``plot_circle``.
+        center_freq : Any, default: False
+            Value for ``center_freq``.
+        only_f_and_kappa : Any, default: False
+            Value for ``only_f_and_kappa``.
+        precision : Any, default: 2
+            Value for ``precision``.
+        alpha_fit : Any, default: 1.0
+            Value for ``alpha_fit``.
+        style : Any, default: 'Normal'
+            Value for ``style``.
+        title : Any, default: None
+            Value for ``title``.
+        params : Any, default: None
+            Value for ``params``.
+        """
         plot(
             self.freq,
             self.signal,

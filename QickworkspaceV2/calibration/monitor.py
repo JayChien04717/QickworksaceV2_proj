@@ -47,6 +47,23 @@ class CalibrationMonitor:
         auto_recalibrate: bool = False,
         max_age_hours: float | None = None,
     ):
+        """Initialize the CalibrationMonitor instance.
+
+        Parameters
+        ----------
+        store : Any
+            Value for ``store``.
+        poll_interval_s : float, default: 300.0
+            Value for ``poll_interval_s``.
+        alert_fn : Callable[[str, str], None] | None, default: None
+            Value for ``alert_fn``.
+        recalibrate_fn : Callable[[str, str], None] | None, default: None
+            Value for ``recalibrate_fn``.
+        auto_recalibrate : bool, default: False
+            Value for ``auto_recalibrate``.
+        max_age_hours : float | None, default: None
+            Value for ``max_age_hours``.
+        """
         self._store = store
         self._poll_interval = poll_interval_s
         self._alert_fn = alert_fn or (lambda q, k: print(f"[Monitor] STALE: {q}/{k}"))
@@ -57,27 +74,39 @@ class CalibrationMonitor:
         self._stop_event = threading.Event()
         self._watched: dict[str, list[str]] = {}  # {qubit: [keys]}
 
-    # ── Watch list management ─────────────────────────────────────────────────
 
     def watch(self, qubit: str, keys: list[str] | None = None):
-        """
-        Add *qubit* (and optionally specific *keys*) to the watch list.
+        """Add *qubit* (and optionally specific *keys*) to the watch list.
 
-        If *keys* is None, all keys currently in the store are watched.
+                        If *keys* is None, all keys currently in the store are watched.
+
+        Parameters
+        ----------
+        qubit : str
+            Qubit identifier.
+        keys : list[str] | None, default: None
+            Value for ``keys``.
         """
         if keys is None:
             keys = self._store.all_keys(qubit)
         self._watched[qubit] = list(set(self._watched.get(qubit, []) + keys))
 
     def unwatch(self, qubit: str, keys: list[str] | None = None):
-        """Remove *qubit* (or specific *keys*) from the watch list."""
+        """Remove *qubit* (or specific *keys*) from the watch list.
+
+        Parameters
+        ----------
+        qubit : str
+            Qubit identifier.
+        keys : list[str] | None, default: None
+            Value for ``keys``.
+        """
         if keys is None:
             self._watched.pop(qubit, None)
         else:
             existing = self._watched.get(qubit, [])
             self._watched[qubit] = [k for k in existing if k not in keys]
 
-    # ── Thread lifecycle ──────────────────────────────────────────────────────
 
     def start(self):
         """Start the background monitoring thread."""
@@ -89,7 +118,13 @@ class CalibrationMonitor:
         print(f"[CalibrationMonitor] started (poll every {self._poll_interval:.0f} s)")
 
     def stop(self, timeout: float = 5.0):
-        """Signal the thread to stop and wait for it to exit."""
+        """Signal the thread to stop and wait for it to exit.
+
+        Parameters
+        ----------
+        timeout : float, default: 5.0
+            Maximum time to wait, in seconds.
+        """
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=timeout)
@@ -98,15 +133,23 @@ class CalibrationMonitor:
 
     @property
     def running(self) -> bool:
+        """Run ning.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         return self._thread is not None and self._thread.is_alive()
 
-    # ── Internal loop ─────────────────────────────────────────────────────────
 
     def _run(self):
+        """Run the operation."""
         while not self._stop_event.wait(self._poll_interval):
             self._check_once()
 
     def _check_once(self):
+        """Return the check once result."""
         for qubit, keys in self._watched.items():
             dynamic_keys = keys if keys else self._store.all_keys(qubit)
             for key in dynamic_keys:
@@ -119,7 +162,13 @@ class CalibrationMonitor:
                             print(f"[CalibrationMonitor] recalibrate failed for {qubit}/{key}: {exc}")
 
     def check_now(self) -> list[tuple[str, str]]:
-        """Perform a synchronous check and return ``[(qubit, key), ...]`` for stale entries."""
+        """Perform a synchronous check and return ``[(qubit, key), ...]`` for stale entries.
+
+        Returns
+        -------
+        list[tuple[str, str]]
+            Result of the operation.
+        """
         stale = []
         for qubit, keys in self._watched.items():
             dynamic_keys = keys if keys else self._store.all_keys(qubit)
@@ -129,6 +178,13 @@ class CalibrationMonitor:
         return stale
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         status = "running" if self.running else "stopped"
         return (
             f"CalibrationMonitor({status}, poll={self._poll_interval:.0f}s, "

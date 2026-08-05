@@ -65,13 +65,9 @@ from QickworkspaceV2.tools.hdf5_store import (
 Legacy `saveLabber()` methods remain available; `convert_labber_file()` is the
 only native-storage function that imports the optional Labber SDK.
 
-## Archive reader
+## Catalog access
 
-`ExperimentArchive(data_root)` scans completed file metadata and maintains the
-rebuildable catalog. Its `ExperimentRecord` results are lightweight. Use
-`record.load_raw(name, selection=...)` or `record.load_analysis(name)` for a
-single dataset, `record.load()` for the complete `ExperimentData`, and
-`record.plot()` to dispatch through the stable `plot_id` registry.
-
-Selective reads return `LabeledArray`, which carries `values`, `dims`, `axes`,
-dataset attributes, and the original HDF5 dataset path.
+Use `find_experiments(data_root=...)` for SQLite-backed discovery,
+`load_result(path)` to load a complete experiment, and `h5py` for selective
+reads from `raw`, `analysis`, or `axes`. The local HTML viewer provides the
+same catalog and selective-dataset access through its API.

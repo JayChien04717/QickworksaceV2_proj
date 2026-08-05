@@ -4,7 +4,20 @@ import numpy as np
 
 
 def decode_acquisition(acquired, *, threshold: bool):
-    """Decode one QICK readout as complex IQ or real threshold population."""
+    """Decode one QICK readout as complex IQ or real threshold population.
+
+    Parameters
+    ----------
+    acquired : Any
+        Value for ``acquired``.
+    threshold : bool
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     try:
         data = acquired[0][0]
     except (IndexError, TypeError):
@@ -12,8 +25,13 @@ def decode_acquisition(acquired, *, threshold: bool):
 
     values = np.asarray(data)
     if threshold:
-        if np.iscomplexobj(values):
-            return np.real(values).squeeze()
+        # QICK keeps the trailing [I, Q] axis in threshold mode. The first
+        # component is the thresholded population; retaining Q would turn an
+        # N-point sweep into 2N plotted values.
+        if values.ndim >= 2 and values.shape[-1] == 2:
+            values = values[..., 0]
+        elif np.iscomplexobj(values):
+            values = np.real(values)
         return values.astype(float, copy=False).squeeze()
 
     if values.ndim > 0 and values.shape[-1] == 2:
@@ -22,7 +40,26 @@ def decode_acquisition(acquired, *, threshold: bool):
 
 
 def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None):
-    """Run ``prog.acquire`` and return values in the selected readout mode."""
+    """Run ``prog.acquire`` and return values in the selected readout mode.
+
+    Parameters
+    ----------
+    prog : Any
+        Value for ``prog``.
+    soc : Any
+        Value for ``soc``.
+    rounds : int
+        Value for ``rounds``.
+    progress : bool
+        Value for ``progress``.
+    threshold : Any, default: None
+        Value for ``threshold``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     call_kwargs = {"rounds": rounds, "progress": progress}
     if threshold is not None:
         call_kwargs["threshold"] = threshold

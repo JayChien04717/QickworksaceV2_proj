@@ -5,9 +5,12 @@ Fitting:  Gaussian Mixture Model (GMM) via scikit-learn.
 Fidelity: mean of the confusion-matrix diagonal.
 """
 
+from dataclasses import dataclass
+from itertools import cycle
+
 import matplotlib.pyplot as plt
 import numpy as np
-from itertools import cycle
+from matplotlib.colors import to_rgba
 from scipy.stats import norm as _norm
 
 try:
@@ -21,8 +24,105 @@ linestyle_cycle = ["solid", "dashed", "dotted", "dashdot"]
 marker_cycle    = ["o", "*", "s", "^"]
 
 
+@dataclass(frozen=True)
+class HistogramAnalysis:
+    """Detailed single-shot analysis while preserving the legacy tuple API."""
+
+    legacy_result: list
+    fidelity: float
+    thresholds: np.ndarray
+    rotation_deg: float
+    confusion_matrix_pct: np.ndarray
+    state_gmms: tuple
+    projections: tuple[np.ndarray, ...]
+    primary_weights: np.ndarray
+
+
+def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
+    """Derive optimizer metrics from an existing GMM fit without refitting.
+
+    Parameters
+    ----------
+    details : HistogramAnalysis
+        Value for ``details``.
+
+    Returns
+    -------
+    dict[str, float]
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
+    if len(details.projections) < 2 or len(details.state_gmms) < 2:
+        raise ValueError("At least g and e states are required")
+
+    projections = details.projections[:2]
+    gmms = details.state_gmms[:2]
+    means = [float(np.mean(values)) for values in projections]
+    separation = abs(means[1] - means[0])
+    snr = separation**2 / (
+        float(np.var(projections[0])) + float(np.var(projections[1])) + 1e-30
+    )
+
+    soft_accuracies = []
+    for state_index, values in enumerate(projections):
+        samples = values.reshape(-1, 1)
+        log_likelihoods = np.array([gmm.score_samples(samples) for gmm in gmms])
+        shifted = log_likelihoods - log_likelihoods.max(axis=0)
+        posteriors = np.exp(shifted)
+        posteriors /= posteriors.sum(axis=0)
+        soft_accuracies.append(float(posteriors[state_index].mean()))
+
+    confusion = np.asarray(details.confusion_matrix_pct, dtype=float) / 100.0
+    g_to_e_error = float(confusion[0, 1])
+    e_to_g_error = float(confusion[1, 0])
+    return {
+        "fid": details.fidelity,
+        "soft_fid": float(np.mean(soft_accuracies)),
+        "snr": snr,
+        "sep": separation,
+        # Compatibility aliases: ge-only data measures assignment errors, not
+        # physical f-level leakage or thermal population.
+        "leakage": e_to_g_error,
+        "thermal": g_to_e_error,
+        "e_to_g_error": e_to_g_error,
+        "g_to_e_error": g_to_e_error,
+    }
+
+
 def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
               label=None, alpha=None, normalize=True):
+    """Plot hist.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    bins : Any
+        Value for ``bins``.
+    ax : Any, default: None
+        Matplotlib axes on which to draw.
+    xlims : Any, default: None
+        Value for ``xlims``.
+    color : Any, default: None
+        Value for ``color``.
+    linestyle : Any, default: None
+        Value for ``linestyle``.
+    label : Any, default: None
+        Value for ``label``.
+    alpha : Any, default: None
+        Value for ``alpha``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if color is None:
         color = next(cycle(default_colors))
     hist_data, bin_edges = np.histogram(data, bins=bins, range=xlims)
@@ -44,8 +144,82 @@ def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
     ax.set_ylim((0, None))
     return hist_data, bin_edges
 
+def _local_density_alpha(x, y, bins=120, alpha_min=0.025,
+                         alpha_max=0.95, gamma=0.7):
+    """Map each point's local 2D-bin density to a display alpha."""
+    x = np.asarray(x, dtype=float).ravel()
+    y = np.asarray(y, dtype=float).ravel()
+    if x.size != y.size:
+        raise ValueError("x and y must contain the same number of points")
+    if x.size == 0:
+        return np.empty(0, dtype=float)
+
+    finite = np.isfinite(x) & np.isfinite(y)
+    alphas = np.full(x.size, alpha_min, dtype=float)
+    if not np.any(finite):
+        return alphas
+
+    xf, yf = x[finite], y[finite]
+    histogram, x_edges, y_edges = np.histogram2d(xf, yf, bins=bins)
+    x_idx = np.clip(np.searchsorted(x_edges, xf, side="right") - 1,
+                    0, histogram.shape[0] - 1)
+    y_idx = np.clip(np.searchsorted(y_edges, yf, side="right") - 1,
+                    0, histogram.shape[1] - 1)
+    local_counts = histogram[x_idx, y_idx]
+    peak = float(np.max(local_counts, initial=0.0))
+    if peak > 1.0:
+        log_floor = np.log(2.0)  # a one-shot bin maps exactly to alpha_min
+        density = (np.log1p(local_counts) - log_floor) / (
+            np.log1p(peak) - log_floor
+        )
+        density = np.clip(density, 0.0, 1.0)
+        alphas[finite] = alpha_min + (alpha_max - alpha_min) * density**gamma
+    else:
+        alphas[finite] = alpha_min
+    return alphas
+
+
+def _density_scatter_interleaved(ax, datasets, bins=120, seed=0):
+    """Draw states in one shuffled collection with density-dependent alpha."""
+    points, facecolors = [], []
+    for x, y, color, label in datasets:
+        x = np.asarray(x).ravel()
+        y = np.asarray(y).ravel()
+        alpha = _local_density_alpha(x, y, bins=bins)
+        rgba = np.tile(to_rgba(color), (x.size, 1))
+        rgba[:, 3] = alpha
+        points.append(np.column_stack((x, y)))
+        facecolors.append(rgba)
+        ax.scatter([], [], color=color, marker=".", label=label, alpha=0.8)
+
+    if not points:
+        return None
+    points = np.concatenate(points)
+    facecolors = np.concatenate(facecolors)
+    order = np.random.default_rng(seed).permutation(len(points))
+    return ax.scatter(
+        points[order, 0], points[order, 1], c=facecolors[order],
+        marker=".", s=9, edgecolors="none", linewidths=0, rasterized=True,
+    )
+
 
 def _bic_gmm(X, max_components=2, n_init=5):
+    """Return the bic gmm result.
+
+    Parameters
+    ----------
+    X : Any
+        Value for ``X``.
+    max_components : Any, default: 2
+        Value for ``max_components``.
+    n_init : Any, default: 5
+        Value for ``n_init``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     best_gmm, best_bic = None, np.inf
     for k in range(1, max_components + 1):
         try:
@@ -62,17 +236,110 @@ def _bic_gmm(X, max_components=2, n_init=5):
     return best_gmm
 
 
+def _ordered_threshold_classifier(projections):
+    """Classify ordered one-dimensional states with contiguous thresholds."""
+    values_by_state = [np.asarray(values, dtype=float).ravel() for values in projections]
+    n_states = len(values_by_state)
+    state_order = np.argsort([np.mean(values) for values in values_by_state])
+    ordered = [values_by_state[index] for index in state_order]
+
+    if n_states == 2:
+        a, b = ordered
+        values = np.unique(np.concatenate((a, b)))
+        candidates = np.concatenate((
+            [np.nextafter(values[0], -np.inf)],
+            (values[:-1] + values[1:]) / 2.0,
+            [np.nextafter(values[-1], np.inf)],
+        )) if values.size > 1 else values
+        cdf_a = np.searchsorted(np.sort(a), candidates, side="right") / a.size
+        cdf_b = np.searchsorted(np.sort(b), candidates, side="right") / b.size
+        scores = cdf_a - cdf_b
+        best = np.flatnonzero(scores == scores.max())
+        midpoint = 0.5 * (np.mean(a) + np.mean(b))
+        index = best[np.argmin(np.abs(candidates[best] - midpoint))]
+        thresholds = [float(candidates[index])]
+    elif n_states == 3:
+        values = np.unique(np.concatenate(ordered))
+        candidates = np.concatenate((
+            [np.nextafter(values[0], -np.inf)],
+            (values[:-1] + values[1:]) / 2.0,
+            [np.nextafter(values[-1], np.inf)],
+        )) if values.size > 1 else values
+        cdfs = [
+            np.searchsorted(np.sort(values), candidates, side="right") / values.size
+            for values in ordered
+        ]
+        left_gain = cdfs[0] - cdfs[1]
+        right_gain = cdfs[1] - cdfs[2]
+        prefix_best = np.maximum.accumulate(left_gain)
+        right_index = int(np.argmax(prefix_best[:-1] + right_gain[1:]) + 1)
+        left_index = int(np.argmax(left_gain[:right_index]))
+        thresholds = [float(candidates[left_index]), float(candidates[right_index])]
+    else:
+        means = [float(np.mean(values)) for values in ordered]
+        thresholds = [0.5 * (a + b) for a, b in zip(means[:-1], means[1:])]
+
+    ordered_to_state = np.asarray(state_order)
+    confusion = np.zeros((n_states, n_states))
+    for prepared_state, values in enumerate(values_by_state):
+        predictions = ordered_to_state[np.digitize(values, thresholds)]
+        for declared_state in range(n_states):
+            confusion[prepared_state, declared_state] = np.mean(
+                predictions == declared_state
+            )
+    return state_order, thresholds, confusion
+
+
+def _optimize_multistate_rotation(iqshots, max_samples_per_state=3000):
+    """Jointly optimize the projection angle and ordered state thresholds."""
+    rng = np.random.default_rng(0)
+    sampled = []
+    for I, Q in iqshots:
+        cloud = np.asarray(I) + 1j * np.asarray(Q)
+        if cloud.size > max_samples_per_state:
+            cloud = cloud[rng.choice(cloud.size, max_samples_per_state, replace=False)]
+        sampled.append(cloud)
+
+    def score(angle):
+        projections = [
+            cloud.real * np.cos(angle) - cloud.imag * np.sin(angle)
+            for cloud in sampled
+        ]
+        _, _, confusion = _ordered_threshold_classifier(projections)
+        return float(np.mean(np.diag(confusion)))
+
+    coarse = np.linspace(-np.pi / 2, np.pi / 2, 37, endpoint=False)
+    coarse_scores = np.array([score(angle) for angle in coarse])
+    best = float(coarse[int(np.argmax(coarse_scores))])
+    fine = best + np.linspace(-np.deg2rad(5), np.deg2rad(5), 21)
+    fine_scores = np.array([score(angle) for angle in fine])
+    return float(fine[int(np.argmax(fine_scores))])
+
 def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
+    """Fit gmm.
+
+    Parameters
+    ----------
+    I_projs : Any
+        Value for ``I_projs``.
+    xlims : Any
+        Value for ``xlims``.
+    n_init : Any, default: 5
+        Value for ``n_init``.
+    max_components : Any, default: 2
+        Value for ``max_components``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     n_states = len(I_projs)
-    _MAX_G_SECONDARY = 0.30
     state_gmms = []
-    for i, proj in enumerate(I_projs):
+    for proj in I_projs:
+        # Components model the shape of one prepared-state density only. They
+        # must never be interpreted as additional qubit populations.
         gmm = _bic_gmm(proj.reshape(-1, 1), max_components, n_init)
-        if i == 0 and gmm.n_components > 1:
-            dominant_w = float(np.max(gmm.weights_))
-            secondary_w = 1.0 - dominant_w
-            if secondary_w > _MAX_G_SECONDARY:
-                gmm = _bic_gmm(proj.reshape(-1, 1), 1, n_init)
         state_gmms.append(gmm)
 
     primary_means   = np.zeros(n_states)
@@ -84,50 +351,8 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
         primary_stds[i]    = float(np.sqrt(gmm.covariances_[idx, 0, 0]))
         primary_weights[i] = float(gmm.weights_[idx])
 
-    if n_states >= 2:
-        pmin, pmax = primary_means.min(), primary_means.max()
-        for i, gmm in enumerate(state_gmms):
-            if gmm.n_components <= 1:
-                continue
-            dom_idx = int(np.argmax(gmm.weights_))
-            out_of_range = any(
-                not (pmin - 1e-9 <= float(gmm.means_[j, 0]) <= pmax + 1e-9)
-                for j in range(gmm.n_components)
-                if j != dom_idx
-            )
-            if out_of_range:
-                state_gmms[i] = _bic_gmm(I_projs[i].reshape(-1, 1), 1, n_init)
-                idx2 = int(np.argmax(state_gmms[i].weights_))
-                primary_means[i]   = float(state_gmms[i].means_[idx2, 0])
-                primary_stds[i]    = float(np.sqrt(state_gmms[i].covariances_[idx2, 0, 0]))
-                primary_weights[i] = float(state_gmms[i].weights_[idx2])
 
-    state_order = np.argsort(primary_means)
-
-    x_dense = np.linspace(xlims[0], xlims[1], 2000).reshape(-1, 1)
-    log_liks_dense = np.array([gmm.score_samples(x_dense) for gmm in state_gmms])
-
-    conf_matrix = np.zeros((n_states, n_states))
-    for i, proj in enumerate(I_projs):
-        X = proj.reshape(-1, 1)
-        ll = np.array([gmm.score_samples(X) for gmm in state_gmms])
-        preds = np.argmax(ll, axis=0)
-        for j in range(n_states):
-            conf_matrix[i, j] = np.mean(preds == j)
-
-    thresholds = []
-    for k in range(n_states - 1):
-        s1, s2 = state_order[k], state_order[k + 1]
-        midpoint = (primary_means[s1] + primary_means[s2]) / 2
-        diff  = log_liks_dense[s1] - log_liks_dense[s2]
-        cross = np.where(np.diff(np.sign(diff)))[0]
-        if cross.size:
-            cross_vals = x_dense[cross, 0]
-            best = cross_vals[np.argmin(np.abs(cross_vals - midpoint))]
-            t = float(best)
-        else:
-            t = float(midpoint)
-        thresholds.append(t)
+    state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
 
     return (state_gmms, state_order, conf_matrix, thresholds,
             primary_means, primary_stds, primary_weights)
@@ -136,7 +361,57 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
 def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
                  check_qubit_label=None, numbins=200, amplitude_mode=False,
                  ps_threshold=None, theta=None, plot=True, verbose=True,
-                 fid_avg=False, normalize=True, title=None, export=False):
+                 fid_avg=False, normalize=True, title=None, export=False,
+                 return_details=False):
+    """Return the general hist result.
+
+    Parameters
+    ----------
+    iqshots : Any
+        Value for ``iqshots``.
+    state_labels : Any
+        Value for ``state_labels``.
+    g_states : Any
+        Value for ``g_states``.
+    e_states : Any
+        Value for ``e_states``.
+    e_label : Any, default: 'e'
+        Value for ``e_label``.
+    check_qubit_label : Any, default: None
+        Value for ``check_qubit_label``.
+    numbins : Any, default: 200
+        Value for ``numbins``.
+    amplitude_mode : Any, default: False
+        Value for ``amplitude_mode``.
+    ps_threshold : Any, default: None
+        Value for ``ps_threshold``.
+    theta : Any, default: None
+        Value for ``theta``.
+    plot : Any, default: True
+        Value for ``plot``.
+    verbose : Any, default: True
+        Value for ``verbose``.
+    fid_avg : Any, default: False
+        Value for ``fid_avg``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+    title : Any, default: None
+        Value for ``title``.
+    export : Any, default: False
+        Value for ``export``.
+    return_details : Any, default: False
+        Value for ``return_details``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    ImportError
+        If the operation cannot be completed.
+    """
     if not _HAS_SKLEARN:
         raise ImportError(
             "scikit-learn is required for GMM fitting. "
@@ -150,45 +425,50 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
 
     if not amplitude_mode:
         if theta is None:
-            g_c = np.concatenate([iqshots[i][0] + 1j * iqshots[i][1] for i in g_states])
-            e_c = np.concatenate([iqshots[i][0] + 1j * iqshots[i][1] for i in e_states])
-            theta_rad = -np.arctan2(np.mean(e_c.imag) - np.mean(g_c.imag),
-                                    np.mean(e_c.real) - np.mean(g_c.real))
-
-            def _make_rot(tr):
-                def _rot_I(c):
-                    return c.real * np.cos(tr) - c.imag * np.sin(tr)
-                def _rot_IQ(c):
-                    I = c.real * np.cos(tr) - c.imag * np.sin(tr)
-                    Q = c.real * np.sin(tr) + c.imag * np.cos(tr)
-                    return I, Q
-                return _rot_I, _rot_IQ
-
-            _rot_I_coarse, _ = _make_rot(theta_rad)
-
-            if _HAS_SKLEARN:
-                try:
-                    g_proj_coarse = _rot_I_coarse(g_c)
-                    e_proj_coarse = _rot_I_coarse(e_c)
-                    gmm_g = _bic_gmm(g_proj_coarse.reshape(-1, 1), 2, 5)
-                    gmm_e = _bic_gmm(e_proj_coarse.reshape(-1, 1), 2, 5)
-                    g_primary_I = float(gmm_g.means_[np.argmax(gmm_g.weights_), 0])
-                    e_primary_I = float(gmm_e.means_[np.argmax(gmm_e.weights_), 0])
-                    Q_g_mean = float(np.mean(g_c.real * np.sin(theta_rad) + g_c.imag * np.cos(theta_rad)))
-                    Q_e_mean = float(np.mean(e_c.real * np.sin(theta_rad) + e_c.imag * np.cos(theta_rad)))
-                    dI = e_primary_I - g_primary_I
-                    dQ = Q_e_mean - Q_g_mean
-                    delta = np.arctan2(dQ, dI)
-                    theta_rad = theta_rad + delta
-                except Exception:
-                    pass
+            if n_states >= 3:
+                theta_rad = _optimize_multistate_rotation(iqshots)
+            else:
+                g_c = np.concatenate([
+                    iqshots[i][0] + 1j * iqshots[i][1] for i in g_states
+                ])
+                e_c = np.concatenate([
+                    iqshots[i][0] + 1j * iqshots[i][1] for i in e_states
+                ])
+                theta_rad = -np.arctan2(
+                    np.mean(e_c.imag) - np.mean(g_c.imag),
+                    np.mean(e_c.real) - np.mean(g_c.real),
+                )
         else:
             theta_rad = float(theta) * np.pi / 180.0
 
         def _rot_I(c):
+            """Return the rot I result.
+
+            Parameters
+            ----------
+            c : Any
+                Value for ``c``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
 
         def _rot_IQ(c):
+            """Return the rot IQ result.
+
+            Parameters
+            ----------
+            c : Any
+                Value for ``c``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             I = c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
             Q = c.real * np.sin(theta_rad) + c.imag * np.cos(theta_rad)
             return I, Q
@@ -223,8 +503,11 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         axs[1, 0].set_ylabel("Counts", fontsize=12)
         plt.subplots_adjust(hspace=0.35, wspace=0.15)
 
-    I_projs   = []
+    I_projs = []
     bins_dist = None
+    unrotated_scatter = []
+    rotated_scatter = []
+    scatter_centers = []
 
     for idx, (I, Q) in enumerate(iqshots):
         cmplx        = I + 1j * Q
@@ -236,12 +519,12 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         lbl       = state_labels[idx]
 
         if plot:
-            axs[0, 0].scatter(I, Q, label=lbl, color=color, marker=".", edgecolor="None", alpha=0.1)
-            axs[0, 0].plot(np.mean(I), np.mean(Q), color="k", marker=marker,
-                           markerfacecolor=color, markersize=6)
-            axs[0, 1].scatter(I_new, Q_new, label=lbl, color=color, marker=".", edgecolor="None", alpha=0.1)
-            axs[0, 1].plot(np.mean(I_new), np.mean(Q_new), color="k", marker=marker,
-                           markerfacecolor=color, markersize=6)
+            unrotated_scatter.append((I, Q, color, lbl))
+            rotated_scatter.append((I_new, Q_new, color, lbl))
+            scatter_centers.append((
+                np.mean(I), np.mean(Q), np.mean(I_new), np.mean(Q_new),
+                color, marker,
+            ))
             _, bins_dist = plot_hist(
                 proj, bins=numbins, ax=axs[1, 0], xlims=xlims,
                 color=color, linestyle=linestyle_cycle[0],
@@ -250,6 +533,15 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         else:
             _, bins_dist = np.histogram(proj, bins=numbins, range=xlims)
 
+    if plot:
+        _density_scatter_interleaved(axs[0, 0], unrotated_scatter)
+        _density_scatter_interleaved(axs[0, 1], rotated_scatter)
+        # State centers stay crisp and visible above the shuffled shot cloud.
+        for i_mean, q_mean, i_rot_mean, q_rot_mean, color, marker in scatter_centers:
+            axs[0, 0].plot(i_mean, q_mean, color="k", marker=marker,
+                           markerfacecolor=color, markersize=6, zorder=4)
+            axs[0, 1].plot(i_rot_mean, q_rot_mean, color="k", marker=marker,
+                           markerfacecolor=color, markersize=6, zorder=4)
     state_gmms, state_order, conf_matrix, thresholds, gmm_means, gmm_stds, gmm_weights = \
         _fit_gmm(I_projs, xlims)
 
@@ -285,8 +577,11 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         if ps_threshold is not None:
             axs[1, 0].axvline(ps_threshold, color="gray", linestyle="-.")
 
-        fid_title = "$F_{\\overline{ge}}$" if fid_avg else "$F_{ge}$"
-        axs[1, 0].set_title(f"{fid_title} (GMM): {100 * fid:.2f}%", fontsize=13)
+        if n_states == 3:
+            fid_title = "$F_{\\overline{gef}}$"
+        else:
+            fid_title = "$F_{\\overline{ge}}$" if fid_avg else "$F_{ge}$"
+        axs[1, 0].set_title(f"{fid_title} (threshold): {100 * fid:.2f}%", fontsize=13)
         axs[1, 0].legend(fontsize=8, loc="upper right")
         axs[0, 0].legend(fontsize=8)
         axs[0, 1].legend(fontsize=8)
@@ -320,22 +615,63 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
 
     if verbose:
         print(f"Rotation angle : {theta_rad * 180 / np.pi:.2f} deg")
-        print(f"GMM Fidelity   : {100 * fid:.3f}%")
+        print(f"Threshold Fid. : {100 * fid:.3f}%")
         for idx, (lbl, gmm) in enumerate(zip(state_labels, state_gmms)):
-            sec_weight = 1.0 - float(gmm_weights[idx]) if gmm.n_components > 1 else 0.0
-            quality_flag = "  ⚠ secondary component large" if sec_weight > 0.25 else ""
-            print(f"  |{lbl}⟩  components={gmm.n_components}  "
-                  f"primary_mean={gmm_means[idx]:.3f}  primary_std={gmm_stds[idx]:.3f}  "
-                  f"secondary_weight={sec_weight:.3f}{quality_flag}")
+            print(f"  |{lbl}?? components={gmm.n_components}  "
+                  f"mean={gmm_means[idx]:.3f}  std={gmm_stds[idx]:.3f}")
         print(f"Thresholds     : {[f'{t:.3f}' for t in thresholds]}")
         print("Confusion Matrix (%):\n", np.round(conf_matrix_pct, 1))
 
-    return [fids, thresholds, theta_rad * 180 / np.pi, conf_matrix_pct]
+    rotation_deg = theta_rad * 180 / np.pi
+    legacy_result = [fids, thresholds, rotation_deg, conf_matrix_pct]
+    details = HistogramAnalysis(
+        legacy_result=legacy_result,
+        fidelity=fid,
+        thresholds=np.asarray(thresholds, dtype=float),
+        rotation_deg=float(rotation_deg),
+        confusion_matrix_pct=np.asarray(conf_matrix_pct, dtype=float),
+        state_gmms=tuple(state_gmms),
+        projections=tuple(np.asarray(values) for values in I_projs),
+        primary_weights=np.asarray(gmm_weights, dtype=float),
+    )
+    return details if return_details else legacy_result
 
 
 def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
          plot=True, verbose=True, fid_avg=False,
-         normalize=True, title=None, export=False):
+         normalize=True, title=None, export=False, return_details=False):
+    """Return the hist result.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    amplitude_mode : Any, default: False
+        Value for ``amplitude_mode``.
+    ps_threshold : Any, default: None
+        Value for ``ps_threshold``.
+    theta : Any, default: None
+        Value for ``theta``.
+    plot : Any, default: True
+        Value for ``plot``.
+    verbose : Any, default: True
+        Value for ``verbose``.
+    fid_avg : Any, default: False
+        Value for ``fid_avg``.
+    normalize : Any, default: True
+        Value for ``normalize``.
+    title : Any, default: None
+        Value for ``title``.
+    export : Any, default: False
+        Value for ``export``.
+    return_details : Any, default: False
+        Value for ``return_details``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     iqshots      = [(data["Ig"], data["Qg"]), (data["Ie"], data["Qe"])]
     state_labels = ["g", "e"]
     g_states     = [0]
@@ -352,8 +688,11 @@ def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
         amplitude_mode=amplitude_mode, ps_threshold=ps_threshold,
         theta=theta, plot=plot, verbose=verbose,
         fid_avg=fid_avg, normalize=normalize,
-        title=title, export=export,
+        title=title, export=export, return_details=return_details,
     )
 
 
-__all__ = ["plot_hist", "general_hist", "hist", "_fit_gmm", "_bic_gmm"]
+__all__ = [
+    "HistogramAnalysis", "histogram_metrics", "plot_hist", "general_hist",
+    "hist", "_fit_gmm", "_bic_gmm",
+]

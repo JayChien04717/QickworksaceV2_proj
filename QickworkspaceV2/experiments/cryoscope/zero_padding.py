@@ -17,6 +17,13 @@ class CryoscopeZeroPaddingProgram(CryoscopeProgramBase):
     """Play a short prefix and pad the descriptor with trailing zeros."""
 
     def _add_flux_pulse(self, cfg):
+        """Add flux pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         ch = cfg["flux_ch"]
         active_samples = int(cfg["flux_active_samples"])
         normalized = make_zero_padded_rectangle(
@@ -56,6 +63,13 @@ class CryoscopeZeroPadding(CryoscopeExperimentBase):
     X_SAVE_SCALE = 1.0
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return CryoscopeZeroPaddingProgram(
             self.soccfg,
             reps=self.cfg["reps"],
@@ -64,11 +78,40 @@ class CryoscopeZeroPadding(CryoscopeExperimentBase):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         active_ns = prog.flux_active_samples * prog.flux_sample_period_ns
         return np.array([active_ns])
 
     def run_sample_sweep(self, active_samples, py_avg: int, *, acquire_xy=True, **run_kwargs):
-        """Rebuild and run one envelope per requested sample count, including zero."""
+        """Rebuild and run one envelope per requested sample count, including zero.
+
+        Parameters
+        ----------
+        active_samples : Any
+            Value for ``active_samples``.
+        py_avg : int
+            Number of Python-level acquisition averages.
+        acquire_xy : Any, default: True
+            Value for ``acquire_xy``.
+        **run_kwargs : Any
+            Value for ``run_kwargs``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
 
         results = {}
         for sample_count in active_samples:

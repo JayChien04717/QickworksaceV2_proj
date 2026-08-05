@@ -9,13 +9,21 @@ import numpy as np
 from qick.asm_v2 import AveragerProgramV2, QickSweep1D
 
 from ..core.base_experiment import BaseExperiment
-from ..core.experiment_data import ExperimentData, QualityFlag
+from ..core.experiment_data import ExperimentData
+from ._common import fit_quality, project_iq
 
 
 class MuxRamseyProgram(AveragerProgramV2):
     """Mux Ramsey: two pi/2 pulses, swept wait, mux readout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -54,14 +62,31 @@ class MuxRamseyProgram(AveragerProgramV2):
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             qb_ch = cfg["qb_ch"][idx]
             pulse_type = cfg["pulse_type"][idx]
-            ramsey_freq = cfg["ramsey_freq"][idx]
+            virtual_detune = cfg["virtual_detune"][idx]
             phase1 = cfg["qb_phase"][idx]
-            phase2 = phase1 + self.wait_time * 360 * ramsey_freq
+            phase2 = phase1 + self.wait_time * 360 * virtual_detune
 
             self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse1", pulse_type, phase1)
             self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse2", pulse_type, phase2)
 
     def _add_qubit_pulse(self, cfg, idx, qb_ch, pulse_name, pulse_type, phase):
+        """Add qubit pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        idx : Any
+            Value for ``idx``.
+        qb_ch : Any
+            Value for ``qb_ch``.
+        pulse_name : Any
+            Name of the pulse.
+        pulse_type : Any
+            Value for ``pulse_type``.
+        phase : Any
+            Value for ``phase``.
+        """
         gain = cfg["pi2_gain_ge"][idx]
         if pulse_type == "const":
             self.add_pulse(
@@ -112,6 +137,13 @@ class MuxRamseyProgram(AveragerProgramV2):
             )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             self.pulse(ch=cfg["qb_ch"][idx], name=f"{name}_pulse1", t=0)
         self.delay_auto(self.wait_time + 0.01, tag="wait")
@@ -135,10 +167,24 @@ class MuxRamsey(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     def __init__(self, config):
+        """Initialize the MuxRamsey instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.wait_axis = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         return MuxRamseyProgram(
             self.soccfg,
@@ -148,10 +194,36 @@ class MuxRamsey(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.wait_axis
 
     @staticmethod
     def _sweep_iq(iq_list, n_trace):
+        """Return the sweep iq result.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -162,6 +234,22 @@ class MuxRamsey(BaseExperiment):
         return np.asarray(vals, dtype=complex)
 
     def run(self, py_avg=1, iq_process="abs", plot=False):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: False
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         prog = MuxRamseyProgram(
             self.soccfg,
@@ -199,7 +287,7 @@ class MuxRamsey(BaseExperiment):
                 fit = self._fit_ramsey(
                     self.wait_axis[finite],
                     trace[finite],
-                    cfg["ramsey_freq"][slot],
+                    cfg["virtual_detune"][slot],
                     cfg["qb_freq_ge"][slot],
                 )
                 if fit is None:
@@ -258,6 +346,9 @@ class MuxRamsey(BaseExperiment):
             plt.show()
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
+        quality, quality_message = fit_quality(
+            has_data, len(fit_method), trace_count, "Mux Ramsey"
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
@@ -272,8 +363,8 @@ class MuxRamsey(BaseExperiment):
                 "points_acquired": int(cfg["steps"]) if has_data else 0,
             },
             figures=figures,
-            quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux Ramsey acquired." if has_data else "No data acquired.",
+            quality=quality,
+            quality_message=quality_message,
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,
@@ -284,7 +375,18 @@ class MuxRamsey(BaseExperiment):
         return result
 
     def correct_detune(self):
-        """Correct each armed qubit frequency from mux Ramsey detuning fits."""
+        """Correct each armed qubit frequency from mux Ramsey detuning fits.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.result is None:
             raise RuntimeError("Run the experiment first.")
 
@@ -300,8 +402,8 @@ class MuxRamsey(BaseExperiment):
                 print(f"{name}: fitted Ramsey frequency not available.")
                 continue
 
-            ramsey_freq = float(cfg["ramsey_freq"][slot])
-            detune = float(fit_freq) - ramsey_freq
+            virtual_detune = float(cfg["virtual_detune"][slot])
+            detune = float(fit_freq) - virtual_detune
             old_freq = float(qb_freqs[slot])
             delta = round(detune, 2)
             if abs(detune) > 0.005:
@@ -318,7 +420,7 @@ class MuxRamsey(BaseExperiment):
                 "old_qb_freq_ge": old_freq,
                 "new_qb_freq_ge": new_freq,
                 "fit_freq_MHz": float(fit_freq),
-                "ramsey_freq_MHz": ramsey_freq,
+                "virtual_detune_MHz": virtual_detune,
                 "detune_MHz": detune,
                 "detune_error_MHz": delta,
                 "status": status,
@@ -328,16 +430,34 @@ class MuxRamsey(BaseExperiment):
         return corrections
 
     @staticmethod
-    def _fit_ramsey(wait_axis, trace, ramsey_freq, qb_freq):
+    def _fit_ramsey(wait_axis, trace, virtual_detune, qb_freq):
+        """Fit ramsey.
+
+        Parameters
+        ----------
+        wait_axis : Any
+            Value for ``wait_axis``.
+        trace : Any
+            Value for ``trace``.
+        virtual_detune : Any
+            Value for ``virtual_detune``.
+        qb_freq : Any
+            Value for ``qb_freq``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
-            if ramsey_freq:
+            if virtual_detune:
                 from ..tools.fitting import fitdecaysin
 
                 popt, pcov, _ = fitdecaysin(wait_axis, trace)
                 perr = np.sqrt(np.abs(np.diag(pcov)))
                 t2r = abs(float(popt[3]))
                 fit_freq = float(popt[1])
-                detune = fit_freq - float(ramsey_freq)
+                detune = fit_freq - float(virtual_detune)
                 corrected = float(qb_freq) - round(detune, 2)
                 return t2r, fit_freq, detune, corrected, popt, perr, "decaysin"
 
@@ -352,6 +472,20 @@ class MuxRamsey(BaseExperiment):
 
     @staticmethod
     def _get_wait_axis(prog, cfg):
+        """Return wait axis.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+        cfg : Any
+            Experiment configuration mapping.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
             wait_axis = np.asarray(
                 prog.get_time_param("wait", "t", as_array=True),
@@ -369,14 +503,21 @@ class MuxRamsey(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
-        iq_process = (iq_process or "abs").lower()
-        if iq_process in {"real", "i", "avgi"}:
-            return np.real(iqdata)
-        if iq_process in {"imag", "q", "avgq"}:
-            return np.imag(iqdata)
-        if iq_process == "phase":
-            return np.unwrap(np.angle(iqdata), axis=-1)
-        return np.abs(iqdata)
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        return project_iq(iqdata, iq_process)
 
 
 __all__ = ["MuxRamsey", "MuxRamseyProgram"]

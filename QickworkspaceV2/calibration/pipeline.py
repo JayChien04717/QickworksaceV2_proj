@@ -42,6 +42,24 @@ class AutoCalibrate:
         cal_store: CalibrationStore | None = None,
         init_guess: dict | None = None,
     ):
+        """Initialize the AutoCalibrate instance.
+
+        Parameters
+        ----------
+        config_all : Any
+            Value for ``config_all``.
+        qubit : str
+            Qubit identifier.
+        cal_store : CalibrationStore | None, default: None
+            Value for ``cal_store``.
+        init_guess : dict | None, default: None
+            Value for ``init_guess``.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from ..core.base_experiment import BaseExperiment
         if BaseExperiment._soc is None:
             raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
@@ -54,12 +72,32 @@ class AutoCalibrate:
         self._T2e: float | None = None
         self._T1:  float | None = self._guess_float("T1_guess")
 
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _cfg(self) -> dict:
+        """Return the cfg result.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return self.config_all.get_qubit(self.qubit)
 
     def _guess_float(self, key: str, default: float | None = None) -> float | None:
+        """Return the guess float result.
+
+        Parameters
+        ----------
+        key : str
+            Lookup key.
+        default : float | None, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        float | None
+            Result of the operation.
+        """
         value = self.init_guess.get(key, default)
         if value is None:
             return None
@@ -69,6 +107,29 @@ class AutoCalibrate:
             return default
 
     def _range_guess(self, key: str, center: float, span: float, steps: int):
+        """Return the range guess result.
+
+        Parameters
+        ----------
+        key : str
+            Lookup key.
+        center : float
+            Value for ``center``.
+        span : float
+            Value for ``span``.
+        steps : int
+            Value for ``steps``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         spec = self.init_guess.get(key)
         if spec is None:
             return float(center - span), float(center + span), int(steps)
@@ -88,19 +149,74 @@ class AutoCalibrate:
 
     @staticmethod
     def _expand_range(start: float, stop: float, factor: float):
+        """Return the expand range result.
+
+        Parameters
+        ----------
+        start : float
+            Value for ``start``.
+        stop : float
+            Value for ``stop``.
+        factor : float
+            Value for ``factor``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         center = 0.5 * (start + stop)
         half_span = 0.5 * abs(stop - start) * factor
         return center - half_span, center + half_span
 
     def _update(self, key: str, value):
+        """Update the operation.
+
+        Parameters
+        ----------
+        key : str
+            Lookup key.
+        value : Any
+            Value to apply.
+        """
         self.config_all.update(key, value, q_index=self.qubit)
         if self.cal_store is not None:
             self.cal_store.set(self.qubit, key, value)
 
     def _log(self, step: str, msg: str):
+        """Return the log result.
+
+        Parameters
+        ----------
+        step : str
+            Value for ``step``.
+        msg : str
+            Value for ``msg``.
+        """
         print(f"  [{step}] {msg}")
 
     def _require_result(self, step: str, result: ExperimentData, required: tuple[str, ...] = ()) -> ExperimentData:
+        """Return the require result result.
+
+        Parameters
+        ----------
+        step : str
+            Value for ``step``.
+        result : ExperimentData
+            Experiment result to process.
+        required : tuple[str, ...], default: ()
+            Value for ``required``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if result.quality == QualityFlag.BAD:
             raise RuntimeError(f"{step}: analysis failed: {result.quality_message}")
         missing = [key for key in required if result.get_param(key) is None]
@@ -120,6 +236,31 @@ class AutoCalibrate:
         lo: float | None = None,
         hi: float | None = None,
     ) -> float:
+        """Return the require param result.
+
+        Parameters
+        ----------
+        step : str
+            Value for ``step``.
+        result : ExperimentData
+            Experiment result to process.
+        key : str
+            Lookup key.
+        lo : float | None, default: None
+            Value for ``lo``.
+        hi : float | None, default: None
+            Value for ``hi``.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         value = result.get_param(key)
         if value is None:
             if result.scalar_result is not None and key in {"scalar", "f0_MHz", "f_res[MHz]"}:
@@ -135,6 +276,18 @@ class AutoCalibrate:
 
     @staticmethod
     def _axis_extremum_freq(result: ExperimentData) -> float | None:
+        """Return the axis extremum freq result.
+
+        Parameters
+        ----------
+        result : ExperimentData
+            Experiment result to process.
+
+        Returns
+        -------
+        float | None
+            Result of the operation.
+        """
         if result.x_axis is None or result.raw_iq is None:
             return None
         x = np.asarray(result.x_axis, dtype=float)
@@ -148,9 +301,15 @@ class AutoCalibrate:
         value = float(x[idx])
         return value if np.isfinite(value) else None
 
-    # ── Pipeline runner ───────────────────────────────────────────────────────
 
     def run(self, skip: tuple = ()):
+        """Run the operation.
+
+        Parameters
+        ----------
+        skip : tuple, default: ()
+            Value for ``skip``.
+        """
         PIPELINE = [
             ("res_spec",   self.step_res_spec),
             ("qubit_spec", self.step_qubit_spec),
@@ -169,9 +328,29 @@ class AutoCalibrate:
             print(f"{'='*60}")
             fn()
 
-    # ── Step 1 — Resonator spectroscopy ──────────────────────────────────────
 
     def step_res_spec(self, span=10.0, steps=101, py_avg=5):
+        """Return the step res spec result.
+
+        Parameters
+        ----------
+        span : Any, default: 10.0
+            Value for ``span``.
+        steps : Any, default: 101
+            Value for ``steps``.
+        py_avg : Any, default: 5
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.resonator.res_spec import ResonatorSpec
         center = self._cfg()["res_freq_ge"]
@@ -204,9 +383,29 @@ class AutoCalibrate:
                 self._log("res_spec", f"{exc} (attempt {attempt+1}), expanding range to {start:.4f}-{stop:.4f} MHz")
         raise RuntimeError("res_spec: circle-fit failed after 3 attempts")
 
-    # ── Step 2 — Qubit spectroscopy ───────────────────────────────────────────
 
     def step_qubit_spec(self, span=50.0, steps=101, py_avg=5):
+        """Return the step qubit spec result.
+
+        Parameters
+        ----------
+        span : Any, default: 50.0
+            Value for ``span``.
+        steps : Any, default: 101
+            Value for ``steps``.
+        py_avg : Any, default: 5
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.qubit_ge.qubit_spec import QubitSpec
         center = self._cfg()["qb_freq_ge"]
@@ -241,9 +440,27 @@ class AutoCalibrate:
                 self._log("qubit_spec", f"{exc} (attempt {attempt+1}), expanding range to {start:.4f}-{stop:.4f} MHz")
         raise RuntimeError("qubit_spec: Lorentzian fit failed after 3 attempts")
 
-    # ── Step 3 — Power Rabi ───────────────────────────────────────────────────
 
     def step_power_rabi(self, steps=100, py_avg=10):
+        """Return the step power rabi result.
+
+        Parameters
+        ----------
+        steps : Any, default: 100
+            Value for ``steps``.
+        py_avg : Any, default: 10
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.qubit_ge.rabi import PowerRabi
         rabi_start, rabi_stop, steps = self._range_guess("rabi", 0.5, 0.5, steps)
@@ -275,12 +492,32 @@ class AutoCalibrate:
             self._update("sigma_ge", new_sigma)
         raise RuntimeError(f"power_rabi: pi_gain still out of range after {self.MAX_RABI_RETRIES} retries")
 
-    # ── Step 4 — Ramsey ───────────────────────────────────────────────────────
 
-    def step_ramsey(self, steps=100, py_avg=20, ramsey_freq=2.0):
+    def step_ramsey(self, steps=100, py_avg=20, virtual_detune=2.0):
+        """Return the step ramsey result.
+
+        Parameters
+        ----------
+        steps : Any, default: 100
+            Value for ``steps``.
+        py_avg : Any, default: 20
+            Number of Python-level acquisition averages.
+        virtual_detune : Any, default: 2.0
+            Value for ``virtual_detune``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.coherence.ramsey import Ramsey
-        ramsey_freq = self._guess_float("ramsey_freq", ramsey_freq) or ramsey_freq
+        virtual_detune = self._guess_float("virtual_detune", virtual_detune) or virtual_detune
         stop = max(2.0, min(3.0 * self._T1, 15.0)) if self._T1 else 5.0
         _, stop, steps = self._range_guess("ramsey", 0.0, stop, steps)
         _freq_history:  list[float] = []
@@ -291,7 +528,7 @@ class AutoCalibrate:
             run_cfg.update([
                 ("steps", steps),
                 ("wait_time", QickSweep1D("waitloop", 0.0, stop)),
-                ("ramsey_freq", ramsey_freq),
+                ("virtual_detune", virtual_detune),
             ])
             expt = Ramsey(run_cfg)
             result: ExperimentData = expt.run(py_avg)
@@ -299,8 +536,8 @@ class AutoCalibrate:
             T2r = self._require_param("ramsey", result, "T2r_us", lo=0.01, hi=5000.0)
             detune = result.get_param("detune_MHz")
             if detune is None:
-                raise RuntimeError("ramsey: detune_MHz missing; use nonzero ramsey_freq")
-            signed_err = float(detune) - ramsey_freq
+                raise RuntimeError("ramsey: detune_MHz missing; use nonzero virtual_detune")
+            signed_err = float(detune) - virtual_detune
             abs_err    = abs(signed_err)
             self._T2r  = T2r
             self.results["T2r_us"] = T2r
@@ -329,21 +566,34 @@ class AutoCalibrate:
         self._log("ramsey", f"did not converge in {self.MAX_RAMSEY_RETRIES+2} attempts, proceeding")
         return self._T2r, self._cfg()["qb_freq_ge"]
 
-    # ── Step 5 — Spin Echo ────────────────────────────────────────────────────
 
     def step_spin_echo(self, steps=100, py_avg=100):
+        """Return the step spin echo result.
+
+        Parameters
+        ----------
+        steps : Any, default: 100
+            Value for ``steps``.
+        py_avg : Any, default: 100
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.coherence.spin_echo import SpinEcho
         T2r = self._T2r or min(self._T1 or self._guess_float("T2_guess", 2.0) or 2.0, 2.0)
         T2e_est = 3.0 * T2r
         stop = max(20.0, 5.0 * T2e_est)
         _, stop, steps = self._range_guess("spin_echo", 0.0, stop, steps)
-        ramsey_freq = round(min(0.5, 1.5 / stop), 4)
+        virtual_detune = round(min(0.5, 1.5 / stop), 4)
         run_cfg = self._cfg()
         run_cfg.update([
             ("steps", steps),
             ("wait_time", QickSweep1D("waitloop", 0.0, stop)),
-            ("ramsey_freq", ramsey_freq),
+            ("virtual_detune", virtual_detune),
         ])
         expt = SpinEcho(run_cfg)
         result: ExperimentData = expt.run(py_avg)
@@ -351,12 +601,25 @@ class AutoCalibrate:
         T2e = self._require_param("spin_echo", result, "T2e_us", lo=0.01, hi=10000.0)
         self._T2e = T2e
         self.results["T2e_us"] = T2e
-        self._log("spin_echo", f"T2E={T2e:.2f} µs (stop={stop:.0f} µs, ramsey_freq={ramsey_freq} MHz)")
+        self._log("spin_echo", f"T2E={T2e:.2f} µs (stop={stop:.0f} µs, virtual_detune={virtual_detune} MHz)")
         return T2e
 
-    # ── Step 6 — T1 ──────────────────────────────────────────────────────────
 
     def step_t1(self, steps=100, py_avg=50):
+        """Return the step t1 result.
+
+        Parameters
+        ----------
+        steps : Any, default: 100
+            Value for ``steps``.
+        py_avg : Any, default: 50
+            Number of Python-level acquisition averages.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from qick.asm_v2 import QickSweep1D
         from ..experiments.coherence.t1 import T1
         T_ref = self._T1 or self._T2r or 5.0
@@ -380,9 +643,26 @@ class AutoCalibrate:
         self._log("t1", f"T1={T1_val:.2f} µs → relax_delay={new_relax} µs")
         return T1_val
 
-    # ── Step 7 — Single-shot optimisation ────────────────────────────────────
 
     def step_ss_opt(self, shots=1000, coarse_pts=(5, 3, 3), bo_n_iter=15, bo_xi=0.02):
+        """Return the step ss opt result.
+
+        Parameters
+        ----------
+        shots : Any, default: 1000
+            Value for ``shots``.
+        coarse_pts : Any, default: (5, 3, 3)
+            Value for ``coarse_pts``.
+        bo_n_iter : Any, default: 15
+            Value for ``bo_n_iter``.
+        bo_xi : Any, default: 0.02
+            Value for ``bo_xi``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from ..experiments.setup.single_shot import SingleShot_ge_opt, SingleShot_gef, hist
         run_cfg = self._cfg()
         freq_centre = run_cfg["res_freq_ge"]
@@ -417,9 +697,22 @@ class AutoCalibrate:
         self._log("ss_opt", f"res_phase={phase:.2f} deg, fidelity={fidelity:.4f}")
         return length, gain, freq
 
-    # ── GP zero-crossing predictor ────────────────────────────────────────────
 
     def _gp_predict_zero_crossing(self, freq_vals: list[float], error_vals: list[float]) -> float | None:
+        """Return the gp predict zero crossing result.
+
+        Parameters
+        ----------
+        freq_vals : list[float]
+            Value for ``freq_vals``.
+        error_vals : list[float]
+            Value for ``error_vals``.
+
+        Returns
+        -------
+        float | None
+            Result of the operation.
+        """
         try:
             from sklearn.gaussian_process import GaussianProcessRegressor
             from sklearn.gaussian_process.kernels import RBF, WhiteKernel
@@ -453,9 +746,9 @@ class AutoCalibrate:
             self._log("ramsey", f"  GP prediction failed ({exc}) — using naive correction")
             return None
 
-    # ── Summary ───────────────────────────────────────────────────────────────
 
     def summary(self):
+        """Return a summary of the current state."""
         print(f"\n{'='*60}")
         print(f"  Auto-Calibration Summary  —  qubit {self.qubit}")
         print(f"{'='*60}")

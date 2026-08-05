@@ -18,6 +18,13 @@ class LoopbackProgram(BaseProgram):
     """QICK loopback program for TOF measurement."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg, prefix="ge")
         self.has_qb_pulse = False
         self.has_qb_pulse_ef = False
@@ -33,6 +40,13 @@ class LoopbackProgram(BaseProgram):
             pass
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         do_check_e = cfg.get("check_e", cfg.get("cheek_e", False))
         do_check_f = cfg.get("check_f", cfg.get("cheek_f", False))
@@ -63,23 +77,76 @@ class TOF(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     def __init__(self, config):
+        """Initialize the TOF instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.iq_list = None
         self.t = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return LoopbackProgram(
             self.soccfg, reps=1, final_delay=self.cfg["relax_delay"], cfg=self.cfg
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_time_axis(ro_index=0)
 
     def run(self, py_avg=1, **kwargs) -> ExperimentData:
-        """Override: uses acquire_decimated instead of standard sweep."""
+        """Override: uses acquire_decimated instead of standard sweep.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         return self.liveplot(py_avg=py_avg)
 
     def liveplot(self, py_avg=1, threshold=1.5) -> ExperimentData:
+        """Update the live experiment plot.
+
+        Parameters
+        ----------
+        py_avg : Any, default: 1
+            Number of Python-level acquisition averages.
+        threshold : Any, default: 1.5
+            Value for ``threshold``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+        """
         prog = self._create_program()
         self.t = self._extract_sweep_axis(prog)
         self._sweep_vals_x = self.t
@@ -151,6 +218,15 @@ class TOF(BaseExperiment):
         return result
 
     def plot(self, threshold=1.5, *, plot_analysis=True):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        threshold : Any, default: 1.5
+            Value for ``threshold``.
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+        """
         if self.iq_list is None:
             print("No data. Run the experiment first.")
             return

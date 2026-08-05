@@ -36,6 +36,18 @@ _INTERLEAVED_FILE_SUFFIX = {
 
 
 def _safe_rb_file_suffix(label):
+    """Return the safe rb file suffix result.
+
+    Parameters
+    ----------
+    label : Any
+        Value for ``label``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     suffix = _INTERLEAVED_FILE_SUFFIX.get(label, str(label))
     for char in '<>:"/\\|?*':
         suffix = suffix.replace(char, "_")
@@ -46,6 +58,13 @@ class RBProgram(BaseProgram):
     """QICK program that unrolls a Clifford gate sequence at compile time."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         prefix = cfg.get("prefix", "ge")
         self.setup_resonator(cfg, prefix=prefix)
         self.setup_qubit_gen(cfg, prefix=prefix)
@@ -54,6 +73,18 @@ class RBProgram(BaseProgram):
             self.apply_cool(cfg)
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.cooling_body(cfg)
@@ -78,6 +109,13 @@ class RandomizedBenchmarking(BaseExperiment):
     Analysis = RBAnalysis
 
     def __init__(self, config):
+        """Initialize the RandomizedBenchmarking instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.x = None
         self.rb_result = None
@@ -97,6 +135,39 @@ class RandomizedBenchmarking(BaseExperiment):
         iq_process: str = "abs",
         randomize_depth_order: bool = False,
     ) -> ExperimentData:
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        max_circuit_depth : int
+            Value for ``max_circuit_depth``.
+        delta_clifford : int
+            Value for ``delta_clifford``.
+        number_sample : int
+            Value for ``number_sample``.
+        interleaved_gate : str | None, default: None
+            Value for ``interleaved_gate``.
+        seed : int | None, default: None
+            Value for ``seed``.
+        prefix : str, default: 'ge'
+            Value for ``prefix``.
+        iq_process : str, default: 'abs'
+            IQ processing mode.
+        randomize_depth_order : bool, default: False
+            Value for ``randomize_depth_order``.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         from ...tools.rb_generator import single_qb_rb, INTERLEAVE_GATES
 
         self._iq_process = iq_process
@@ -119,31 +190,45 @@ class RandomizedBenchmarking(BaseExperiment):
             for _ in range(n_depths)
         ]
         sequences_matrix = [[None] * number_sample for _ in range(n_depths)]
+        programs_matrix = [[None] * number_sample for _ in range(n_depths)]
         depth_indices = np.arange(n_depths)
         if randomize_depth_order:
             rng.shuffle(depth_indices)
 
+        for idx in tqdm(depth_indices, desc=f"Compile {desc}", leave=False):
+            depth = self.x[idx]
+            for sample_idx in range(number_sample):
+                sequence = single_qb_rb(
+                    n_clifford=depth,
+                    n_sample=1,
+                    interleave=interleaved_gate,
+                    seed=seeds_matrix[idx][sample_idx],
+                )[0]
+                sequences_matrix[idx][sample_idx] = sequence
+                program_cfg = dict(self.cfg)
+                program_cfg["gate_seq"] = sequence
+                program_cfg["prefix"] = prefix
+                programs_matrix[idx][sample_idx] = RBProgram(
+                    self.soccfg,
+                    reps=program_cfg["reps"],
+                    final_delay=program_cfg["relax_delay"],
+                    cfg=program_cfg,
+                )
+
         rb_accum = [[None] * number_sample for _ in range(n_depths)]
-        for avg_i in tqdm(range(py_avg), desc="Software Average"):
+        for _ in tqdm(range(py_avg), desc="Software Average"):
             for idx in tqdm(depth_indices, desc=desc, leave=False):
-                depth = self.x[idx]
-                for s_i in tqdm(range(number_sample), desc="Samples", leave=False):
-                    seqs = single_qb_rb(
-                        n_clifford=depth, n_sample=1,
-                        interleave=interleaved_gate, seed=seeds_matrix[idx][s_i],
+                for sample_idx in tqdm(
+                    range(number_sample), desc="Samples", leave=False
+                ):
+                    acquired = programs_matrix[idx][sample_idx].acquire(
+                        self.soc, rounds=1, progress=False
                     )
-                    sequences_matrix[idx][s_i] = seqs[0]
-                    self.cfg["gate_seq"] = seqs[0]
-                    self.cfg["prefix"] = prefix
-                    prog = RBProgram(
-                        self.soccfg, reps=self.cfg["reps"],
-                        final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+                    iq_data = acquired[0][0].dot([1, 1j])
+                    previous = rb_accum[idx][sample_idx]
+                    rb_accum[idx][sample_idx] = (
+                        iq_data if previous is None else previous + iq_data
                     )
-                    iq_data = prog.acquire(self.soc, rounds=1, progress=False)[0][0].dot([1, 1j])
-                    if avg_i == 0:
-                        rb_accum[idx][s_i] = iq_data
-                    else:
-                        rb_accum[idx][s_i] = rb_accum[idx][s_i] + iq_data
 
         self.rb_result = [
             [rb_accum[idx][s_i] / py_avg for s_i in range(number_sample)]
@@ -191,6 +276,33 @@ class RandomizedBenchmarking(BaseExperiment):
         self, label: str = "RB", color=None, ax=None, marker="o",
         show_individual=False, *, plot_analysis=True,
     ):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        label : str, default: 'RB'
+            Value for ``label``.
+        color : Any, default: None
+            Value for ``color``.
+        ax : Any, default: None
+            Matplotlib axes on which to draw.
+        marker : Any, default: 'o'
+            Value for ``marker``.
+        show_individual : Any, default: False
+            Whether to show individual.
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.x is None or self.rb_result is None:
             raise RuntimeError("Call run() first.")
         _proc = np.real if self._iq_process == "real" else np.abs
@@ -220,6 +332,24 @@ class RandomizedBenchmarking(BaseExperiment):
         return epc, epc_err, p_fit, p_fit_err, pCov
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None, title=None):
+        """Save Labber.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        title : Any, default: None
+            Value for ``title``.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.x is None or self.rb_result is None:
             raise RuntimeError("Call run() first.")
         from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
@@ -243,16 +373,53 @@ class RandomizedBenchmarking(BaseExperiment):
             y_info={"name": "Sample Number", "unit": "", "values": np.arange(self._number_sample, dtype=float)},
             z_info={"name": "Signal", "unit": "ADC unit", "values": np.array(self.rb_result).T},
             comment=str(dict_val), tag="RB",
+            result=self.result,
         )
         print(f"RB data saved to {file_path}")
 
 
 def _gate_fidelity(p_ref, p_irb, d=2):
+    """Return the gate fidelity result.
+
+    Parameters
+    ----------
+    p_ref : Any
+        Value for ``p_ref``.
+    p_irb : Any
+        Value for ``p_irb``.
+    d : Any, default: 2
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     epc = (d - 1) / d * (1 - p_irb / p_ref)
     return 1 - epc, epc
 
 
 def _gate_fidelity_err(p_ref, p_irb, var_p_ref, var_p_irb, d=2):
+    """Return the gate fidelity err result.
+
+    Parameters
+    ----------
+    p_ref : Any
+        Value for ``p_ref``.
+    p_irb : Any
+        Value for ``p_irb``.
+    var_p_ref : Any
+        Value for ``var_p_ref``.
+    var_p_irb : Any
+        Value for ``var_p_irb``.
+    d : Any, default: 2
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     c = (d - 1) / d
     depc_dpref = c * p_irb / p_ref**2
     depc_dpirb = -c / p_ref
@@ -263,6 +430,13 @@ class AutoRB:
     """Automated Standard + Interleaved RB in one call (s015)."""
 
     def __init__(self, config):
+        """Initialize the AutoRB instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         self.cfg = config
         self._rb_kwargs: dict = {}
         self.results: dict = {}
@@ -279,6 +453,27 @@ class AutoRB:
         prefix: str = "ge",
         iq_process: str = "abs",
     ):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        max_circuit_depth : int
+            Value for ``max_circuit_depth``.
+        delta_clifford : int
+            Value for ``delta_clifford``.
+        number_sample : int
+            Value for ``number_sample``.
+        interleaved_gates : list[str] | None, default: None
+            Value for ``interleaved_gates``.
+        seed : int | None, default: None
+            Value for ``seed``.
+        prefix : str, default: 'ge'
+            Value for ``prefix``.
+        iq_process : str, default: 'abs'
+            IQ processing mode.
+        """
         from ...tools.hdf5_store import generate_experiment_id
 
         session_id = generate_experiment_id()
@@ -298,6 +493,15 @@ class AutoRB:
             self._rb_objects[label] = rb
 
     def plot(self, show_individual=False, *, plot_analysis=True):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        show_individual : Any, default: False
+            Whether to show individual.
+        plot_analysis : Any, default: True
+            Value for ``plot_analysis``.
+        """
         fig, ax = plt.subplots(figsize=(8, 6))
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
         ref_rb = self._rb_objects.get("ref")
@@ -336,6 +540,13 @@ class AutoRB:
         plt.show()
 
     def summary(self) -> str:
+        """Return a summary of the current state.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         lines = ["AutoRB Summary", "=" * 50]
         for key, val in self.results.items():
             if "fidelity" in val:
@@ -348,5 +559,16 @@ class AutoRB:
         return "\n".join(lines)
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None):
+        """Save Labber.
+
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        """
         for label, rb in self._rb_objects.items():
             rb.saveLabber(qb_idx, config_all=config_all, yoko_value=yoko_value, title=label)

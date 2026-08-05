@@ -29,6 +29,18 @@ class AnritsuMG3692(RFSourceInstrument):
     }
 
     def __init__(self, address: str) -> None:
+        """Initialize the AnritsuMG3692 instance.
+
+        Parameters
+        ----------
+        address : str
+            Instrument resource address.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         self.address = address
         self.rm = pyvisa.ResourceManager()
         if "::" not in address:
@@ -47,6 +59,7 @@ class AnritsuMG3692(RFSourceInstrument):
         self.connect_message()
 
     def connect_message(self) -> None:
+        """Connect message."""
         if self.instrument:
             try:
                 idn = self.instrument.query("*IDN?")
@@ -55,15 +68,30 @@ class AnritsuMG3692(RFSourceInstrument):
                 print(f"Could not query IDN. Error: {e}")
 
     def idn(self) -> str:
+        """Return the instrument identification string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.query("*IDN?")
 
     def close(self) -> None:
+        """Close the operation."""
         if self.instrument:
             print(f"Disconnecting from {self.resource_name}")
             self.instrument.close()
             self.rm.close()
 
     def reconnect(self) -> None:
+        """Return the reconnect result.
+
+        Raises
+        ------
+        ConnectionError
+            If the operation cannot be completed.
+        """
         print(f"[mg3692] Reconnecting to {self.resource_name} ...")
         try:
             try:
@@ -79,6 +107,13 @@ class AnritsuMG3692(RFSourceInstrument):
             raise ConnectionError(f"[mg3692] Reconnect failed: {e}") from e
 
     def write(self, cmd: str) -> None:
+        """Write the operation.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+        """
         if self.instrument:
             try:
                 self.instrument.write(cmd)
@@ -90,6 +125,18 @@ class AnritsuMG3692(RFSourceInstrument):
                     raise
 
     def query(self, cmd: str) -> str:
+        """Query the instrument and return its response.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         if self.instrument:
             try:
                 return self.instrument.query(cmd).strip()
@@ -102,6 +149,13 @@ class AnritsuMG3692(RFSourceInstrument):
         return ""
 
     def check_error(self) -> str:
+        """Return the latest instrument error.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         err_msg = ""
         if self.instrument:
             err_msg = self.query("SYST:ERR?")
@@ -109,15 +163,46 @@ class AnritsuMG3692(RFSourceInstrument):
         return err_msg
 
     def get_limit(self, parameter: str) -> Tuple[float, float]:
+        """Return limit.
+
+        Parameters
+        ----------
+        parameter : str
+            Value for ``parameter``.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         param_lower = parameter.lower()
         if param_lower in self.DEFAULT_LIMITS:
             return self.DEFAULT_LIMITS[param_lower]
         raise ValueError(f"Limits not defined for parameter '{parameter}'.")
 
     def get_limits(self) -> dict:
+        """Return limits.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return dict(self.DEFAULT_LIMITS)
 
     def discover_limits(self) -> dict:
+        """Discover limits.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         limits = self.get_limits()
         queries = {
             "frequency": ("FREQ? MIN", "FREQ? MAX"),
@@ -131,6 +216,22 @@ class AnritsuMG3692(RFSourceInstrument):
         return limits
 
     def _map_and_write(self, cmd_template: str, value: Union[str, int, bool], name: str) -> None:
+        """Return the map and write result.
+
+        Parameters
+        ----------
+        cmd_template : str
+            Value for ``cmd_template``.
+        value : Union[str, int, bool]
+            Value to apply.
+        name : str
+            Name of the target object.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         try:
             mapped_val = ON_OFF_MAP[str(value).lower()]
             self.write(cmd_template.format(mapped_val))
@@ -138,11 +239,30 @@ class AnritsuMG3692(RFSourceInstrument):
             raise ValueError(f"Invalid {name} value: {value}. Use 'on' or 'off'.")
 
     def _query_and_map(self, cmd: str) -> str:
+        """Return and map.
+
+        Parameters
+        ----------
+        cmd : str
+            Instrument command string.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         val = self.query(cmd)
         return ON_OFF_MAP_INV.get(val, f"unknown_val_{val}")
 
     @property
     def frequency(self) -> float:
+        """Return the current frequency setting.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         try:
             return float(self.query("FREQ?"))
         except ValueError:
@@ -150,6 +270,13 @@ class AnritsuMG3692(RFSourceInstrument):
 
     @frequency.setter
     def frequency(self, value: float) -> None:
+        """Return the current frequency setting.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_f, max_f = self.get_limit("frequency")
         if not (min_f <= value <= max_f):
             print(f"Warning: Frequency {value} Hz is outside normal range ({min_f}, {max_f})")
@@ -157,6 +284,13 @@ class AnritsuMG3692(RFSourceInstrument):
 
     @property
     def power(self) -> float:
+        """Return the current power setting.
+
+        Returns
+        -------
+        float
+            Result of the operation.
+        """
         try:
             return float(self.query("POW?"))
         except ValueError:
@@ -164,6 +298,13 @@ class AnritsuMG3692(RFSourceInstrument):
 
     @power.setter
     def power(self, value: float) -> None:
+        """Return the current power setting.
+
+        Parameters
+        ----------
+        value : float
+            Value to apply.
+        """
         min_p, max_p = self.get_limit("power")
         if not (min_p <= value <= max_p):
             print(f"Warning: Power {value} dBm is outside normal range ({min_p}, {max_p})")
@@ -171,24 +312,59 @@ class AnritsuMG3692(RFSourceInstrument):
 
     @property
     def status(self) -> str:
+        """Return the current status.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self._query_and_map("OUTP?")
 
     @status.setter
     def status(self, value: Union[str, int, bool]) -> None:
+        """Return the current status.
+
+        Parameters
+        ----------
+        value : Union[str, int, bool]
+            Value to apply.
+        """
         self._map_and_write("OUTP {}", value, "status")
 
     def output(self, state: Union[bool, None] = None) -> Union[bool, None]:
+        """Return the current output setting.
+
+        Parameters
+        ----------
+        state : Union[bool, None], default: None
+            Value for ``state``.
+
+        Returns
+        -------
+        Union[bool, None]
+            Result of the operation.
+        """
         if state is None:
             return self.status == "on"
         self.status = state
 
     def on(self) -> None:
+        """Enable the instrument output."""
         self.output(True)
 
     def off(self) -> None:
+        """Disable the instrument output."""
         self.output(False)
 
     def snapshot(self) -> dict:
+        """Return the current instrument settings.
+
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
         return {
             "output": self.status,
             "frequency": self.frequency,

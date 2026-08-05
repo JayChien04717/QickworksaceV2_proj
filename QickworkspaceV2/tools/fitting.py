@@ -13,14 +13,42 @@ import scipy as sp
 
 
 def get_r2(xdata, ydata, fitfunc, fit_params):
-    """Compute the coefficient of determination (R²) for a fit."""
+    """Compute the coefficient of determination (R²) for a fit.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitfunc : Any
+        Value for ``fitfunc``.
+    fit_params : Any
+        Value for ``fit_params``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     ss_res = np.sum((fitfunc(xdata, *fit_params) - ydata) ** 2)
     ss_tot = np.sum((ydata - np.mean(ydata)) ** 2)
     return 1 - ss_res / ss_tot if ss_tot > 0 else -np.inf
 
 
 def fix_phase(p):
-    """Normalize phase and calculate pi and pi/2 gains from sinusoidal fit parameters."""
+    """Normalize phase and calculate pi and pi/2 gains from sinusoidal fit parameters.
+
+    Parameters
+    ----------
+    p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     phase = p[2]
     if phase > 180:
         phase -= 360
@@ -36,7 +64,22 @@ def fix_phase(p):
 
 
 def fourier_init(xdata, ydata, debug=False):
-    """Estimate oscillation frequency and phase using a real-valued FFT."""
+    """Estimate oscillation frequency and phase using a real-valued FFT.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    debug : Any, default: False
+        Value for ``debug``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     ydata = ydata - np.mean(ydata)
     fourier = np.fft.rfft(ydata)
     fft_freqs = np.fft.rfftfreq(len(ydata), d=xdata[1] - xdata[0])
@@ -61,7 +104,20 @@ def fourier_init(xdata, ydata, debug=False):
 
 
 def validate_bounds(fitparams, bounds):
-    """Validate that initial fit parameters lie within specified bounds."""
+    """Validate that initial fit parameters lie within specified bounds.
+
+    Parameters
+    ----------
+    fitparams : Any
+        Value for ``fitparams``.
+    bounds : Any
+        Value for ``bounds``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     fitparams = list(fitparams)
     for i, (param, lo, hi) in enumerate(zip(fitparams, bounds[0], bounds[1])):
         below = np.isfinite(lo) and param <= lo
@@ -75,7 +131,28 @@ def validate_bounds(fitparams, bounds):
 
 
 def generic_fit(fitfunc, xdata, ydata, fitparams, bounds=None, error_message="Warning: fit failed!"):
-    """Generic curve-fitting wrapper using scipy Trust Region Reflective."""
+    """Generic curve-fitting wrapper using scipy Trust Region Reflective.
+
+    Parameters
+    ----------
+    fitfunc : Any
+        Value for ``fitfunc``.
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any
+        Value for ``fitparams``.
+    bounds : Any, default: None
+        Value for ``bounds``.
+    error_message : Any, default: 'Warning: fit failed!'
+        Value for ``error_message``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if bounds:
         fitparams = validate_bounds(fitparams, bounds)
     pCov = np.full((len(fitparams), len(fitparams)), np.inf)
@@ -92,7 +169,26 @@ def generic_fit(fitfunc, xdata, ydata, fitparams, bounds=None, error_message="Wa
 
 
 def _fit_snr(xdata, ydata, fit, fit_err, fitfunc):
-    """Score a fit by SNR = (peak-to-peak of fit curve) / (residual RMS)."""
+    """Score a fit by SNR = (peak-to-peak of fit curve) / (residual RMS).
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fit : Any
+        Value for ``fit``.
+    fit_err : Any
+        Value for ``fit_err``.
+    fitfunc : Any
+        Value for ``fitfunc``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if np.any(np.isnan(fit)) or np.any(np.diag(fit_err) == np.inf):
         return -np.inf
     y_fit = fitfunc(xdata, *fit)
@@ -106,7 +202,20 @@ def _fit_snr(xdata, ydata, fit, fit_err, fitfunc):
 
 
 def _calculate_normalized_errors(fits, fit_errors):
-    """Fallback scorer: mean(σ_i / |p_i|) across parameters."""
+    """Fallback scorer: mean(σ_i / |p_i|) across parameters.
+
+    Parameters
+    ----------
+    fits : Any
+        Value for ``fits``.
+    fit_errors : Any
+        Value for ``fit_errors``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     norm_errors = []
     for fit, err_matrix in zip(fits, fit_errors):
         param_errors = np.sqrt(np.abs(np.diag(err_matrix)))
@@ -119,7 +228,26 @@ def _calculate_normalized_errors(fits, fit_errors):
 
 
 def _find_best_fit_with_snr(data, fits, fit_errors, check_measures, fitfunc):
-    """Select the best measurement channel by SNR of the fit."""
+    """Select the best measurement channel by SNR of the fit.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    fits : Any
+        Value for ``fits``.
+    fit_errors : Any
+        Value for ``fit_errors``.
+    check_measures : Any
+        Value for ``check_measures``.
+    fitfunc : Any
+        Value for ``fitfunc``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     xdata = data["xpts"]
     scores = [
         _fit_snr(xdata, data[measure], fits[i], fit_errors[i], fitfunc)
@@ -132,14 +260,48 @@ def _find_best_fit_with_snr(data, fits, fit_errors, check_measures, fitfunc):
 
 
 def _find_best_fit_simple(fits, fit_errors):
-    """Select the best fit by minimum normalised covariance error."""
+    """Select the best fit by minimum normalised covariance error.
+
+    Parameters
+    ----------
+    fits : Any
+        Value for ``fits``.
+    fit_errors : Any
+        Value for ``fit_errors``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return int(np.argmin(_calculate_normalized_errors(fits, fit_errors)))
 
 
 def get_best_fit(data, fitfunc=None, prefixes=["fit"],
                  check_measures=("amps", "avgi", "avgq"),
                  get_best_data_params=(), override=None):
-    """Compare fits across measurement channels and return the best one."""
+    """Compare fits across measurement channels and return the best one.
+
+    Parameters
+    ----------
+    data : Any
+        Input data to process.
+    fitfunc : Any, default: None
+        Value for ``fitfunc``.
+    prefixes : Any, default: ['fit']
+        Value for ``prefixes``.
+    check_measures : Any, default: ('amps', 'avgi', 'avgq')
+        Value for ``check_measures``.
+    get_best_data_params : Any, default: ()
+        Value for ``get_best_data_params``.
+    override : Any, default: None
+        Value for ``override``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     fits, fit_errors = [], []
     for measure in check_measures:
         for prefix in prefixes:
@@ -163,22 +325,62 @@ def get_best_fit(data, fitfunc=None, prefixes=["fit"],
     return result
 
 
-# ── Exponential ────────────────────────────────────────────────────────────────
 
 def expfunc(x, *p):
-    """Exponential decay: y0 + yscale * exp(-x / decay)."""
+    """Exponential decay: y0 + yscale * exp(-x / decay).
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     y0, yscale, decay = p
     return y0 + yscale * np.exp(-x / decay)
 
 
 def expfunc2(x, *p):
-    """Exponential decay with x offset: y0 + yscale * exp(-(x-x0) / decay)."""
+    """Exponential decay with x offset: y0 + yscale * exp(-(x-x0) / decay).
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     y0, yscale, x0, decay = p
     return y0 + yscale * np.exp(-(x - x0) / decay)
 
 
 def fitexp(xdata, ydata, fitparams=None):
-    """Fit data to an exponential decay model."""
+    """Fit data to an exponential decay model.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 3
     if fitparams[0] is None: fitparams[0] = ydata[-1]
@@ -188,7 +390,22 @@ def fitexp(xdata, ydata, fitparams=None):
 
 
 def fitexp2(xdata, ydata, fitparams=None):
-    """Fit data to an exponential decay with x offset."""
+    """Fit data to an exponential decay with x offset.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 4
     if fitparams[0] is None: fitparams[0] = ydata[-1]
@@ -198,16 +415,43 @@ def fitexp2(xdata, ydata, fitparams=None):
     return generic_fit(expfunc2, xdata, ydata, fitparams, error_message="Warning: Fit exponential2 failed!")
 
 
-# ── Lorentzian ─────────────────────────────────────────────────────────────────
 
 def lorfunc(x, *p):
-    """Lorentzian: y0 + yscale / (1 + (x-x0)^2 / xscale^2)."""
+    """Lorentzian: y0 + yscale / (1 + (x-x0)^2 / xscale^2).
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     y0, yscale, x0, xscale = p
     return y0 + yscale / (1 + (x - x0) ** 2 / xscale**2)
 
 
 def fitlor(xdata, ydata, fitparams=None):
-    """Fit data to a Lorentzian function."""
+    """Fit data to a Lorentzian function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 4
     if fitparams[0] is None: fitparams[0] = (ydata[0] + ydata[-1]) / 2
@@ -218,13 +462,41 @@ def fitlor(xdata, ydata, fitparams=None):
 
 
 def asym_lorfunc(x, *p):
-    """Asymmetric Lorentzian: y0 + A / (1 + ((x-x0)/(gamma*(1+alpha*(x-x0))))^2)."""
+    """Asymmetric Lorentzian: y0 + A / (1 + ((x-x0)/(gamma*(1+alpha*(x-x0))))^2).
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     y0, A, x0, gamma, alpha = p
     return y0 + A / (1 + ((x - x0) / (gamma * (1 + alpha * (x - x0)))) ** 2)
 
 
 def fit_asym_lor(xdata, ydata, fitparams=None):
-    """Fit data to an asymmetric Lorentzian function."""
+    """Fit data to an asymmetric Lorentzian function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 5
     else:
@@ -237,16 +509,45 @@ def fit_asym_lor(xdata, ydata, fitparams=None):
     return generic_fit(asym_lorfunc, xdata, ydata, fitparams, error_message="Warning: Fit asymmetric Lorentzian failed!")
 
 
-# ── Sinusoidal ─────────────────────────────────────────────────────────────────
 
 def sinfunc(x, *p):
-    """Sinusoidal: yscale * sin(2*pi*freq*x + phase_deg*pi/180) + y0."""
+    """Sinusoidal: yscale * sin(2*pi*freq*x + phase_deg*pi/180) + y0.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     yscale, freq, phase_deg, y0 = p
     return yscale * np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) + y0
 
 
 def fitsin(xdata, ydata, fitparams=None, debug=False):
-    """Fit data to a sinusoidal function."""
+    """Fit data to a sinusoidal function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+    debug : Any, default: False
+        Value for ``debug``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 4
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
@@ -262,13 +563,43 @@ def fitsin(xdata, ydata, fitparams=None, debug=False):
 
 
 def decaysin(x, *p):
-    """Decaying sinusoid: yscale * sin(2*pi*freq*x + phase*pi/180) * exp(-x/decay) + y0."""
+    """Decaying sinusoid: yscale * sin(2*pi*freq*x + phase*pi/180) * exp(-x/decay) + y0.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     yscale, freq, phase_deg, decay, y0 = p
     return (yscale * np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) * np.exp(-x / decay) + y0)
 
 
 def fitdecaysin(xdata, ydata, fitparams=None, debug=False):
-    """Fit data to a decaying sinusoidal function."""
+    """Fit data to a decaying sinusoidal function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+    debug : Any, default: False
+        Value for ``debug``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 5
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
@@ -297,13 +628,43 @@ def fitdecaysin(xdata, ydata, fitparams=None, debug=False):
 
 
 def decayslopesin(x, *p):
-    """Decaying sinusoid with linear slope: yscale*(sin(...)+slope)*exp(-x/decay)+y0."""
+    """Decaying sinusoid with linear slope: yscale*(sin(...)+slope)*exp(-x/decay)+y0.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     yscale, freq, phase_deg, decay, y0, slope = p
     return (yscale * (np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) + slope) * np.exp(-x / decay) + y0)
 
 
 def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
-    """Fit data to a decaying sinusoidal function with a linear slope envelope."""
+    """Fit data to a decaying sinusoidal function with a linear slope envelope.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+    debug : Any, default: False
+        Value for ``debug``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 6
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
@@ -337,7 +698,20 @@ def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
 
 
 def twofreq_decaysin(x, *p):
-    """Two-frequency decaying sinusoidal function."""
+    """Two-frequency decaying sinusoidal function.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     yscale0, freq0, phase_deg0, decay0, y00, x00, yscale1, freq1, phase_deg1, y01 = p
     p0 = [yscale0, freq0, phase_deg0, decay0, 0]
     p1 = [yscale1, freq1, phase_deg1, y01]
@@ -345,7 +719,22 @@ def twofreq_decaysin(x, *p):
 
 
 def fittwofreq_decaysin(xdata, ydata, fitparams=None):
-    """Fit data to a two-frequency decaying sinusoidal function."""
+    """Fit data to a two-frequency decaying sinusoidal function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 10
     fourier = np.fft.fft(ydata)
@@ -377,15 +766,48 @@ def fittwofreq_decaysin(xdata, ydata, fitparams=None):
                        error_message="Warning: Fit two-frequency decaying sine failed!")
 
 
-# ── Gaussian ───────────────────────────────────────────────────────────────────
 
 def gaussian(x, a, x0, sigma, y0):
-    """Single Gaussian: a * exp(-(x-x0)^2 / (2*sigma^2)) + y0."""
+    """Single Gaussian: a * exp(-(x-x0)^2 / (2*sigma^2)) + y0.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    a : Any
+        Value for ``a``.
+    x0 : Any
+        Value for ``x0``.
+    sigma : Any
+        Value for ``sigma``.
+    y0 : Any
+        Value for ``y0``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2)) + y0
 
 
 def fit_gauss(xdata, ydata, fitparams=None):
-    """Fit data to a single Gaussian function."""
+    """Fit data to a single Gaussian function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 4
     else:
@@ -402,12 +824,50 @@ def fit_gauss(xdata, ydata, fitparams=None):
 
 
 def double_gaussian(x, a1, b1, c1, a2, b2, c2):
-    """Standard double Gaussian function."""
+    """Standard double Gaussian function.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    a1 : Any
+        Value for ``a1``.
+    b1 : Any
+        Value for ``b1``.
+    c1 : Any
+        Value for ``c1``.
+    a2 : Any
+        Value for ``a2``.
+    b2 : Any
+        Value for ``b2``.
+    c2 : Any
+        Value for ``c2``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return a1 * np.exp(-((x - b1) ** 2) / (2 * c1**2)) + a2 * np.exp(-((x - b2) ** 2) / (2 * c2**2))
 
 
 def fit_doublegauss(xdata, ydata, fitparams):
-    """Robust fitting for double Gaussian distributions with constrained means."""
+    """Robust fitting for double Gaussian distributions with constrained means.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     ag, mug, sig, ae, mue, sie = fitparams
     delta_mu_g = abs(sig) * 2 if sig > 0 else 100
     delta_mu_e = abs(sie) * 2 if sie > 0 else 100
@@ -422,33 +882,99 @@ def fit_doublegauss(xdata, ydata, fitparams):
     return pOpt, pCov
 
 
-# ── Hanger resonator ───────────────────────────────────────────────────────────
 
 def hangerfunc(x, *p):
-    """Complex Hanger (notch) function for resonator S21 fitting."""
+    """Complex Hanger (notch) function for resonator S21 fitting.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     f0, Qi, Qe, phi, scale = p
     Q0 = 1 / (1 / Qi + np.real(1 / Qe))
     return scale * (1 - Q0 / Qe * np.exp(1j * phi) / (1 + 2j * Q0 * (x - f0) / f0))
 
 
 def hangerS21func(x, *p):
-    """Magnitude of the Hanger function."""
+    """Magnitude of the Hanger function.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return np.abs(hangerfunc(x, *p))
 
 
 def hangerS21func_sloped(x, *p):
-    """Magnitude of the Hanger function with a linear background slope."""
+    """Magnitude of the Hanger function with a linear background slope.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     f0, Qi, Qe, phi, scale, slope = p
     return hangerS21func(x, f0, 1e4 * Qi, 1e4 * Qe, phi, scale) + slope * (x - f0)
 
 
 def hangerphasefunc(x, *p):
-    """Phase of the Hanger function."""
+    """Phase of the Hanger function.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return np.angle(hangerfunc(x, *p))
 
 
 def fithanger(xdata, ydata, fitparams=None):
-    """Fit resonator transmission data to a sloped Hanger function."""
+    """Fit resonator transmission data to a sloped Hanger function.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 6
     if fitparams[0] is None: fitparams[0] = xdata[np.argmin(np.abs(ydata))]
@@ -473,30 +999,106 @@ def fithanger(xdata, ydata, fitparams=None):
     return pOpt, pCov, fitparams
 
 
-# ── Randomized Benchmarking ────────────────────────────────────────────────────
 
 def rb_func(depth, p, a, b):
-    """RB decay function: a * p**depth + b."""
+    """RB decay function: a * p**depth + b.
+
+    Parameters
+    ----------
+    depth : Any
+        Value for ``depth``.
+    p : Any
+        Value for ``p``.
+    a : Any
+        Value for ``a``.
+    b : Any
+        Value for ``b``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return a * p**depth + b
 
 
 def rb_error(p, d):
-    """Average error rate per Clifford: 1 - (p + (1-p)/d)."""
+    """Average error rate per Clifford: 1 - (p + (1-p)/d).
+
+    Parameters
+    ----------
+    p : Any
+        Value for ``p``.
+    d : Any
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return 1 - (p + (1 - p) / d)
 
 
 def error_fit_err(cov_p, d):
-    """Propagate covariance of p to uncertainty in EPC."""
+    """Propagate covariance of p to uncertainty in EPC.
+
+    Parameters
+    ----------
+    cov_p : Any
+        Value for ``cov_p``.
+    d : Any
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return cov_p * (1 / d - 1) ** 2
 
 
 def rb_gate_fidelity(p_rb, p_irb, d):
-    """Gate fidelity from standard and interleaved RB: 1 - (d-1)*(1 - p_irb/p_rb)/d."""
+    """Gate fidelity from standard and interleaved RB: 1 - (d-1)*(1 - p_irb/p_rb)/d.
+
+    Parameters
+    ----------
+    p_rb : Any
+        Value for ``p_rb``.
+    p_irb : Any
+        Value for ``p_irb``.
+    d : Any
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return 1 - (d - 1) * (1 - p_irb / p_rb) / d
 
 
 def fitrb(xdata, ydata, fitparams=None, p_bounds=(0.0, 1.0), maxfev=10000):
-    """Fit data to the RB decay model a * p**depth + b."""
+    """Fit data to the RB decay model a * p**depth + b.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+    p_bounds : Any, default: (0.0, 1.0)
+        Value for ``p_bounds``.
+    maxfev : Any, default: 10000
+        Value for ``maxfev``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     y = np.asarray(ydata, dtype=float)
     x = np.asarray(xdata, dtype=float)
     y_max, y_min = y.max(), y.min()
@@ -541,20 +1143,72 @@ def fitrb(xdata, ydata, fitparams=None, p_bounds=(0.0, 1.0), maxfev=10000):
     return pOpt, pCov
 
 
-# ── Adiabatic pulse ────────────────────────────────────────────────────────────
 
 def adiabatic_amp(t, amp_max, beta, period):
-    """Amplitude envelope for an adiabatic pi pulse (sech shape)."""
+    """Amplitude envelope for an adiabatic pi pulse (sech shape).
+
+    Parameters
+    ----------
+    t : Any
+        Value for ``t``.
+    amp_max : Any
+        Value for ``amp_max``.
+    beta : Any
+        Value for ``beta``.
+    period : Any
+        Value for ``period``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return amp_max / np.cosh(beta * (2 * t / period - 1))
 
 
 def adiabatic_phase(t, mu, beta, period):
-    """Phase function for an adiabatic pi pulse."""
+    """Phase function for an adiabatic pi pulse.
+
+    Parameters
+    ----------
+    t : Any
+        Value for ``t``.
+    mu : Any
+        Value for ``mu``.
+    beta : Any
+        Value for ``beta``.
+    period : Any
+        Value for ``period``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return mu * np.log(adiabatic_amp(t, amp_max=1, beta=beta, period=period))
 
 
 def adiabatic_iqamp(t, amp_max, mu, beta, period):
-    """Calculate I and Q amplitudes for an adiabatic pi pulse."""
+    """Calculate I and Q amplitudes for an adiabatic pi pulse.
+
+    Parameters
+    ----------
+    t : Any
+        Value for ``t``.
+    amp_max : Any
+        Value for ``amp_max``.
+    mu : Any
+        Value for ``mu``.
+    beta : Any
+        Value for ``beta``.
+    period : Any
+        Value for ``period``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     amp = np.abs(adiabatic_amp(t, amp_max=amp_max, beta=beta, period=period))
     phase = adiabatic_phase(t, mu=mu, beta=beta, period=period)
     iamp = amp * (np.cos(phase) + 1j * np.sin(phase))
@@ -562,31 +1216,84 @@ def adiabatic_iqamp(t, amp_max, mu, beta, period):
     return np.real(iamp), np.real(qamp)
 
 
-# ── Rotation error models ──────────────────────────────────────────────────────
 
 def probg_Xhalf(n, *p):
-    """Ground-state probability for repeated X/2 pulse sequence."""
+    """Ground-state probability for repeated X/2 pulse sequence.
+
+    Parameters
+    ----------
+    n : Any
+        Value for ``n``.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     a, delta = p
     delta = delta * np.pi / 180
     return a + (0.5 * (-1) ** n * np.cos(np.pi / 2 + 2 * n * delta))
 
 
 def probg_X(n, *p):
-    """Ground-state probability for repeated X pulse sequence."""
+    """Ground-state probability for repeated X pulse sequence.
+
+    Parameters
+    ----------
+    n : Any
+        Value for ``n``.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     a, delta = p
     delta = delta * np.pi / 180
     return a + (0.5 * np.cos(np.pi / 2 + 2 * n * delta))
 
 
 def probg_Xhalf_decay(n, *p):
-    """Decaying ground-state probability for repeated X/2 pulse sequence."""
+    """Decaying ground-state probability for repeated X/2 pulse sequence.
+
+    Parameters
+    ----------
+    n : Any
+        Value for ``n``.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     a, delta, decay = p
     delta = delta * np.pi / 180
     return a + (0.5 * (-1) ** n * np.cos(np.pi / 2 + 2 * n * delta)) * np.exp(-n / decay)
 
 
 def fit_probg_Xhalf(xdata, ydata, fitparams=None):
-    """Fit data to the X/2 repeated pulse rotation error model."""
+    """Fit data to the X/2 repeated pulse rotation error model.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 2
     else:
@@ -599,7 +1306,22 @@ def fit_probg_Xhalf(xdata, ydata, fitparams=None):
 
 
 def fit_probg_X(xdata, ydata, fitparams=None):
-    """Fit data to the X repeated pulse rotation error model."""
+    """Fit data to the X repeated pulse rotation error model.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 2
     else:
@@ -612,7 +1334,22 @@ def fit_probg_X(xdata, ydata, fitparams=None):
 
 
 def fit_probg_Xhalf_decay(xdata, ydata, fitparams=None):
-    """Fit data to the decaying X/2 repeated pulse rotation error model."""
+    """Fit data to the decaying X/2 repeated pulse rotation error model.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 3
     else:
@@ -625,16 +1362,43 @@ def fit_probg_Xhalf_decay(xdata, ydata, fitparams=None):
                        error_message="Warning: Fit decaying X/2 rotation error failed!")
 
 
-# ── Poisson ────────────────────────────────────────────────────────────────────
 
 def poisson(n, *p):
-    """Poisson PMF: exp(-nbar) * nbar^n / n!"""
+    """Poisson PMF: exp(-nbar) * nbar^n / n!
+
+    Parameters
+    ----------
+    n : Any
+        Value for ``n``.
+    *p : Any
+        Value for ``p``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     nbar = p[0]
     return np.exp(-nbar) * (nbar**n) / sp.special.factorial(n)
 
 
 def fit_poisson(xdata, ydata, fitparams=None):
-    """Fit data to a Poisson distribution."""
+    """Fit data to a Poisson distribution.
+
+    Parameters
+    ----------
+    xdata : Any
+        Independent-variable data.
+    ydata : Any
+        Dependent-variable data.
+    fitparams : Any, default: None
+        Value for ``fitparams``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if fitparams is None:
         fitparams = [None] * 1
     else:

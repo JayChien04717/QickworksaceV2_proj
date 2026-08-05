@@ -16,7 +16,20 @@ from ...core.base_program import BaseProgram
 
 
 def generator_sample_period_ns(soccfg, ch: int) -> float:
-    """Return the programmable envelope-sample interval for a generator."""
+    """Return the programmable envelope-sample interval for a generator.
+
+    Parameters
+    ----------
+    soccfg : Any
+        Value for ``soccfg``.
+    ch : int
+        Value for ``ch``.
+
+    Returns
+    -------
+    float
+        Result of the operation.
+    """
 
     gen_cfg = soccfg["gens"][ch]
     samples_per_clock = int(gen_cfg["samps_per_clk"])
@@ -24,7 +37,20 @@ def generator_sample_period_ns(soccfg, ch: int) -> float:
 
 
 def minimum_envelope_samples(soccfg, ch: int) -> int:
-    """QICK pulse descriptors must span at least three fabric clocks."""
+    """QICK pulse descriptors must span at least three fabric clocks.
+
+    Parameters
+    ----------
+    soccfg : Any
+        Value for ``soccfg``.
+    ch : int
+        Value for ``ch``.
+
+    Returns
+    -------
+    int
+        Result of the operation.
+    """
 
     return 3 * int(soccfg["gens"][ch]["samps_per_clk"])
 
@@ -38,8 +64,29 @@ def pad_normalized_envelope(
 ) -> np.ndarray:
     """Validate a normalized envelope and append the padding QICK requires.
 
-    Padding is placed *after* the useful waveform so the physical rising edge
-    stays at the requested start time.
+            Padding is placed *after* the useful waveform so the physical rising edge
+            stays at the requested start time.
+
+    Parameters
+    ----------
+    soccfg : Any
+        Value for ``soccfg``.
+    ch : int
+        Value for ``ch``.
+    samples : Iterable[float]
+        Value for ``samples``.
+    minimum_clocks : int, default: 3
+        Value for ``minimum_clocks``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
 
     waveform = np.asarray(samples, dtype=float)
@@ -63,7 +110,22 @@ def pad_normalized_envelope(
 
 
 def quantize_envelope(soccfg, ch: int, normalized_samples) -> np.ndarray:
-    """Convert a normalized real envelope to QICK's signed int16 format."""
+    """Convert a normalized real envelope to QICK's signed int16 format.
+
+    Parameters
+    ----------
+    soccfg : Any
+        Value for ``soccfg``.
+    ch : int
+        Value for ``ch``.
+    normalized_samples : Any
+        Value for ``normalized_samples``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+    """
 
     waveform = np.asarray(normalized_samples, dtype=float)
     maxv = int(soccfg.get_maxv(ch))
@@ -77,7 +139,29 @@ def make_zero_padded_rectangle(
     *,
     amplitude: float = 1.0,
 ) -> np.ndarray:
-    """Make a short rectangle followed by enough zeros for a legal pulse."""
+    """Make a short rectangle followed by enough zeros for a legal pulse.
+
+    Parameters
+    ----------
+    soccfg : Any
+        Value for ``soccfg``.
+    ch : int
+        Value for ``ch``.
+    active_samples : int
+        Value for ``active_samples``.
+    amplitude : float, default: 1.0
+        Value for ``amplitude``.
+
+    Returns
+    -------
+    np.ndarray
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
 
     active_samples = int(active_samples)
     if active_samples < 0:
@@ -96,6 +180,18 @@ class CryoscopeProgramBase(BaseProgram):
     """Ramsey cryoscope sequence shared by all flux-pulse implementations."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_standard_gates(cfg, prefix="ge")
@@ -114,9 +210,33 @@ class CryoscopeProgramBase(BaseProgram):
         self._add_flux_pulse(cfg)
 
     def _add_flux_pulse(self, cfg):
+        """Add flux pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        NotImplementedError
+            If the operation cannot be completed.
+        """
         raise NotImplementedError
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         axis = str(cfg.get("cryoscope_axis", "X")).upper()
         analysis_gate = {"X": "y90m_ge", "Y": "x90_ge"}.get(axis)
         if analysis_gate is None:
@@ -153,8 +273,20 @@ class CryoscopeExperimentBase(BaseExperiment):
     def run_xy(self, py_avg: int, **run_kwargs):
         """Acquire raw resonator IQ for the X and Y Ramsey quadratures.
 
-        The returned values are still resonator IQ.  Convert them to Bloch X/Y
-        with ground/excited IQ references before calling ``trace_from_xy``.
+                        The returned values are still resonator IQ.  Convert them to Bloch X/Y
+                        with ground/excited IQ references before calling ``trace_from_xy``.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        **run_kwargs : Any
+            Value for ``run_kwargs``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
         """
 
         run_kwargs.setdefault("iq_process", "all")
