@@ -777,6 +777,8 @@ class BaseExperiment:
         """
         if not hasattr(self.cfg, "get"):
             return None
+        if self.cfg.get("threshold") is None and self.cfg.get("theshold") is not None:
+            raise KeyError("Config key 'theshold' is misspelled; use 'threshold'.")
         return self.cfg.get("threshold")
 
 

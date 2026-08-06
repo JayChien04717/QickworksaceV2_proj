@@ -11,7 +11,13 @@ from tqdm.auto import tqdm
 from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
-from .singleshot_utils import general_hist, hist, histogram_metrics, plot_hist
+from .singleshot_utils import (
+    general_hist,
+    hist,
+    histogram_metrics,
+    plot_hist,
+    weighted_assignment_score,
+)
 
 
 
@@ -451,7 +457,8 @@ class SingleShot_ge_opt:
         return I_g, Q_g, I_e, Q_e, metrics
 
     def analyze(self, leakage_threshold=0.20, thermal_threshold=0.10,
-                bo_n_iter=0, bo_xi=0.01, pareto=True):
+                bo_n_iter=0, bo_xi=0.01, pareto=True,
+                t1_decay_weight=3.0):
         """Return the analyze result.
 
         Parameters
@@ -466,6 +473,10 @@ class SingleShot_ge_opt:
             Value for ``bo_xi``.
         pareto : Any, default: True
             Value for ``pareto``.
+        t1_decay_weight : float, default: 3.0
+            Relative weight of ``|e> -> |g>`` assignment error versus
+            ``|g> -> |e>`` error. This is sensitive to T1 decay but also
+            contains ordinary IQ-cloud overlap.
 
         Returns
         -------
@@ -522,6 +533,10 @@ class SingleShot_ge_opt:
                     leakage_array[l_idx, g_idx, f_idx] = m["leakage"]
                     thermal_array[l_idx, g_idx, f_idx] = m["thermal"]
 
+        selection_score_array = weighted_assignment_score(
+            thermal_array, leakage_array, e_to_g_weight=t1_decay_weight
+        )
+
         feasible_mask = (leakage_array <= leakage_threshold) & (thermal_array <= thermal_threshold)
         n_feasible = feasible_mask.sum()
         print(f"\n{n_feasible}/{feasible_mask.size} grid points pass physical constraints.")
@@ -530,18 +545,24 @@ class SingleShot_ge_opt:
             print("Warning: no feasible points. Relaxing constraints.")
             feasible_mask = leakage_array <= (leakage_array.min() + 0.10)
 
-        fid_feasible = np.where(feasible_mask, fid_Array, -np.inf)
-        max_idx = np.unravel_index(np.argmax(fid_feasible), fid_feasible.shape)
+        score_feasible = np.where(feasible_mask, selection_score_array, -np.inf)
+        max_idx = np.unravel_index(np.argmax(score_feasible), score_feasible.shape)
         max_l_idx, max_g_idx, max_f_idx = max_idx
         best_fid_grid = float(fid_Array[max_idx])
+        best_selection_score = float(selection_score_array[max_idx])
         best_length_grid = self.length_sweep[max_l_idx]
         best_gain_grid = self.gain_sweep[max_g_idx]
         best_freq_grid = self.freq_sweep[max_f_idx]
         max_length, max_gain, max_freq = best_length_grid, best_gain_grid, best_freq_grid
 
-        print(f"\n--- Grid best (feasible) ---")
-        print(f"  fid={best_fid_grid:.4f}  length={best_length_grid}  "
-              f"gain={best_gain_grid}  freq={best_freq_grid}")
+        print(f"\n--- Grid best (T1-weighted, feasible) ---")
+        print(f"  score={best_selection_score:.4f}  "
+              f"fid={best_fid_grid:.4f}  "
+              f"e->g={leakage_array[max_idx]:.4f}  "
+              f"g->e={thermal_array[max_idx]:.4f}  "
+              f"T1_weight={float(t1_decay_weight):.2f}")
+        print(f"  length={best_length_grid}  gain={best_gain_grid}  "
+              f"freq={best_freq_grid}")
 
         self.fid_Array = fid_Array
         self.soft_fid_array = soft_fid_array
@@ -549,6 +570,8 @@ class SingleShot_ge_opt:
         self.sep_array = sep_array
         self.leakage_array = leakage_array
         self.thermal_array = thermal_array
+        self.selection_score_array = selection_score_array
+        self.t1_decay_weight = float(t1_decay_weight)
         self._feasible_mask = feasible_mask
 
         if pareto:
@@ -582,6 +605,9 @@ class SingleShot_ge_opt:
             "gain": float(max_gain) if max_gain is not None else None,
             "frequency": float(max_freq) if max_freq is not None else None,
             "fidelity": best_fid_grid,
+            "selection_score": best_selection_score,
+            "e_to_g_error": float(leakage_array[max_idx]),
+            "g_to_e_error": float(thermal_array[max_idx]),
         }
         self.result = ExperimentData(
             experiment_type="s000_singleshot_ge_opt",
@@ -593,6 +619,10 @@ class SingleShot_ge_opt:
                 "best": best,
                 "leakage_threshold": float(leakage_threshold),
                 "thermal_threshold": float(thermal_threshold),
+                "t1_decay_weight": float(t1_decay_weight),
+                "selection_score_note": (
+                    "e_to_g is T1-sensitive but also includes IQ overlap"
+                ),
                 "bo_n_iter": int(bo_n_iter),
                 "bo_xi": float(bo_xi),
             },
@@ -611,6 +641,10 @@ class SingleShot_ge_opt:
                 "separation": {"values": sep_array, "dims": ["length", "gain", "frequency"]},
                 "leakage": {"values": leakage_array, "dims": ["length", "gain", "frequency"]},
                 "thermal": {"values": thermal_array, "dims": ["length", "gain", "frequency"]},
+                "t1_weighted_score": {
+                    "values": selection_score_array,
+                    "dims": ["length", "gain", "frequency"],
+                },
                 "feasible_mask": {"values": feasible_mask, "dims": ["length", "gain", "frequency"]},
                 "pareto_mask": {
                     "values": getattr(self, "_pareto_mask", np.zeros(shape3, dtype=bool)),
@@ -622,6 +656,9 @@ class SingleShot_ge_opt:
                 "best_gain": (best["gain"], None),
                 "best_frequency": (best["frequency"], None),
                 "best_fidelity": (best["fidelity"], None),
+                "best_t1_weighted_score": (best["selection_score"], None),
+                "best_e_to_g_error": (best["e_to_g_error"], None),
+                "best_g_to_e_error": (best["g_to_e_error"], None),
             },
             data_kind="single_shot_optimization",
             analysis_id="single_shot_optimization",
@@ -651,7 +688,7 @@ class SingleShot_ge_opt:
         therm_arr = self.thermal_array
         len_L, len_G, len_F = fid_arr.shape
 
-        best_f = np.argmax(fid_arr, axis=2)
+        best_f = np.argmax(self.selection_score_array, axis=2)
 
         def _take(arr):
             """Return the take result.
@@ -670,6 +707,7 @@ class SingleShot_ge_opt:
 
         fid_2d = _take(fid_arr)
         soft_2d = _take(soft_arr)
+        score_2d = _take(self.selection_score_array)
         snr_2d = _take(snr_arr)
         sep_2d = _take(sep_arr)
         leak_2d = _take(leak_arr)
@@ -772,8 +810,12 @@ class SingleShot_ge_opt:
 
         _imshow(axs[0, 0], fid_2d, "Threshold Fidelity", "RdYlGn", 0.5, 1.0, ".3f",
                 "Fidelity", mark_infeasible=True)
-        _imshow(axs[0, 1], soft_2d, "Soft Fidelity", "RdYlGn", 0.5, 1.0, ".3f",
-                "Soft Fidelity", mark_infeasible=True)
+        _imshow(
+            axs[0, 1], score_2d,
+            f"T1-weighted Score (weight={self.t1_decay_weight:g})",
+            "RdYlGn", 0.5, 1.0, ".3f", "Selection score",
+            mark_infeasible=True,
+        )
         _imshow(axs[0, 2], snr_2d, "SNR  (||delta_mu||^2/sigma^2)", "plasma",
                 0, None, ".2f", "SNR")
         _imshow(axs[1, 0], sep_2d, "IQ Separation (||delta_mu||)", "Blues",
@@ -812,7 +854,12 @@ class SingleShot_ge_opt:
             for l in range(len_L)
             for g in range(len_G)
         ]
-        all_pts.sort(key=lambda x: (x[8], x[3]), reverse=True)
+        all_pts.sort(
+            key=lambda x: (
+                x[8], self.selection_score_array[x[0], x[1], x[2]]
+            ),
+            reverse=True,
+        )
 
         print("\n=== Top 5 points (feasible first, then by fidelity) ===")
         print(
@@ -913,8 +960,12 @@ class SingleShot_ge_opt:
         )
 
         if hasattr(self, "_feasible_mask"):
-            fid_feasible = np.where(self._feasible_mask, self.fid_Array, -np.inf)
-            best_idx = np.unravel_index(np.argmax(fid_feasible), fid_feasible.shape)
+            score_feasible = np.where(
+                self._feasible_mask, self.selection_score_array, -np.inf
+            )
+            best_idx = np.unravel_index(
+                np.argmax(score_feasible), score_feasible.shape
+            )
             ax.scatter(
                 self.leakage_array[best_idx], self.fid_Array[best_idx],
                 c="red", s=100, zorder=4, marker="*", label="Best feasible",
@@ -951,9 +1002,11 @@ class SingleShot_ge_opt:
             return
 
         if feasible_only and hasattr(self, "_feasible_mask"):
-            scored = np.where(self._feasible_mask, fid_Array, -np.inf)
+            scored = np.where(
+                self._feasible_mask, self.selection_score_array, -np.inf
+            )
         else:
-            scored = fid_Array
+            scored = self.selection_score_array
 
         flat_scored = scored.flatten()
         top_n_flat_indices = np.argsort(flat_scored)[-top_n:][::-1]

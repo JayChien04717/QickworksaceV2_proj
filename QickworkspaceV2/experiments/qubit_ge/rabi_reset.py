@@ -42,7 +42,9 @@ class ActiveResetRabiProgram(BaseProgram):
         self.setup_qubit_gen(cfg, prefix="ge")
 
         ro_ch = cfg["ro_ch"]
-        if "tproc_ch" not in self.soccfg["readouts"][ro_ch]:
+
+        tproc_ch = self.soccfg["readouts"][ro_ch].get("tproc_ch")
+        if tproc_ch is None or int(tproc_ch) < 0:
             raise RuntimeError(
                 f"readout channel {ro_ch} has no tProc feedback input "
                 "('tproc_ch'); measurement-based active reset is unavailable "
@@ -65,55 +67,30 @@ class ActiveResetRabiProgram(BaseProgram):
             name="reset_pi",
             gain_key="pi_gain_ge",
         )
-
-        component = str(cfg.get("reset_component", "I")).upper()
-        if component not in {"I", "Q"}:
-            raise ValueError("reset_component must be 'I' or 'Q'")
-        self.reset_component = component
-
-        excited_if = cfg.get("reset_excited_if", ">=")
-        if excited_if not in {">=", "<"}:
-            raise ValueError("reset_excited_if must be '>=' or '<'")
-        # We jump over the reset pulse when the measurement is classified as
-        # ground, so this is the logical complement of reset_excited_if.
-        self.ground_test = "<" if excited_if == ">=" else ">="
-
-        threshold = cfg.get("threshold", cfg.get("reset_threshold"))
-        self.reset_threshold_normalized = (
-            None if threshold is None else float(threshold)
+        # Reserve the same waveform slot in the no-reset control while
+        # applying zero drive.
+        self.setup_qb_pulse(
+            cfg,
+            "ge",
+            name="reset_idle",
+            gain_override=0,
         )
-        if "reset_threshold_raw" in cfg:
-            threshold_raw = int(cfg["reset_threshold_raw"])
-        else:
-            if threshold is None:
-                raise KeyError(
-                    "active reset requires threshold (normalized I/Q "
-                    "units) or reset_threshold_raw (accumulator units)"
-                )
-            # acquire() reports length-normalized I/Q, while read_input()
-            # exposes the raw accumulated integer from the readout buffer. Add
-            # back the readout offset that acquire(remove_offset=True) removes.
-            iq_offset = np.asarray(
-                self.soccfg["readouts"][ro_ch].get("iq_offset", [0.0, 0.0]),
-                dtype=float,
-            ).reshape(-1)
-            offset_index = 0 if component == "I" else 1
-            component_offset = (
-                float(iq_offset[offset_index])
-                if iq_offset.size > offset_index
-                else 0.0
-            )
-            threshold_raw = int(
-                round(
-                    (float(threshold) + component_offset)
-                    * self.ro_chs[ro_ch]["length"]
-                )
-            )
 
-        # A register avoids the 24-bit immediate limit of cond_jump().
-        if not -(2**31) <= threshold_raw < 2**31:
-            raise ValueError("active-reset threshold does not fit in int32")
+        reset_mode = str(cfg.get("reset_mode", "conditional")).lower()
+        if reset_mode not in {"conditional", "always", "never"}:
+            raise ValueError(
+                "reset_mode must be 'conditional', 'always', or 'never'"
+            )
+        self.reset_mode = reset_mode
+
+        # Feedback reads the raw accumulator, so store the configured
+        # normalized threshold in accumulator units.
+        threshold_raw = int(round(cfg["threshold"] * cfg["ro_length"]))
+        self.reset_threshold_normalized = float(cfg["threshold"])
         self.reset_threshold_raw = threshold_raw
+        self.reset_readout_length = float(cfg["ro_length"])
+        self.reset_component = "I"
+        self.ground_test = "<"
         self.add_reg("reset_threshold")
         self.write_reg("reset_threshold", threshold_raw)
 
@@ -146,30 +123,21 @@ class ActiveResetRabiProgram(BaseProgram):
         self.pulse(ch=cfg["qb_ch"], name="rabi_pulse", t=0)
         self.delay_auto(cfg.get("rabi_readout_delay", 0.05))
 
-        # First readout: Power-Rabi result and feedback input.
-        self._readout(cfg)
+        if self.reset_mode == "conditional":
+            self.activate_reset(cfg)
+        else:
+            # A/B controls keep the same readout and timing slot.
+            self._readout(cfg)
+            self.wait_auto(
+                float(cfg.get("read_wait", 0.15)), gens=True, ros=True
+            )
+            self.resync(0.05)
+            pulse_name = (
+                "reset_pi" if self.reset_mode == "always" else "reset_idle"
+            )
+            self.pulse(ch=cfg["qb_ch"], name=pulse_name, t=0)
 
-        # wait_auto() blocks instruction execution until the ADC result is
-        # ready.  It does not move the reference time, so delay_auto() is also
-        # required to keep the conditional pulse scheduled in the future.
-        read_wait = float(cfg.get("read_wait", 0.0))
-        feedback_slack = float(cfg.get("extra_delay", 0.10))
-        self.wait_auto(read_wait, gens=False, ros=True)
-        self.delay_auto(read_wait + feedback_slack, gens=True, ros=True)
-
-        # Skip the pi pulse when the first readout says the qubit is in |g>.
-        self.read_and_jump(
-            ro_ch=cfg["ro_ch"],
-            component=self.reset_component,
-            threshold="reset_threshold",
-            test=self.ground_test,
-            label="AFTER_ACTIVE_RESET",
-        )
-        self.pulse(ch=cfg["qb_ch"], name="reset_pi", t=0)
-        self.label("AFTER_ACTIVE_RESET")
-
-        # The compile-time timeline includes reset_pi.  Both branches therefore
-        # receive an equal reset slot; the ground branch simply idles through it.
+        # Every mode includes an equal-duration reset pulse slot.
         self.delay_auto(cfg.get("reset_post_delay", 0.05))
 
         # Second readout: verify the state after conditional reset.
@@ -183,12 +151,11 @@ class ActiveResetRabi(BaseExperiment):
     -----------------------------------------
     threshold : float
         Length-normalized I or Q threshold, in the same units returned by a
-        non-thresholded QICK acquisition.  Alternatively provide
-        ``reset_threshold_raw`` in raw accumulator units.
+        non-thresholded QICK acquisition.
 
-    Optional keys are ``reset_component`` (``"I"`` or ``"Q"``),
-    ``reset_excited_if`` (``">="`` or ``"<"``), ``read_wait``,
-    ``extra_delay``, and ``reset_post_delay``.
+    Optional keys are ``reset_mode`` (``"conditional"``, ``"always"``, or
+    ``"never"``), ``read_wait``, and ``reset_post_delay``. Feedback uses I;
+    values below threshold are ground and skip the reset pulse.
     """
 
     EXPT_NAME = "s005c_power_rabi_active_reset_ge"
@@ -301,8 +268,17 @@ class ActiveResetRabi(BaseExperiment):
             )
 
         if threshold is not None:
-            pre_reset = np.asarray(channel_data[0], dtype=float)
-            post_reset = np.asarray(channel_data[1], dtype=float)
+            if channel_data.shape[-1] != 2:
+                raise RuntimeError(
+                    "thresholded active-reset data must end in the QICK "
+                    f"[population, Q-placeholder] axis, got {channel_data.shape}"
+                )
+            # QICK retains a final two-component axis after software
+            # thresholding. Only component 0 contains the population;
+            # component 1 is a zero placeholder and must not reach plotting.
+            threshold_data = np.asarray(channel_data[..., 0], dtype=float)
+            pre_reset = threshold_data[0]
+            post_reset = threshold_data[1]
             # QICK threshold acquisition reports P(component >= threshold).
             # Convert it when the configured excited cloud is below threshold.
             if prog.ground_test == ">=":
@@ -353,7 +329,10 @@ class ActiveResetRabi(BaseExperiment):
                 "feedback_read_index": 0,
                 "reset_verification_read_index": 1,
                 "reset_threshold_raw": prog.reset_threshold_raw,
+                "reset_threshold_normalized": threshold,
+                "reset_readout_length": prog.reset_readout_length,
                 "reset_component": prog.reset_component,
+                "reset_mode": prog.reset_mode,
             },
         )
 

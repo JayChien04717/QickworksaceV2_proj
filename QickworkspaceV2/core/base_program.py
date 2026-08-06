@@ -112,5 +112,27 @@ class BaseProgram(QubitPulseMixin, AveragerProgramV2):
         self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
         self.trigger(ros=[cfg["ro_ch"]], pins=[0], t=cfg["trig_time"])
 
+    def activate_reset(self, cfg):
+        """Measure once and apply ``reset_pi`` only to non-ground shots."""
+        self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
+        self.trigger(
+            ros=[cfg["ro_ch"]],
+            pins=cfg.get("reset_trigger_pins", [0]),
+            t=cfg["trig_time"],
+        )
+        self.wait_auto(
+            float(cfg.get("read_wait", 0.15)), gens=True, ros=True
+        )
+        self.resync(0.05)
+        self.read_and_jump(
+            ro_ch=cfg["ro_ch"],
+            component="I",
+            threshold="reset_threshold",
+            test="<",
+            label="AFTER_ACTIVE_RESET",
+        )
+        self.pulse(ch=cfg["qb_ch"], name="reset_pi", t=0)
+        self.label("AFTER_ACTIVE_RESET")
+
 
 __all__ = ["BaseProgram", "GATE_ALIAS", "resolve_gate"]

@@ -38,6 +38,23 @@ class HistogramAnalysis:
     primary_weights: np.ndarray
 
 
+def weighted_assignment_score(g_to_e_error, e_to_g_error, e_to_g_weight=3.0):
+    """Return assignment fidelity with extra weight on ``|e> -> |g>`` errors.
+
+    The excited-to-ground assignment error is sensitive to T1 decay during
+    readout, but ge-only IQ data cannot separate T1 decay from cloud overlap.
+    A weight of 1 reproduces ordinary equal-prior threshold fidelity; the
+    optimizer defaults to 3 so the excited-state error matters three times as
+    much as the ground-state error.
+    """
+    weight = float(e_to_g_weight)
+    if not np.isfinite(weight) or weight < 0:
+        raise ValueError("e_to_g_weight must be finite and non-negative")
+    g_error = np.asarray(g_to_e_error, dtype=float)
+    e_error = np.asarray(e_to_g_error, dtype=float)
+    return 1.0 - (g_error + weight * e_error) / (1.0 + weight)
+
+
 def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
     """Derive optimizer metrics from an existing GMM fit without refitting.
 
@@ -236,6 +253,63 @@ def _bic_gmm(X, max_components=2, n_init=5):
     return best_gmm
 
 
+def _gmm_threshold_classifier(state_gmms):
+    """Calculate a two-state threshold and confusion matrix from fitted GMMs."""
+    if len(state_gmms) != 2:
+        raise ValueError("GMM threshold classification requires exactly two states")
+
+    primary_centers = [
+        float(gmm.means_[int(np.argmax(gmm.weights_)), 0])
+        for gmm in state_gmms
+    ]
+    state_order = np.argsort(primary_centers)
+    ordered_gmms = [state_gmms[index] for index in state_order]
+
+    component_lows = []
+    component_highs = []
+    for gmm in ordered_gmms:
+        means = gmm.means_[:, 0]
+        stds = np.sqrt(gmm.covariances_[:, 0, 0])
+        component_lows.extend(means - 8.0 * stds)
+        component_highs.extend(means + 8.0 * stds)
+    candidates = np.linspace(
+        float(np.min(component_lows)),
+        float(np.max(component_highs)),
+        20001,
+    )
+
+    def mixture_cdf(gmm, values):
+        means = gmm.means_[:, 0]
+        stds = np.sqrt(gmm.covariances_[:, 0, 0])
+        component_cdfs = _norm.cdf(
+            (np.asarray(values)[..., None] - means) / stds
+        )
+        return component_cdfs @ gmm.weights_
+
+    lower_cdf = mixture_cdf(ordered_gmms[0], candidates)
+    upper_cdf = mixture_cdf(ordered_gmms[1], candidates)
+    scores = lower_cdf - upper_cdf
+    best = np.flatnonzero(np.isclose(scores, np.max(scores)))
+    midpoint = 0.5 * (
+        primary_centers[state_order[0]] + primary_centers[state_order[1]]
+    )
+    threshold_index = best[np.argmin(np.abs(candidates[best] - midpoint))]
+    threshold = float(candidates[threshold_index])
+
+    ordered_confusion = np.array([
+        [mixture_cdf(ordered_gmms[0], threshold),
+         1.0 - mixture_cdf(ordered_gmms[0], threshold)],
+        [mixture_cdf(ordered_gmms[1], threshold),
+         1.0 - mixture_cdf(ordered_gmms[1], threshold)],
+    ], dtype=float)
+    confusion = np.zeros((2, 2), dtype=float)
+    for prepared_order, prepared_state in enumerate(state_order):
+        for declared_order, declared_state in enumerate(state_order):
+            confusion[prepared_state, declared_state] = ordered_confusion[
+                prepared_order, declared_order
+            ]
+    return state_order, [threshold], confusion
+
 def _ordered_threshold_classifier(projections):
     """Classify ordered one-dimensional states with contiguous thresholds."""
     values_by_state = [np.asarray(values, dtype=float).ravel() for values in projections]
@@ -352,7 +426,10 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
         primary_weights[i] = float(gmm.weights_[idx])
 
 
-    state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
+    if n_states == 2:
+        state_order, thresholds, conf_matrix = _gmm_threshold_classifier(state_gmms)
+    else:
+        state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
 
     return (state_gmms, state_order, conf_matrix, thresholds,
             primary_means, primary_stds, primary_weights)

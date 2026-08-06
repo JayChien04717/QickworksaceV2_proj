@@ -33,6 +33,21 @@ class SingleShotGMMReuseTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["fid"], details.legacy_result[0][0])
         self.assertGreater(metrics["snr"], 0.0)
 
+    def test_t1_weighted_score_prefers_lower_e_to_g_error(self):
+        ordinary = singleshot_utils.weighted_assignment_score(
+            np.array([0.02, 0.12]), np.array([0.20, 0.12]), e_to_g_weight=1.0
+        )
+        weighted = singleshot_utils.weighted_assignment_score(
+            np.array([0.02, 0.12]), np.array([0.20, 0.12]), e_to_g_weight=3.0
+        )
+
+        self.assertGreater(ordinary[0], ordinary[1])
+        self.assertGreater(weighted[1], weighted[0])
+        self.assertAlmostEqual(
+            singleshot_utils.weighted_assignment_score(0.10, 0.20, 1.0),
+            0.85,
+        )
+
     def test_legacy_histogram_return_shape_is_unchanged(self):
         rng = np.random.default_rng(4)
         data = {
@@ -58,9 +73,31 @@ class SingleShotGMMReuseTests(unittest.TestCase):
         metrics = singleshot_utils.histogram_metrics(details)
 
         self.assertEqual([gmm.n_components for gmm in details.state_gmms], [2, 2])
+        primary_centers = [
+            gmm.means_[np.argmax(gmm.weights_), 0]
+            for gmm in details.state_gmms
+        ]
+        state_order = np.argsort(primary_centers)
+        threshold = details.thresholds[0]
+        modeled_confusion = details.confusion_matrix_pct / 100.0
+        for prepared_state, gmm in enumerate(details.state_gmms):
+            means = gmm.means_[:, 0]
+            stds = np.sqrt(gmm.covariances_[:, 0, 0])
+            probability_left = float(np.sum(
+                gmm.weights_ * singleshot_utils._norm.cdf(
+                    (threshold - means) / stds
+                )
+            ))
+            expected = np.zeros(2)
+            expected[state_order[0]] = probability_left
+            expected[state_order[1]] = 1.0 - probability_left
+            np.testing.assert_allclose(
+                modeled_confusion[prepared_state], expected
+            )
         self.assertGreater(details.fidelity, 0.99)
         self.assertAlmostEqual(metrics["leakage"], details.confusion_matrix_pct[1, 0] / 100)
         self.assertAlmostEqual(metrics["thermal"], details.confusion_matrix_pct[0, 1] / 100)
+
     def test_three_state_rotation_optimizes_all_prepared_states(self):
         rng = np.random.default_rng(7)
         centers = [(1.558, 1.264), (0.681, -1.010), (-0.246, -0.350)]

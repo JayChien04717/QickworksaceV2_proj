@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def decode_acquisition(acquired, *, threshold: bool):
+def decode_acquisition(acquired, *, threshold: bool, scalar_readout=False):
     """Decode one QICK readout as complex IQ or real threshold population.
 
     Parameters
@@ -30,6 +30,8 @@ def decode_acquisition(acquired, *, threshold: bool):
         # N-point sweep into 2N plotted values.
         if values.ndim >= 2 and values.shape[-1] == 2:
             values = values[..., 0]
+        elif scalar_readout and values.ndim == 1 and values.size == 2:
+            values = values[0]
         elif np.iscomplexobj(values):
             values = np.real(values)
         return values.astype(float, copy=False).squeeze()
@@ -39,7 +41,8 @@ def decode_acquisition(acquired, *, threshold: bool):
     return values.astype(complex, copy=False)
 
 
-def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None):
+def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None,
+                   scalar_readout=False):
     """Run ``prog.acquire`` and return values in the selected readout mode.
 
     Parameters
@@ -64,7 +67,11 @@ def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None):
     if threshold is not None:
         call_kwargs["threshold"] = threshold
     acquired = prog.acquire(soc, **call_kwargs)
-    return decode_acquisition(acquired, threshold=threshold is not None)
+    return decode_acquisition(
+        acquired,
+        threshold=threshold is not None,
+        scalar_readout=scalar_readout,
+    )
 
 
 __all__ = ["acquire_values", "decode_acquisition"]
