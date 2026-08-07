@@ -1384,6 +1384,27 @@ def _preview_png(result) -> bytes:
     return buffer.getvalue()
 
 
+def _figure_payloads(figures) -> dict[str, bytes]:
+    """Normalise named PNG bytes or Matplotlib figures for HDF5 embedding."""
+    if isinstance(figures, Mapping):
+        return dict(figures)
+    payloads = {}
+    for index, figure in enumerate(figures or []):
+        if figure is None or not hasattr(figure, "savefig"):
+            continue
+        buffer = BytesIO()
+        figure.savefig(
+            buffer,
+            format="png",
+            dpi=150,
+            bbox_inches="tight",
+            metadata={"Software": "QickworkspaceV2"},
+        )
+        name = "analysis.png" if not payloads else f"analysis_{index + 1}.png"
+        payloads[name] = buffer.getvalue()
+    return payloads
+
+
 def _write_native_group(
     root: h5py.Group,
     result,
@@ -1500,10 +1521,11 @@ def _write_native_group(
 
     if save_plots or figures:
         plots = root.create_group("plots")
-        payloads = dict(figures or {})
-        if save_plots and "main.png" not in payloads:
-            payloads["main.png"] = _preview_png(result)
-            payloads["analysis.png"] = _preview_png(result)
+        payloads = _figure_payloads(figures)
+        if save_plots:
+            payloads.setdefault("main.png", _preview_png(result))
+            payloads.setdefault("analysis.png", payloads["main.png"])
+            payloads.setdefault("preview.png", payloads["analysis.png"])
         for name, payload in payloads.items():
             safe_name = str(name).replace("/", "_")
             data = payload.getvalue() if hasattr(payload, "getvalue") else bytes(payload)

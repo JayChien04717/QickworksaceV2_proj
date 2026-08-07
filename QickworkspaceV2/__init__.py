@@ -1,5 +1,5 @@
-"""
-QickworkspaceV2 — IBM/IQM-style automated quantum calibration framework.
+﻿"""
+QickworkspaceV2 ??IBM/IQM-style automated quantum calibration framework.
 
 Quick start
 -----------
@@ -48,6 +48,8 @@ _LAZY_EXPORTS = {
     "ResonatorSpecFlux": ".experiments.resonator",
     "DispersiveShift": ".experiments.resonator",
     "Chi": ".experiments.resonator",
+    "CKP": ".experiments.resonator",
+    "ChiKappaPower": ".experiments.resonator",
     "QubitSpec": ".experiments.qubit_ge",
     "QubitSpecFlux": ".experiments.qubit_ge",
     "TimeRabi": ".experiments.qubit_ge",
@@ -115,7 +117,7 @@ __all__ = [
     "CalibrationMonitor", "AutoCalibrate",
     "ExperimentConfig",
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
+    "Chi", "CKP", "ChiKappaPower", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
     "Ramsey", "ActiveResetRamsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
@@ -124,3 +126,5 @@ __all__ = [
     "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
     "BaseInstrumentManager", "InstrumentManager",
 ]
+
+

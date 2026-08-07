@@ -53,7 +53,7 @@ def _catalog(root: Path) -> Path:
 
 def _rows(root: Path, *, limit: int = 2000):
     catalog = _catalog(root)
-    with sqlite3.connect(f"file:{catalog.as_posix()}?mode=ro&immutable=1", uri=True, timeout=10) as connection:
+    with sqlite3.connect(f"file:{catalog.as_posix()}?mode=ro", uri=True, timeout=10) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
             "SELECT * FROM experiments ORDER BY timestamp_utc DESC LIMIT ?", (int(limit),)
@@ -72,7 +72,7 @@ def _rows(root: Path, *, limit: int = 2000):
 
 
 def _row(root: Path, experiment_id: str):
-    with sqlite3.connect(f"file:{_catalog(root).as_posix()}?mode=ro&immutable=1", uri=True, timeout=10) as connection:
+    with sqlite3.connect(f"file:{_catalog(root).as_posix()}?mode=ro", uri=True, timeout=10) as connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute(
             "SELECT * FROM experiments WHERE experiment_id = ?", (experiment_id,)
@@ -225,6 +225,32 @@ def _sample_indices(size: int, max_points: int) -> np.ndarray:
     return np.unique(np.linspace(0, size - 1, max_points, dtype=int))
 
 
+def _matrix_axis(path: Path, name: str, size: int) -> tuple[np.ndarray, dict]:
+    """Read a matrix axis, falling back to a stable integer coordinate."""
+    try:
+        values, meta = _read_axis(path, name)
+        values = np.asarray(values).reshape(-1)
+        if values.size == size:
+            return values, meta
+    except KeyError:
+        pass
+    return np.arange(size, dtype=float), {"label": name, "unit": "", "scale": 1.0}
+
+
+def _matrix_axis_names(path: Path, shape: tuple[int, int], dims: list[str]) -> tuple[str, str]:
+    """Infer row/column axes for older 2-D files whose dims attribute is empty."""
+    if len(dims) == 2:
+        return dims[0], dims[1]
+    axes = _axis_summary(path)
+    row = "y" if axes.get("y", {}).get("size") == shape[0] else "row"
+    column = "x" if axes.get("x", {}).get("size") == shape[1] else "column"
+    if row == "row":
+        row = next((name for name, item in axes.items() if item.get("size") == shape[0] and name != column), row)
+    if column == "column":
+        column = next((name for name, item in axes.items() if item.get("size") == shape[1] and name != row), column)
+    return row, column
+
+
 def _result_summary(path: Path) -> dict:
     """Read fit summaries without materialising the potentially large raw tree."""
     def read_node(node):
@@ -262,7 +288,14 @@ def _result_summary(path: Path) -> dict:
 
 @app.get("/")
 def index():
-    return FileResponse(HTML_FILE)
+    return FileResponse(
+        HTML_FILE,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/api/choose-folder")
@@ -341,25 +374,100 @@ def trace(
     if x.size != y.size:
         x = np.arange(y.size, dtype=float)
         axis_meta = {"label": "index", "unit": "", "scale": 1.0}
+    info = inspect_file(path)
+    metadata = info.get("metadata", {}) or {}
+    primary_channel = {
+        "amplitude": "abs", "amp": "abs", "i": "real", "q": "imag",
+    }.get(str(metadata.get("fit_channel", "")).lower(), str(metadata.get("fit_channel", "")).lower())
     fit = None
-    try:
-        fit_values, fit_dims = _read_dataset(path, "analysis", "fit_curve")
-        fit_values, _ = _numeric_channel(np.asarray(fit_values), actual_channel)
-        fit = _one_dimensional(fit_values)
-        if fit.size != y.size or (fit_dims and dims and fit_dims[-1] != dims[-1]):
+    fit_dataset = None
+    fit_candidates = [f"fit_curves/{actual_channel}"]
+    if actual_channel == primary_channel or not np.iscomplexobj(values) or source == "analysis":
+        fit_candidates.append("fit_curve")
+    for candidate in fit_candidates:
+        try:
+            fit_values, _ = _read_dataset(path, "analysis", candidate)
+            fit = _one_dimensional(np.asarray(fit_values, dtype=float))
+            if fit.size == y.size:
+                fit_dataset = f"analysis/{candidate}"
+                break
             fit = None
-    except (KeyError, ValueError, TypeError):
-        pass
+        except (KeyError, ValueError, TypeError):
+            fit = None
     indices = _sample_indices(y.size, max_points)
     result = _result_summary(path)
-    metadata = inspect_file(path).get("metadata", {}) or {}
     return JSONResponse(_jsonable({
-        "experiment_id": experiment_id, "experiment_type": inspect_file(path).get("experiment_type", ""),
+        "experiment_id": experiment_id, "experiment_type": info.get("experiment_type", ""),
         "dataset": f"{source}/{dataset}", "channel": actual_channel,
         "shape": list(values.shape), "dims": dims, "reduction": "mean leading dimensions" if values.ndim > 1 else "none",
         "x": x[indices], "y": y[indices], "fit": fit[indices] if fit is not None else None,
         "x_label": axis_meta.get("label") or axis_name, "x_unit": axis_meta.get("unit", ""),
-        "y_label": metadata.get("fit_channel", actual_channel), **result,
+        "y_label": actual_channel, "fit_dataset": fit_dataset, "primary_fit_channel": primary_channel, **result,
+    }))
+
+
+@app.get("/api/visual/{experiment_id}")
+def visual(
+    experiment_id: str,
+    folder: str = Query(...),
+    dataset: str = Query("iq"),
+    source: str = Query("raw", pattern="^(raw|analysis)$"),
+    channel: str = Query("auto", pattern="^(auto|value|abs|real|imag|phase)$"),
+    max_scatter_points: int = Query(3000, ge=200, le=10000),
+):
+    """Return shape-preserving data for single-shot and 2-D matrix renderers."""
+    root = _root(folder)
+    _, path = _row(root, experiment_id)
+    try:
+        values, dims = _read_dataset(path, source, dataset)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    info = inspect_file(path)
+    experiment_type = str(info.get("experiment_type", ""))
+    metadata = info.get("metadata", {}) or {}
+    result = _result_summary(path)
+
+    if "singleshot" in experiment_type.lower() and np.iscomplexobj(values) and values.ndim == 2:
+        states = metadata.get("states") or [str(index) for index in range(values.shape[0])]
+        rotation = float((result.get("fit_result", {}).get("rotation_deg") or [0.0])[0] or 0.0)
+        rotated = values * np.exp(1j * np.deg2rad(rotation))
+        series = []
+        for index in range(values.shape[0]):
+            indices = _sample_indices(values.shape[1], max_scatter_points)
+            series.append({
+                "label": str(states[index]) if index < len(states) else str(index),
+                "real": values[index, indices].real,
+                "imag": values[index, indices].imag,
+                "projection": rotated[index, indices].real,
+            })
+        return JSONResponse(_jsonable({
+            "kind": "single_shot", "experiment_id": experiment_id,
+            "experiment_type": experiment_type, "series": series,
+            "rotation_deg": rotation,
+            "threshold": (result.get("fit_result", {}).get("threshold") or [None])[0],
+            "fit_result": result.get("fit_result", {}),
+        }))
+
+    if values.ndim != 2:
+        raise HTTPException(400, f"A 2-D dataset is required; got shape {values.shape}")
+    try:
+        display_values, actual_channel = _numeric_channel(values, channel)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    row_name, column_name = _matrix_axis_names(path, values.shape, dims)
+    y, y_meta = _matrix_axis(path, row_name, values.shape[0])
+    x, x_meta = _matrix_axis(path, column_name, values.shape[1])
+    row_indices = _sample_indices(values.shape[0], 250)
+    column_indices = _sample_indices(values.shape[1], 400)
+    z = display_values[np.ix_(row_indices, column_indices)]
+    return JSONResponse(_jsonable({
+        "kind": "matrix", "experiment_id": experiment_id,
+        "experiment_type": experiment_type, "dataset": f"{source}/{dataset}",
+        "channel": actual_channel, "shape": list(values.shape),
+        "x": x[column_indices], "y": y[row_indices], "z": z,
+        "x_label": x_meta.get("label") or column_name, "x_unit": x_meta.get("unit", ""),
+        "y_label": y_meta.get("label") or row_name, "y_unit": y_meta.get("unit", ""),
+        "fit_result": result.get("fit_result", {}),
     }))
 
 

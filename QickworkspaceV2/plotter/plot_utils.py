@@ -37,6 +37,7 @@ def plot_fit_result(
     quality: str = "no_information",
     extra_lines=None,
     fit_channel: str = "abs",
+    channel_fit_curves=None,
 ) -> plt.Figure:
     """Render a clean fit dashboard with one primary and three context panels.
 
@@ -54,6 +55,10 @@ def plot_fit_result(
                   e.g. ``[{"x": 0.5, "color": "r", "ls": "--", "label": "π"}]``.
     fit_channel : str
         Channel used for the primary fit panel.
+    channel_fit_curves : mapping, optional
+        Independently fitted curves keyed by ``abs``, ``phase``, ``real`` and
+        ``imag``. These are drawn in the context panels so every IQ
+        representation can be judged without switching channels.
 
     Returns
     -------
@@ -76,6 +81,13 @@ def plot_fit_result(
         "q": "Q",
         "phase": "Phase",
     }.get(str(fit_channel).lower(), "Amplitude")
+    curve_key = {
+        "Amplitude": "abs",
+        "Phase": "phase",
+        "I": "real",
+        "Q": "imag",
+    }
+    channel_fit_curves = channel_fit_curves or {}
 
     x_fit = np.linspace(xpts[0], xpts[-1], 600) if fit_params is not None else None
     fit_y = simfunc(x_fit, *fit_params) if fit_params is not None else None
@@ -171,6 +183,17 @@ def plot_fit_result(
             color=COLORS["cyan"],
             alpha=0.88,
         )
+        context_fit = channel_fit_curves.get(curve_key[key])
+        if context_fit is not None:
+            context_fit = np.asarray(context_fit, dtype=float).reshape(-1)
+            if context_fit.size == np.asarray(xpts).size:
+                ax.plot(
+                    xpts,
+                    context_fit,
+                    lw=1.7,
+                    color=COLORS["orange"],
+                    zorder=5,
+                )
         if extra_lines:
             for kw in extra_lines:
                 marker_kw = {k: v for k, v in kw.items() if k != "label"}

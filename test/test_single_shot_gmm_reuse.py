@@ -11,6 +11,31 @@ from QickworkspaceV2.experiments.setup.single_shot import (
 
 
 class SingleShotGMMReuseTests(unittest.TestCase):
+    def test_fast_metrics_avoid_gmm_and_find_empirical_threshold(self):
+        rng = np.random.default_rng(21)
+        data = {
+            "Ig": rng.normal(-1.0, 0.2, 1000),
+            "Qg": rng.normal(0.0, 0.2, 1000),
+            "Ie": rng.normal(1.0, 0.2, 1000),
+            "Qe": rng.normal(0.2, 0.2, 1000),
+        }
+
+        with patch.object(
+            singleshot_utils, "_fit_gmm", side_effect=AssertionError("GMM used")
+        ):
+            metrics = singleshot_utils.fast_histogram_metrics(data)
+
+        self.assertGreater(metrics["fid"], 0.99)
+        self.assertLess(metrics["g_to_e_error"], 0.01)
+        self.assertLess(metrics["e_to_g_error"], 0.01)
+        self.assertTrue(np.isfinite(metrics["threshold"]))
+        self.assertGreater(metrics["e_core_fraction"], 0.95)
+        self.assertLess(metrics["e_tail_fraction"], 0.05)
+        self.assertAlmostEqual(
+            metrics["readout_score"],
+            metrics["fid"] * metrics["e_core_fraction"]
+            * (1.0 - metrics["e_to_g_error"]),
+        )
     def test_optimizer_metrics_reuse_histogram_gmm_fit(self):
         rng = np.random.default_rng(3)
         data = {
@@ -62,7 +87,7 @@ class SingleShotGMMReuseTests(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 4)
 
-    def test_skewed_density_components_are_not_treated_as_leakage(self):
+    def test_skewed_density_uses_all_shots_for_empirical_confusion(self):
         rng = np.random.default_rng(12)
         g = np.concatenate((rng.normal(-1.0, 0.15, 2400), rng.normal(-2.2, 0.30, 600)))
         e = np.concatenate((rng.normal(1.0, 0.20, 2100), rng.normal(2.4, 0.40, 900)))
@@ -72,32 +97,25 @@ class SingleShotGMMReuseTests(unittest.TestCase):
         )
         metrics = singleshot_utils.histogram_metrics(details)
 
-        self.assertEqual([gmm.n_components for gmm in details.state_gmms], [2, 2])
-        primary_centers = [
-            gmm.means_[np.argmax(gmm.weights_), 0]
-            for gmm in details.state_gmms
-        ]
-        state_order = np.argsort(primary_centers)
         threshold = details.thresholds[0]
-        modeled_confusion = details.confusion_matrix_pct / 100.0
-        for prepared_state, gmm in enumerate(details.state_gmms):
-            means = gmm.means_[:, 0]
-            stds = np.sqrt(gmm.covariances_[:, 0, 0])
-            probability_left = float(np.sum(
-                gmm.weights_ * singleshot_utils._norm.cdf(
-                    (threshold - means) / stds
+        state_order = np.argsort([np.mean(values) for values in details.projections])
+        expected = np.zeros((2, 2))
+        for prepared_state, values in enumerate(details.projections):
+            predicted = np.where(values <= threshold, state_order[0], state_order[1])
+            for declared_state in range(2):
+                expected[prepared_state, declared_state] = np.mean(
+                    predicted == declared_state
                 )
-            ))
-            expected = np.zeros(2)
-            expected[state_order[0]] = probability_left
-            expected[state_order[1]] = 1.0 - probability_left
-            np.testing.assert_allclose(
-                modeled_confusion[prepared_state], expected
-            )
-        self.assertGreater(details.fidelity, 0.99)
-        self.assertAlmostEqual(metrics["leakage"], details.confusion_matrix_pct[1, 0] / 100)
-        self.assertAlmostEqual(metrics["thermal"], details.confusion_matrix_pct[0, 1] / 100)
+        np.testing.assert_allclose(details.confusion_matrix_pct / 100.0, expected)
+        self.assertAlmostEqual(metrics["leakage"], expected[1, 0])
+        self.assertAlmostEqual(metrics["thermal"], expected[0, 1])
 
+        g_core, g_retained = singleshot_utils._dominant_core(g)
+        e_core, e_retained = singleshot_utils._dominant_core(e)
+        self.assertLess(g_retained, 1.0)
+        self.assertLess(e_retained, 1.0)
+        self.assertLess(np.std(g_core), np.std(g))
+        self.assertLess(np.std(e_core), np.std(e))
     def test_three_state_rotation_optimizes_all_prepared_states(self):
         rng = np.random.default_rng(7)
         centers = [(1.558, 1.264), (0.681, -1.010), (-0.246, -0.350)]

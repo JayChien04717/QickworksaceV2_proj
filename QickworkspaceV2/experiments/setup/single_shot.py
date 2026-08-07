@@ -14,9 +14,8 @@ from ...tools.system_tool import hdf5_generator, get_next_filename_labber, confi
 from .singleshot_utils import (
     general_hist,
     hist,
-    histogram_metrics,
+    fast_histogram_metrics,
     plot_hist,
-    weighted_assignment_score,
 )
 
 
@@ -166,7 +165,16 @@ class SingleShot_gef:
         Any
             Result of the operation.
         """
+        before_figures = set(plt.get_fignums())
         analyzed = hist(self.data, plot=True, verbose=verbose, fid_avg=fid_avg)
+        if getattr(self, "result", None) is not None:
+            known = {id(figure) for figure in self.result.figures}
+            for number in plt.get_fignums():
+                if number not in before_figures:
+                    figure = plt.figure(number)
+                    if id(figure) not in known:
+                        self.result.figures.append(figure)
+                        known.add(id(figure))
         if getattr(self, "result", None) is not None:
             fidelity = float(analyzed[0][0])
             thresholds = np.asarray(analyzed[1], dtype=float)
@@ -242,21 +250,14 @@ class SingleShot_gef:
 
 
 class SingleShot_ge_opt:
-    """Grid search + GP optimization for single-shot readout parameters."""
+    """Minimal empirical optimization of readout length and gain.
+
+    Frequency stays fixed at ``cfg['res_freq_ge']``.  Every grid point uses
+    the same robust median rotation and exact all-shot threshold; no GMM,
+    Gaussian process, Pareto filter, or histogram-bin tuning is involved.
+    """
 
     def __init__(self, config):
-        """Initialize the SingleShot_ge_opt instance.
-
-        Parameters
-        ----------
-        config : Any
-            Experiment configuration.
-
-        Raises
-        ------
-        RuntimeError
-            If the operation cannot be completed.
-        """
         from ...core.base_experiment import BaseExperiment
         if BaseExperiment._soc is None:
             raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
@@ -264,401 +265,163 @@ class SingleShot_ge_opt:
         self.soccfg = BaseExperiment._soccfg
         self.cfg = config
 
+    @staticmethod
+    def _axis(values, fallback, name):
+        if values is None:
+            values = [fallback]
+        elif np.isscalar(values):
+            values = [values]
+        result = np.asarray(values, dtype=float)
+        if result.ndim != 1 or result.size == 0 or not np.all(np.isfinite(result)):
+            raise ValueError(f"{name} must be a non-empty finite 1-D sweep")
+        return result
+
     def run(self, SHOTS, sweep_para: dict, shot_f=False):
-        """Run the operation.
-
-        Parameters
-        ----------
-        SHOTS : Any
-            Value for ``SHOTS``.
-        sweep_para : dict
-            Value for ``sweep_para``.
-        shot_f : Any, default: False
-            Value for ``shot_f``.
-        """
-        self.cfg["shots"] = SHOTS
-        self.cfg["shot_f"] = shot_f
-        self._shot_f = shot_f
-
-        raw_length = sweep_para.get("length")
-        self.length_sweep = (
-            raw_length if isinstance(raw_length, (list, tuple, np.ndarray)) else [raw_length]
-        )
-        raw_gain = sweep_para.get("gain")
-        self.gain_sweep = (
-            raw_gain if isinstance(raw_gain, (list, tuple, np.ndarray)) else [raw_gain]
-        )
-        raw_freq = sweep_para.get("freq")
-        self.freq_sweep = (
-            raw_freq if isinstance(raw_freq, (list, tuple, np.ndarray)) else [raw_freq]
-        )
-
-        final_shape = (len(self.length_sweep), len(self.gain_sweep), len(self.freq_sweep), SHOTS)
-        self.I_g_array = np.full(final_shape, np.nan)
-        self.Q_g_array = np.full(final_shape, np.nan)
-        self.I_e_array = np.full(final_shape, np.nan)
-        self.Q_e_array = np.full(final_shape, np.nan)
+        """Acquire a length x gain grid for prepared g and e states."""
         if shot_f:
-            self.I_f_array = np.full(final_shape, np.nan)
-            self.Q_f_array = np.full(final_shape, np.nan)
+            raise ValueError("The minimal optimizer is ge-only; use SingleShot_gef for f-state analysis.")
+        if int(SHOTS) < 1:
+            raise ValueError("SHOTS must be positive")
+        extra = set(sweep_para) - {"length", "gain"}
+        if extra:
+            raise ValueError("Only 'length' and 'gain' are swept; frequency stays fixed.")
 
-        is_l_sweep = len(self.length_sweep) > 1
-        is_g_sweep = len(self.gain_sweep) > 1
-        is_f_sweep = len(self.freq_sweep) > 1
-
-        outermost_real_sweep = None
-        if is_l_sweep:
-            outermost_real_sweep = "l"
-        elif is_g_sweep:
-            outermost_real_sweep = "g"
-        elif is_f_sweep:
-            outermost_real_sweep = "f"
-
-        l_iter = self.length_sweep
-        if "l" == outermost_real_sweep:
-            l_iter = tqdm(self.length_sweep, desc="Length loop")
-
-        for l_idx, l_val in enumerate(l_iter):
-            g_iter = self.gain_sweep
-            if "g" == outermost_real_sweep:
-                g_iter = tqdm(self.gain_sweep, desc="Gain loop")
-            elif is_g_sweep:
-                g_iter = tqdm(self.gain_sweep, desc="Gain loop", leave=False)
-
-            for g_idx, g_val in enumerate(g_iter):
-                f_iter = self.freq_sweep
-                if "f" == outermost_real_sweep:
-                    f_iter = tqdm(self.freq_sweep, desc="Freq loop")
-                elif is_f_sweep:
-                    f_iter = tqdm(self.freq_sweep, desc="Freq loop", leave=False)
-
-                for f_idx, f_val in enumerate(f_iter):
-                    cfg_update = {"steps": SHOTS}
-                    if l_val is not None:
-                        cfg_update["ro_length"] = l_val
-                    if g_val is not None:
-                        cfg_update["res_gain_ge"] = g_val
-                    if f_val is not None:
-                        cfg_update["res_freq_ge"] = f_val
-                    self.cfg.update(cfg_update)
-
-                    ssp = SingleShotOptProgram(
-                        self.soccfg, reps=1,
-                        final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-                    )
-                    iq_list = ssp.acquire(self.soc, rounds=1, progress=False)
-
-                    self.I_g_array[l_idx, g_idx, f_idx, :] = iq_list[0][0, :, 0]
-                    self.Q_g_array[l_idx, g_idx, f_idx, :] = iq_list[0][0, :, 1]
-                    self.I_e_array[l_idx, g_idx, f_idx, :] = iq_list[0][1, :, 0]
-                    self.Q_e_array[l_idx, g_idx, f_idx, :] = iq_list[0][1, :, 1]
-
-                    if shot_f:
-                        self.I_f_array[l_idx, g_idx, f_idx, :] = iq_list[0][2, :, 0]
-                        self.Q_f_array[l_idx, g_idx, f_idx, :] = iq_list[0][2, :, 1]
-
-        self.data = {"Ig": self.I_g_array, "Qg": self.Q_g_array,
-                     "Ie": self.I_e_array, "Qe": self.Q_e_array}
-        if shot_f:
-            self.data["If"] = self.I_f_array
-            self.data["Qf"] = self.Q_f_array
-
-    @staticmethod
-    def _is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
-        """Return whether is pareto efficient.
-
-        Parameters
-        ----------
-        costs : np.ndarray
-            Value for ``costs``.
-
-        Returns
-        -------
-        np.ndarray
-            Result of the operation.
-        """
-        is_eff = np.ones(len(costs), dtype=bool)
-        for i, c in enumerate(costs):
-            if is_eff[i]:
-                dominated = np.all(costs[is_eff] <= c, axis=1) & np.any(costs[is_eff] < c, axis=1)
-                is_eff[is_eff] = ~dominated
-                is_eff[i] = True
-        return is_eff
-
-    @staticmethod
-    def _expected_improvement(gp, X_candidates: np.ndarray, y_best: float, xi: float = 0.01) -> np.ndarray:
-        """Return the expected improvement result.
-
-        Parameters
-        ----------
-        gp : Any
-            Value for ``gp``.
-        X_candidates : np.ndarray
-            Value for ``X_candidates``.
-        y_best : float
-            Value for ``y_best``.
-        xi : float, default: 0.01
-            Value for ``xi``.
-
-        Returns
-        -------
-        np.ndarray
-            Result of the operation.
-        """
-        from scipy.stats import norm as sp_norm
-        mu, sigma = gp.predict(X_candidates, return_std=True)
-        sigma = sigma.reshape(-1)
-        imp = mu - y_best - xi
-        Z = np.where(sigma > 1e-9, imp / sigma, 0.0)
-        ei = imp * sp_norm.cdf(Z) + sigma * sp_norm.pdf(Z)
-        ei[sigma < 1e-9] = 0.0
-        return ei
-
-    def _acquire_single_point(self, length, gain, freq, SHOTS):
-        """Return the acquire single point result.
-
-        Parameters
-        ----------
-        length : Any
-            Value for ``length``.
-        gain : Any
-            Value for ``gain``.
-        freq : Any
-            Value for ``freq``.
-        SHOTS : Any
-            Value for ``SHOTS``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        cfg_update = {"steps": SHOTS}
-        if length is not None:
-            cfg_update["ro_length"] = length
-        if gain is not None:
-            cfg_update["res_gain_ge"] = gain
-        if freq is not None:
-            cfg_update["res_freq_ge"] = freq
-        self.cfg.update(cfg_update)
-        ssp = SingleShotOptProgram(
-            self.soccfg, reps=1, final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+        self.length_sweep = self._axis(
+            sweep_para.get("length"), self.cfg["ro_length"], "length"
         )
-        iq_list = ssp.acquire(self.soc, rounds=1, progress=False)
-        I_g = iq_list[0][0, :, 0]
-        Q_g = iq_list[0][0, :, 1]
-        I_e = iq_list[0][1, :, 0]
-        Q_e = iq_list[0][1, :, 1]
-        data_slice = {"Ig": I_g, "Qg": Q_g, "Ie": I_e, "Qe": Q_e}
-        details = hist(
-            data_slice, plot=False, verbose=False, return_details=True
+        self.gain_sweep = self._axis(
+            sweep_para.get("gain"), self.cfg["res_gain_ge"], "gain"
         )
-        metrics = histogram_metrics(details)
-        return I_g, Q_g, I_e, Q_e, metrics
+        self.fixed_frequency = float(self.cfg["res_freq_ge"])
+        self.shots = int(SHOTS)
+        self.cfg.update({"shots": self.shots, "shot_f": False})
 
-    def analyze(self, leakage_threshold=0.20, thermal_threshold=0.10,
-                bo_n_iter=0, bo_xi=0.01, pareto=True,
-                t1_decay_weight=3.0):
-        """Return the analyze result.
+        shape = (len(self.length_sweep), len(self.gain_sweep), self.shots)
+        self.I_g_array = np.empty(shape)
+        self.Q_g_array = np.empty(shape)
+        self.I_e_array = np.empty(shape)
+        self.Q_e_array = np.empty(shape)
 
-        Parameters
-        ----------
-        leakage_threshold : Any, default: 0.2
-            Value for ``leakage_threshold``.
-        thermal_threshold : Any, default: 0.1
-            Value for ``thermal_threshold``.
-        bo_n_iter : Any, default: 0
-            Value for ``bo_n_iter``.
-        bo_xi : Any, default: 0.01
-            Value for ``bo_xi``.
-        pareto : Any, default: True
-            Value for ``pareto``.
-        t1_decay_weight : float, default: 3.0
-            Relative weight of ``|e> -> |g>`` assignment error versus
-            ``|g> -> |e>`` error. This is sensitive to T1 decay but also
-            contains ordinary IQ-cloud overlap.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        try:
-            from sklearn.gaussian_process import GaussianProcessRegressor
-            from sklearn.gaussian_process.kernels import Matern, WhiteKernel
-            from sklearn.preprocessing import StandardScaler
-            GP_AVAILABLE = True
-        except ImportError:
-            GP_AVAILABLE = False
-            print("Warning: scikit-learn not found. GP interpolation disabled.")
-
-        try:
-            len_L = len(self.length_sweep)
-            len_G = len(self.gain_sweep)
-            len_F = len(self.freq_sweep)
-        except AttributeError:
-            print("Error: call run() first to define sweep axes.")
-            return
-
-        shape3 = (len_L, len_G, len_F)
-        fid_Array = np.zeros(shape3)
-        soft_fid_array = np.zeros(shape3)
-        snr_array = np.zeros(shape3)
-        sep_array = np.zeros(shape3)
-        leakage_array = np.zeros(shape3)
-        thermal_array = np.zeros(shape3)
-
-        shot_f = getattr(self, "_shot_f", False)
-        metric_label = "threshold fidelity (gef)" if shot_f else "threshold fidelity (ge)"
-
-        for l_idx in tqdm(range(len_L), desc=f"Analyze [{metric_label}]"):
-            for g_idx in range(len_G):
-                for f_idx in range(len_F):
-                    I_g = self.data["Ig"][l_idx, g_idx, f_idx]
-                    Q_g = self.data["Qg"][l_idx, g_idx, f_idx]
-                    I_e = self.data["Ie"][l_idx, g_idx, f_idx]
-                    Q_e = self.data["Qe"][l_idx, g_idx, f_idx]
-                    data_slice = {"Ig": I_g, "Qg": Q_g, "Ie": I_e, "Qe": Q_e}
-                    if shot_f:
-                        data_slice["If"] = self.data["If"][l_idx, g_idx, f_idx]
-                        data_slice["Qf"] = self.data["Qf"][l_idx, g_idx, f_idx]
-                    details = hist(
-                        data_slice, plot=False, verbose=False, return_details=True
-                    )
-                    fid_Array[l_idx, g_idx, f_idx] = details.fidelity
-                    m = histogram_metrics(details)
-                    soft_fid_array[l_idx, g_idx, f_idx] = m["soft_fid"]
-                    snr_array[l_idx, g_idx, f_idx] = m["snr"]
-                    sep_array[l_idx, g_idx, f_idx] = m["sep"]
-                    leakage_array[l_idx, g_idx, f_idx] = m["leakage"]
-                    thermal_array[l_idx, g_idx, f_idx] = m["thermal"]
-
-        selection_score_array = weighted_assignment_score(
-            thermal_array, leakage_array, e_to_g_weight=t1_decay_weight
+        total = len(self.length_sweep) * len(self.gain_sweep)
+        points = (
+            (li, gi, length, gain)
+            for li, length in enumerate(self.length_sweep)
+            for gi, gain in enumerate(self.gain_sweep)
         )
+        for li, gi, length, gain in tqdm(points, total=total, desc="Length x gain"):
+            self.cfg.update({
+                "steps": self.shots,
+                "ro_length": float(length),
+                "res_gain_ge": float(gain),
+                "res_freq_ge": self.fixed_frequency,
+            })
+            program = SingleShotOptProgram(
+                self.soccfg, reps=1,
+                final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+            )
+            iq = program.acquire(self.soc, rounds=1, progress=False)[0]
+            self.I_g_array[li, gi] = iq[0, :, 0]
+            self.Q_g_array[li, gi] = iq[0, :, 1]
+            self.I_e_array[li, gi] = iq[1, :, 0]
+            self.Q_e_array[li, gi] = iq[1, :, 1]
 
-        feasible_mask = (leakage_array <= leakage_threshold) & (thermal_array <= thermal_threshold)
-        n_feasible = feasible_mask.sum()
-        print(f"\n{n_feasible}/{feasible_mask.size} grid points pass physical constraints.")
+        self.data = {
+            "Ig": self.I_g_array, "Qg": self.Q_g_array,
+            "Ie": self.I_e_array, "Qe": self.Q_e_array,
+        }
+        return self.data
 
-        if n_feasible == 0:
-            print("Warning: no feasible points. Relaxing constraints.")
-            feasible_mask = leakage_array <= (leakage_array.min() + 0.10)
+    def analyze(self):
+        """Choose the largest ``fidelity * e_core * e_survival`` score."""
+        if not hasattr(self, "data"):
+            raise RuntimeError("Call run() before analyze().")
 
-        score_feasible = np.where(feasible_mask, selection_score_array, -np.inf)
-        max_idx = np.unravel_index(np.argmax(score_feasible), score_feasible.shape)
-        max_l_idx, max_g_idx, max_f_idx = max_idx
-        best_fid_grid = float(fid_Array[max_idx])
-        best_selection_score = float(selection_score_array[max_idx])
-        best_length_grid = self.length_sweep[max_l_idx]
-        best_gain_grid = self.gain_sweep[max_g_idx]
-        best_freq_grid = self.freq_sweep[max_f_idx]
-        max_length, max_gain, max_freq = best_length_grid, best_gain_grid, best_freq_grid
+        shape = (len(self.length_sweep), len(self.gain_sweep))
+        names = (
+            "fidelity", "e_to_g", "g_to_e", "e_core", "g_core",
+            "e_tail", "g_tail", "score", "threshold", "rotation_deg",
+        )
+        arrays = {name: np.empty(shape) for name in names}
 
-        print(f"\n--- Grid best (T1-weighted, feasible) ---")
-        print(f"  score={best_selection_score:.4f}  "
-              f"fid={best_fid_grid:.4f}  "
-              f"e->g={leakage_array[max_idx]:.4f}  "
-              f"g->e={thermal_array[max_idx]:.4f}  "
-              f"T1_weight={float(t1_decay_weight):.2f}")
-        print(f"  length={best_length_grid}  gain={best_gain_grid}  "
-              f"freq={best_freq_grid}")
+        for li in range(shape[0]):
+            for gi in range(shape[1]):
+                metrics = fast_histogram_metrics({
+                    "Ig": self.I_g_array[li, gi],
+                    "Qg": self.Q_g_array[li, gi],
+                    "Ie": self.I_e_array[li, gi],
+                    "Qe": self.Q_e_array[li, gi],
+                })
+                arrays["fidelity"][li, gi] = metrics["fid"]
+                arrays["e_to_g"][li, gi] = metrics["e_to_g_error"]
+                arrays["g_to_e"][li, gi] = metrics["g_to_e_error"]
+                arrays["e_core"][li, gi] = metrics["e_core_fraction"]
+                arrays["g_core"][li, gi] = metrics["g_core_fraction"]
+                arrays["e_tail"][li, gi] = metrics["e_tail_fraction"]
+                arrays["g_tail"][li, gi] = metrics["g_tail_fraction"]
+                arrays["score"][li, gi] = metrics["readout_score"]
+                arrays["threshold"][li, gi] = metrics["threshold"]
+                arrays["rotation_deg"][li, gi] = metrics["rotation_deg"]
 
-        self.fid_Array = fid_Array
-        self.soft_fid_array = soft_fid_array
-        self.snr_array = snr_array
-        self.sep_array = sep_array
-        self.leakage_array = leakage_array
-        self.thermal_array = thermal_array
-        self.selection_score_array = selection_score_array
-        self.t1_decay_weight = float(t1_decay_weight)
-        self._feasible_mask = feasible_mask
+        best_idx = np.unravel_index(np.nanargmax(arrays["score"]), shape)
+        li, gi = best_idx
+        self.metrics = arrays
+        self.best_index = best_idx
+        self.fid_Array = arrays["fidelity"]
+        self.leakage_array = arrays["e_to_g"]
+        self.thermal_array = arrays["g_to_e"]
+        self.selection_score_array = arrays["score"]
+        self.best = {
+            "length": float(self.length_sweep[li]),
+            "gain": float(self.gain_sweep[gi]),
+            "frequency": self.fixed_frequency,
+            "fidelity": float(arrays["fidelity"][best_idx]),
+            "score": float(arrays["score"][best_idx]),
+            "e_to_g_error": float(arrays["e_to_g"][best_idx]),
+            "g_to_e_error": float(arrays["g_to_e"][best_idx]),
+            "e_core_fraction": float(arrays["e_core"][best_idx]),
+            "e_tail_fraction": float(arrays["e_tail"][best_idx]),
+            "threshold": float(arrays["threshold"][best_idx]),
+            "rotation_deg": float(arrays["rotation_deg"][best_idx]),
+        }
+        self.cfg.update({
+            "ro_length": self.best["length"],
+            "res_gain_ge": self.best["gain"],
+        })
 
-        if pareto:
-            fid_flat = fid_Array.ravel()
-            leak_flat = leakage_array.ravel()
-            pareto_mask = np.ones(fid_flat.size, dtype=bool)
-            for i, (fid_i, leak_i) in enumerate(zip(fid_flat, leak_flat)):
-                dominated = (
-                    (fid_flat >= fid_i)
-                    & (leak_flat <= leak_i)
-                    & ((fid_flat > fid_i) | (leak_flat < leak_i))
-                )
-                pareto_mask[i] = not np.any(dominated)
-            self._pareto_pts = [
-                (float(fid), float(leak))
-                for fid, leak, keep in zip(fid_flat, leak_flat, pareto_mask)
-                if keep
-            ]
-            self._pareto_mask = pareto_mask.reshape(shape3)
-
-        states = ["g", "e", "f"] if shot_f else ["g", "e"]
-        iq_states = [
+        raw_iq = np.stack((
             self.I_g_array + 1j * self.Q_g_array,
             self.I_e_array + 1j * self.Q_e_array,
-        ]
-        if shot_f:
-            iq_states.append(self.I_f_array + 1j * self.Q_f_array)
-        raw_iq = np.stack(iq_states, axis=3)
-        best = {
-            "length": float(max_length) if max_length is not None else None,
-            "gain": float(max_gain) if max_gain is not None else None,
-            "frequency": float(max_freq) if max_freq is not None else None,
-            "fidelity": best_fid_grid,
-            "selection_score": best_selection_score,
-            "e_to_g_error": float(leakage_array[max_idx]),
-            "g_to_e_error": float(thermal_array[max_idx]),
+        ), axis=2)
+        analysis_data = {
+            name: {"values": values, "dims": ["length", "gain"]}
+            for name, values in arrays.items()
         }
         self.result = ExperimentData(
             experiment_type="s000_singleshot_ge_opt",
             raw_iq=raw_iq,
             metadata={
                 "qubit": self.cfg.get("name"),
-                "states": states,
-                "shots": int(raw_iq.shape[-1]),
-                "best": best,
-                "leakage_threshold": float(leakage_threshold),
-                "thermal_threshold": float(thermal_threshold),
-                "t1_decay_weight": float(t1_decay_weight),
-                "selection_score_note": (
-                    "e_to_g is T1-sensitive but also includes IQ overlap"
-                ),
-                "bo_n_iter": int(bo_n_iter),
-                "bo_xi": float(bo_xi),
+                "states": ["g", "e"],
+                "shots": self.shots,
+                "best": self.best,
+                "optimizer_method": "empirical_length_gain",
+                "score_formula": "fidelity * e_core_fraction * (1 - e_to_g_error)",
             },
             axes={
-                "length": {"values": np.asarray(self.length_sweep), "unit": "us"},
-                "gain": {"values": np.asarray(self.gain_sweep), "unit": "DAC unit"},
-                "frequency": {"values": np.asarray(self.freq_sweep), "unit": "MHz"},
-                "state": {"values": states},
-                "shot": {"values": np.arange(raw_iq.shape[-1]), "unit": "#"},
+                "length": {"values": self.length_sweep, "unit": "us"},
+                "gain": {"values": self.gain_sweep, "unit": "DAC unit"},
+                "state": {"values": ["g", "e"]},
+                "shot": {"values": np.arange(self.shots), "unit": "#"},
             },
-            dataset_dims={"iq": ["length", "gain", "frequency", "state", "shot"]},
-            analysis_data={
-                "fidelity": {"values": fid_Array, "dims": ["length", "gain", "frequency"]},
-                "soft_fidelity": {"values": soft_fid_array, "dims": ["length", "gain", "frequency"]},
-                "snr": {"values": snr_array, "dims": ["length", "gain", "frequency"]},
-                "separation": {"values": sep_array, "dims": ["length", "gain", "frequency"]},
-                "leakage": {"values": leakage_array, "dims": ["length", "gain", "frequency"]},
-                "thermal": {"values": thermal_array, "dims": ["length", "gain", "frequency"]},
-                "t1_weighted_score": {
-                    "values": selection_score_array,
-                    "dims": ["length", "gain", "frequency"],
-                },
-                "feasible_mask": {"values": feasible_mask, "dims": ["length", "gain", "frequency"]},
-                "pareto_mask": {
-                    "values": getattr(self, "_pareto_mask", np.zeros(shape3, dtype=bool)),
-                    "dims": ["length", "gain", "frequency"],
-                },
-            },
+            dataset_dims={"iq": ["length", "gain", "state", "shot"]},
+            analysis_data=analysis_data,
             fit_result={
-                "best_length": (best["length"], None),
-                "best_gain": (best["gain"], None),
-                "best_frequency": (best["frequency"], None),
-                "best_fidelity": (best["fidelity"], None),
-                "best_t1_weighted_score": (best["selection_score"], None),
-                "best_e_to_g_error": (best["e_to_g_error"], None),
-                "best_g_to_e_error": (best["g_to_e_error"], None),
+                "best_length": (self.best["length"], None),
+                "best_gain": (self.best["gain"], None),
+                "best_fidelity": (self.best["fidelity"], None),
+                "best_score": (self.best["score"], None),
+                "best_e_to_g_error": (self.best["e_to_g_error"], None),
+                "best_e_tail_fraction": (self.best["e_tail_fraction"], None),
             },
             data_kind="single_shot_optimization",
             analysis_id="single_shot_optimization",
@@ -667,434 +430,62 @@ class SingleShot_ge_opt:
             avg_count=1,
         )
 
-        return_L = round(float(max_length), 3) if max_length is not None else None
-        return_G = round(float(max_gain), 6) if max_gain is not None else None
-        return_F = round(float(max_freq), 6) if max_freq is not None else None
-        return return_L, return_G, return_F
+        print("\n--- Best empirical readout ---")
+        print(
+            f"length={self.best['length']:.3f} us  gain={self.best['gain']:.6f}  "
+            f"freq(fixed)={self.fixed_frequency:.6f} MHz"
+        )
+        print(
+            f"score={self.best['score']:.4f}  fidelity={self.best['fidelity']:.4f}  "
+            f"e->g={self.best['e_to_g_error']:.4f}  "
+            f"e-tail={self.best['e_tail_fraction']:.4f}"
+        )
+        return self.best["length"], self.best["gain"]
 
     def plot_grid_analysis(self):
-        """Six-panel heatmap overview of all grid metrics, followed by a full
-        hist() IQ plot for the best feasible grid point.
-        """
-        if not hasattr(self, "fid_Array"):
-            print("Running analyze() first ...")
+        """Plot only the four metrics that drive the practical choice."""
+        if not hasattr(self, "metrics"):
             self.analyze()
-
-        fid_arr = self.fid_Array
-        soft_arr = self.soft_fid_array
-        snr_arr = self.snr_array
-        sep_arr = self.sep_array
-        leak_arr = self.leakage_array
-        therm_arr = self.thermal_array
-        len_L, len_G, len_F = fid_arr.shape
-
-        best_f = np.argmax(self.selection_score_array, axis=2)
-
-        def _take(arr):
-            """Return the take result.
-
-            Parameters
-            ----------
-            arr : Any
-                Value for ``arr``.
-
-            Returns
-            -------
-            Any
-                Result of the operation.
-            """
-            return np.take_along_axis(arr, best_f[:, :, None], axis=2)[:, :, 0]
-
-        fid_2d = _take(fid_arr)
-        soft_2d = _take(soft_arr)
-        score_2d = _take(self.selection_score_array)
-        snr_2d = _take(snr_arr)
-        sep_2d = _take(sep_arr)
-        leak_2d = _take(leak_arr)
-        therm_2d = _take(therm_arr)
-
-        if hasattr(self, "_feasible_mask"):
-            feasible_2d = _take(self._feasible_mask.astype(float)) > 0.5
-        else:
-            feasible_2d = np.ones((len_L, len_G), dtype=bool)
-
-        def _labels(sweep):
-            """Return the labels result.
-
-            Parameters
-            ----------
-            sweep : Any
-                Value for ``sweep``.
-
-            Returns
-            -------
-            Any
-                Result of the operation.
-            """
-            if sweep[0] is None:
-                return [str(i) for i in range(len(sweep))]
-            return [f"{v:.3g}" for v in sweep]
-
-        l_labels = _labels(self.length_sweep)
-        g_labels = _labels(self.gain_sweep)
-        font_sz = max(4, 7 - max(len_L, len_G) // 5)
-
-        def _imshow(
-            ax,
-            data,
-            title,
-            cmap,
-            vmin=None,
-            vmax=None,
-            fmt=".3f",
-            cbar_label="",
-            mark_infeasible=False,
-        ):
-            """Return the imshow result.
-
-            Parameters
-            ----------
-            ax : Any
-                Matplotlib axes on which to draw.
-            data : Any
-                Input data to process.
-            title : Any
-                Value for ``title``.
-            cmap : Any
-                Value for ``cmap``.
-            vmin : Any, default: None
-                Value for ``vmin``.
-            vmax : Any, default: None
-                Value for ``vmax``.
-            fmt : Any, default: '.3f'
-                Value for ``fmt``.
-            cbar_label : Any, default: ''
-                Value for ``cbar_label``.
-            mark_infeasible : Any, default: False
-                Value for ``mark_infeasible``.
-            """
-            im = ax.imshow(
-                data, cmap=cmap, vmin=vmin, vmax=vmax, origin="upper", aspect="auto"
-            )
-            plt.colorbar(im, ax=ax, label=cbar_label, fraction=0.046, pad=0.04)
-            ax.set_title(title, fontsize=10)
-            ax.set_xlabel("Gain", fontsize=9)
-            ax.set_ylabel("Length", fontsize=9)
-            ax.set_xticks(range(len_G))
-            ax.set_xticklabels(g_labels, rotation=45, ha="right", fontsize=7)
-            ax.set_yticks(range(len_L))
-            ax.set_yticklabels(l_labels, fontsize=7)
-            for i in range(len_L):
-                for j in range(len_G):
-                    v = data[i, j]
-                    if np.isnan(v):
-                        continue
-                    bg = im.cmap(im.norm(v))
-                    lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
-                    tc = "white" if lum < 0.45 else "black"
-                    ax.text(
-                        j, i, format(v, fmt),
-                        ha="center", va="center",
-                        fontsize=font_sz, color=tc,
-                    )
-                    if mark_infeasible and not feasible_2d[i, j]:
-                        ax.text(
-                            j, i, "X",
-                            ha="center", va="center",
-                            fontsize=font_sz + 2, color="grey",
-                            alpha=0.6, fontweight="bold",
-                        )
-
-        fig, axs = plt.subplots(2, 3, figsize=(16, 10))
-        fig.suptitle("SingleShot Optimization - Grid Analysis", fontsize=13)
-
-        _imshow(axs[0, 0], fid_2d, "Threshold Fidelity", "RdYlGn", 0.5, 1.0, ".3f",
-                "Fidelity", mark_infeasible=True)
-        _imshow(
-            axs[0, 1], score_2d,
-            f"T1-weighted Score (weight={self.t1_decay_weight:g})",
-            "RdYlGn", 0.5, 1.0, ".3f", "Selection score",
-            mark_infeasible=True,
+        fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+        panels = (
+            ("score", "Useful score", "viridis"),
+            ("fidelity", "All-shot fidelity", "RdYlGn"),
+            ("e_to_g", "e -> g error (T1-sensitive)", "Reds"),
+            ("e_tail", "e main-peak tail", "Oranges"),
         )
-        _imshow(axs[0, 2], snr_2d, "SNR  (||delta_mu||^2/sigma^2)", "plasma",
-                0, None, ".2f", "SNR")
-        _imshow(axs[1, 0], sep_2d, "IQ Separation (||delta_mu||)", "Blues",
-                0, None, ".3f", "Separation [ADC]")
-        _imshow(axs[1, 1], leak_2d, "|e> -> |g> assignment error", "Reds",
-                0, 0.5, ".3f", "Error probability")
-        _imshow(axs[1, 2], therm_2d, "|g> -> |e> assignment error", "Oranges",
-                0, 0.3, ".3f", "Error probability")
-
-        fig.tight_layout(rect=[0, 0, 1, 0.96])
-
-        def _val_str(sweep, idx):
-            """Return the val str result.
-
-            Parameters
-            ----------
-            sweep : Any
-                Value for ``sweep``.
-            idx : Any
-                Value for ``idx``.
-
-            Returns
-            -------
-            Any
-                Result of the operation.
-            """
-            v = sweep[idx]
-            return f"{v:.4g}" if v is not None else str(idx)
-
-        all_pts = [
-            (
-                l, g, int(best_f[l, g]),
-                fid_2d[l, g], soft_2d[l, g], snr_2d[l, g],
-                leak_2d[l, g], therm_2d[l, g], bool(feasible_2d[l, g]),
-            )
-            for l in range(len_L)
-            for g in range(len_G)
+        extent = [
+            self.gain_sweep[0], self.gain_sweep[-1],
+            self.length_sweep[-1], self.length_sweep[0],
         ]
-        all_pts.sort(
-            key=lambda x: (
-                x[8], self.selection_score_array[x[0], x[1], x[2]]
-            ),
-            reverse=True,
+        for ax, (key, title, cmap) in zip(axes.flat, panels):
+            image = ax.imshow(
+                self.metrics[key], origin="upper", aspect="auto",
+                extent=extent, cmap=cmap,
+            )
+            ax.scatter(self.best["gain"], self.best["length"], marker="*", s=130,
+                       color="cyan", edgecolor="black")
+            ax.set(title=title, xlabel="Readout gain", ylabel="Readout length (us)")
+            fig.colorbar(image, ax=ax)
+        fig.suptitle(
+            f"Q{str(self.cfg.get('name', '')).lstrip('Q')} readout optimization  "
+            f"(frequency fixed at {self.fixed_frequency:.4f} MHz)"
         )
+        fig.tight_layout()
+        return fig
 
-        print("\n=== Top 5 points (feasible first, then by fidelity) ===")
-        print(
-            f"  {'L':>8}  {'G':>8}  {'F':>8}"
-            f"  {'fid':>6}  {'soft':>6}  {'snr':>6}"
-            f"  {'leak':>6}  {'therm':>6}  {'ok?':>4}"
-        )
-        for l, g, f, fid, soft, snr, leak, therm, ok in all_pts[:5]:
-            print(
-                f"  {_val_str(self.length_sweep, l):>8}"
-                f"  {_val_str(self.gain_sweep, g):>8}"
-                f"  {_val_str(self.freq_sweep, f):>8}"
-                f"  {fid:.4f}  {soft:.4f}  {snr:6.3f}"
-                f"  {leak:.3f}  {therm:.3f}  {'yes' if ok else 'NO':>4}"
-            )
+    plot = plot_grid_analysis
 
-        l, g, f, fid, soft, snr, leak, therm, _ = all_pts[0]
-        print("\n=== Diagnostics for best point ===")
-        if leak > 0.15:
-            print(
-                f"  [!] High |e> -> |g> error ({leak:.3f}) - this can be caused by "
-                f"overlap or T1 decay; ge-only data cannot identify f-level leakage."
-            )
-        else:
-            print(f"  [ok] |e> -> |g> error OK ({leak:.3f})")
-
-        if therm > 0.05:
-            print(
-                f"  [!] High |g> -> |e> error ({therm:.3f}) - this is an assignment "
-                f"error; ge-only data alone does not determine thermal population."
-            )
-        else:
-            print(f"  [ok] |g> -> |e> error OK ({therm:.3f})")
-
-        delta_fid = soft - fid
-        if delta_fid > 0.01:
-            print(
-                f"  [i] soft_fid - fid = {delta_fid:.4f}: the Bayesian soft "
-                f"boundary outperforms the hard threshold - more shots or a "
-                f"better threshold placement may improve fidelity."
-            )
-        else:
-            print(f"  [ok] Hard and soft fidelities agree (delta = {delta_fid:.4f}).")
-
-        l_v = _val_str(self.length_sweep, l)
-        g_v = _val_str(self.gain_sweep, g)
-        f_v = _val_str(self.freq_sweep, f)
-        print(
-            f"\n=== Full hist for best point: L={l_v}, G={g_v}, F={f_v}"
-            f"  (fid={fid:.4f}, soft={soft:.4f}) ==="
-        )
-        data_slice = {
-            "Ig": self.data["Ig"][l, g, f],
-            "Qg": self.data["Qg"][l, g, f],
-            "Ie": self.data["Ie"][l, g, f],
-            "Qe": self.data["Qe"][l, g, f],
-        }
-        if getattr(self, "_shot_f", False):
-            data_slice["If"] = self.data["If"][l, g, f]
-            data_slice["Qf"] = self.data["Qf"][l, g, f]
-
-        hist(
-            data_slice,
-            plot=True,
-            verbose=True,
-            title=(
-                f"Best point  L={l_v}, G={g_v}, F={f_v}"
-                f"  -  fid={fid:.4f}  soft={soft:.4f}"
-                f"  leak={leak:.3f}  therm={therm:.3f}"
-            ),
-        )
-        plt.show()
-
-    def plot_pareto(self):
-        """Plot all grid points in leakage/fidelity space with Pareto front."""
-        if not hasattr(self, "_pareto_pts"):
-            print("Run analyze(pareto=True) first.")
-            return
-
-        fig, ax = plt.subplots(figsize=(7, 5))
-
-        leak_all = self.leakage_array.ravel()
-        fid_all = self.fid_Array.ravel()
-
-        ax.scatter(leak_all, fid_all, c="grey", s=20, alpha=0.4, label="Grid points")
-
-        pareto_fid = [p[0] for p in self._pareto_pts]
-        pareto_leak = [p[1] for p in self._pareto_pts]
-        ax.scatter(
-            pareto_leak, pareto_fid,
-            c="tab:blue", s=60, zorder=3, label="Pareto front",
-        )
-        sorted_pairs = sorted(zip(pareto_leak, pareto_fid))
-        ax.step(
-            [p[0] for p in sorted_pairs],
-            [p[1] for p in sorted_pairs],
-            where="post", color="tab:blue", linewidth=1.2, alpha=0.6,
-        )
-
-        if hasattr(self, "_feasible_mask"):
-            score_feasible = np.where(
-                self._feasible_mask, self.selection_score_array, -np.inf
-            )
-            best_idx = np.unravel_index(
-                np.argmax(score_feasible), score_feasible.shape
-            )
-            ax.scatter(
-                self.leakage_array[best_idx], self.fid_Array[best_idx],
-                c="red", s=100, zorder=4, marker="*", label="Best feasible",
-            )
-
-        ax.set_xlabel("|e> -> |g> assignment error", fontsize=11)
-        ax.set_ylabel("Threshold Fidelity", fontsize=11)
-        ax.set_title("Pareto Front: Fidelity vs Assignment Error", fontsize=12)
-        ax.legend(fontsize=9)
-        ax.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
-
-    def plot_top_fidelity_histograms(self, top_n=9, feasible_only=True):
-        """IQ hexbin plots for the top-N grid points by threshold fidelity.
-
-        Parameters
-        ----------
-        top_n : Any, default: 9
-            Value for ``top_n``.
-        feasible_only : Any, default: True
-            Value for ``feasible_only``.
-        """
-        if not hasattr(self, "fid_Array"):
-            print("Running analyze() to generate fidelity data...")
+    def plot_best_histogram(self):
+        """Show the ordinary single-shot diagnostic for the chosen point."""
+        if not hasattr(self, "best_index"):
             self.analyze()
-            if not hasattr(self, "fid_Array"):
-                print("Error: fidelity data not available.")
-                return
-
-        fid_Array = self.fid_Array
-        if fid_Array.ndim != 3:
-            print("Error: fid_Array must be 3-D (length, gain, freq).")
-            return
-
-        if feasible_only and hasattr(self, "_feasible_mask"):
-            scored = np.where(
-                self._feasible_mask, self.selection_score_array, -np.inf
-            )
-        else:
-            scored = self.selection_score_array
-
-        flat_scored = scored.flatten()
-        top_n_flat_indices = np.argsort(flat_scored)[-top_n:][::-1]
-        top_n_flat_indices = [
-            idx for idx in top_n_flat_indices if flat_scored[idx] > -np.inf
-        ][:top_n]
-        if not top_n_flat_indices:
-            print("No points to plot.")
-            return
-        top_n_indices = np.unravel_index(top_n_flat_indices, fid_Array.shape)
-
-        all_I = np.concatenate(
-            [self.data["Ig"][idx] for idx in zip(*top_n_indices)]
-            + [self.data["Ie"][idx] for idx in zip(*top_n_indices)]
-        )
-        all_Q = np.concatenate(
-            [self.data["Qg"][idx] for idx in zip(*top_n_indices)]
-            + [self.data["Qe"][idx] for idx in zip(*top_n_indices)]
-        )
-
-        overall_min = min(all_I.min(), all_Q.min())
-        overall_max = max(all_I.max(), all_Q.max())
-        span = (overall_max - overall_min) * 0.05
-        plot_min = overall_min - span
-        plot_max = overall_max + span
-        plot_extent = [plot_min, plot_max, plot_min, plot_max]
-
-        hexbin_gridsize = 50
-        grid_size = int(np.ceil(np.sqrt(len(top_n_flat_indices))))
-        fig, axes = plt.subplots(
-            grid_size, grid_size,
-            figsize=(5 * grid_size, 5 * grid_size),
-        )
-        axes = np.array(axes).reshape(-1)
-
-        feasible_suffix = "(feasible only)" if feasible_only else "(all points)"
-        print(
-            f"\nPlotting top {len(top_n_flat_indices)} fidelity points {feasible_suffix}..."
-        )
-
-        for i, (l_idx, g_idx, f_idx) in enumerate(zip(*top_n_indices)):
-            I_g = self.data["Ig"][l_idx, g_idx, f_idx]
-            Q_g = self.data["Qg"][l_idx, g_idx, f_idx]
-            I_e = self.data["Ie"][l_idx, g_idx, f_idx]
-            Q_e = self.data["Qe"][l_idx, g_idx, f_idx]
-
-            current_fid = fid_Array[l_idx, g_idx, f_idx]
-            soft_fid_val = self.soft_fid_array[l_idx, g_idx, f_idx]
-            leak_val = self.leakage_array[l_idx, g_idx, f_idx]
-            therm_val = self.thermal_array[l_idx, g_idx, f_idx]
-            length = self.length_sweep[l_idx]
-            gain = self.gain_sweep[g_idx]
-            freq = self.freq_sweep[f_idx]
-
-            ax = axes[i]
-            ax.hexbin(
-                I_e, Q_e, gridsize=hexbin_gridsize, cmap="Reds",
-                alpha=0.6, extent=plot_extent, mincnt=1,
-            )
-            ax.hexbin(
-                I_g, Q_g, gridsize=hexbin_gridsize, cmap="Blues",
-                alpha=0.6, extent=plot_extent, mincnt=1,
-            )
-            ax.set_xlim(plot_min, plot_max)
-            ax.set_ylim(plot_min, plot_max)
-            ax.set_aspect("equal", adjustable="box")
-
-            if hasattr(self, "_feasible_mask"):
-                ok = bool(self._feasible_mask[l_idx, g_idx, f_idx])
-                if not ok:
-                    for spine in ax.spines.values():
-                        spine.set_edgecolor("red")
-                        spine.set_linewidth(2)
-
-            title_str = (
-                f"fid={current_fid:.4f}  soft={soft_fid_val:.4f}\n"
-                f"L={length:.3f}us  G={gain:.5f}  F={freq:.5f}MHz\n"
-                f"leak={leak_val:.3f}  therm={therm_val:.3f}"
-            )
-            ax.set_title(title_str, fontsize=9)
-            ax.set_xlabel("I")
-            ax.set_ylabel("Q")
-
-        for j in range(len(top_n_flat_indices), len(axes)):
-            fig.delaxes(axes[j])
-
-        plt.tight_layout()
-        plt.show()
+        li, gi = self.best_index
+        return hist({
+            "Ig": self.I_g_array[li, gi], "Qg": self.Q_g_array[li, gi],
+            "Ie": self.I_e_array[li, gi], "Qe": self.Q_e_array[li, gi],
+        }, plot=True, verbose=True, title=(
+            f"Best L={self.best['length']:.3f} us, G={self.best['gain']:.6f}"
+        ))
 
 
 __all__ = [

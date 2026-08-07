@@ -55,6 +55,76 @@ def weighted_assignment_score(g_to_e_error, e_to_g_error, e_to_g_weight=3.0):
     return 1.0 - (g_error + weight * e_error) / (1.0 + weight)
 
 
+def fast_histogram_metrics(data) -> dict[str, float]:
+    """Fast two-state readout metrics without histogram bins or GMM fitting.
+
+    The IQ axis is aligned from robust median centers, then the threshold is
+    selected directly from the empirical distributions.  This avoids both
+    histogram range/bin sensitivity and repeated Gaussian-mixture fits.
+    """
+    ig = np.asarray(data["Ig"], dtype=float).ravel()
+    qg = np.asarray(data["Qg"], dtype=float).ravel()
+    ie = np.asarray(data["Ie"], dtype=float).ravel()
+    qe = np.asarray(data["Qe"], dtype=float).ravel()
+    g_ok = np.isfinite(ig) & np.isfinite(qg)
+    e_ok = np.isfinite(ie) & np.isfinite(qe)
+    ig, qg, ie, qe = ig[g_ok], qg[g_ok], ie[e_ok], qe[e_ok]
+    if ig.size == 0 or ie.size == 0:
+        raise ValueError("Ground and excited shot clouds must be non-empty")
+
+    xg, yg = np.median(ig), np.median(qg)
+    xe, ye = np.median(ie), np.median(qe)
+    theta = -np.arctan2(ye - yg, xe - xg)
+    cosine, sine = np.cos(theta), np.sin(theta)
+    g_proj = ig * cosine - qg * sine
+    e_proj = ie * cosine - qe * sine
+    _, thresholds, confusion = _ordered_threshold_classifier([g_proj, e_proj])
+    fidelity = float(np.mean(np.diag(confusion)))
+    _, g_core_fraction = _dominant_core(g_proj)
+    _, e_core_fraction = _dominant_core(e_proj)
+    e_survival = float(1.0 - confusion[1, 0])
+    # Useful discrimination x a clean excited-state peak x T1-sensitive
+    # excited-state survival. All three factors are measured empirically.
+    readout_score = fidelity * e_core_fraction * e_survival
+    separation = float(abs(np.median(e_proj) - np.median(g_proj)))
+    snr = separation**2 / (
+        float(np.var(g_proj)) + float(np.var(e_proj)) + 1e-30
+    )
+    return {
+        "fid": fidelity,
+        "soft_fid": fidelity,
+        "snr": snr,
+        "sep": separation,
+        "leakage": float(confusion[1, 0]),
+        "thermal": float(confusion[0, 1]),
+        "e_to_g_error": float(confusion[1, 0]),
+        "g_to_e_error": float(confusion[0, 1]),
+        "g_core_fraction": g_core_fraction,
+        "e_core_fraction": e_core_fraction,
+        "g_tail_fraction": 1.0 - g_core_fraction,
+        "e_tail_fraction": 1.0 - e_core_fraction,
+        "readout_score": readout_score,
+        "threshold": float(thresholds[0]),
+        "rotation_deg": float(np.degrees(theta)),
+    }
+
+
+def _dominant_core(values, nsigma=3.0, iterations=3):
+    """Return the robust main peak and its retained-shot fraction."""
+    values = np.asarray(values, dtype=float).ravel()
+    core = values[np.isfinite(values)]
+    for _ in range(iterations):
+        center = float(np.median(core))
+        sigma = 1.4826 * float(np.median(np.abs(core - center)))
+        if not np.isfinite(sigma) or sigma <= 1e-12:
+            break
+        clipped = core[np.abs(core - center) <= nsigma * sigma]
+        if clipped.size == 0 or clipped.size == core.size:
+            break
+        core = clipped
+    return core, float(core.size / max(values.size, 1))
+
+
 def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
     """Derive optimizer metrics from an existing GMM fit without refitting.
 
@@ -253,63 +323,6 @@ def _bic_gmm(X, max_components=2, n_init=5):
     return best_gmm
 
 
-def _gmm_threshold_classifier(state_gmms):
-    """Calculate a two-state threshold and confusion matrix from fitted GMMs."""
-    if len(state_gmms) != 2:
-        raise ValueError("GMM threshold classification requires exactly two states")
-
-    primary_centers = [
-        float(gmm.means_[int(np.argmax(gmm.weights_)), 0])
-        for gmm in state_gmms
-    ]
-    state_order = np.argsort(primary_centers)
-    ordered_gmms = [state_gmms[index] for index in state_order]
-
-    component_lows = []
-    component_highs = []
-    for gmm in ordered_gmms:
-        means = gmm.means_[:, 0]
-        stds = np.sqrt(gmm.covariances_[:, 0, 0])
-        component_lows.extend(means - 8.0 * stds)
-        component_highs.extend(means + 8.0 * stds)
-    candidates = np.linspace(
-        float(np.min(component_lows)),
-        float(np.max(component_highs)),
-        20001,
-    )
-
-    def mixture_cdf(gmm, values):
-        means = gmm.means_[:, 0]
-        stds = np.sqrt(gmm.covariances_[:, 0, 0])
-        component_cdfs = _norm.cdf(
-            (np.asarray(values)[..., None] - means) / stds
-        )
-        return component_cdfs @ gmm.weights_
-
-    lower_cdf = mixture_cdf(ordered_gmms[0], candidates)
-    upper_cdf = mixture_cdf(ordered_gmms[1], candidates)
-    scores = lower_cdf - upper_cdf
-    best = np.flatnonzero(np.isclose(scores, np.max(scores)))
-    midpoint = 0.5 * (
-        primary_centers[state_order[0]] + primary_centers[state_order[1]]
-    )
-    threshold_index = best[np.argmin(np.abs(candidates[best] - midpoint))]
-    threshold = float(candidates[threshold_index])
-
-    ordered_confusion = np.array([
-        [mixture_cdf(ordered_gmms[0], threshold),
-         1.0 - mixture_cdf(ordered_gmms[0], threshold)],
-        [mixture_cdf(ordered_gmms[1], threshold),
-         1.0 - mixture_cdf(ordered_gmms[1], threshold)],
-    ], dtype=float)
-    confusion = np.zeros((2, 2), dtype=float)
-    for prepared_order, prepared_state in enumerate(state_order):
-        for declared_order, declared_state in enumerate(state_order):
-            confusion[prepared_state, declared_state] = ordered_confusion[
-                prepared_order, declared_order
-            ]
-    return state_order, [threshold], confusion
-
 def _ordered_threshold_classifier(projections):
     """Classify ordered one-dimensional states with contiguous thresholds."""
     values_by_state = [np.asarray(values, dtype=float).ravel() for values in projections]
@@ -426,10 +439,8 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
         primary_weights[i] = float(gmm.weights_[idx])
 
 
-    if n_states == 2:
-        state_order, thresholds, conf_matrix = _gmm_threshold_classifier(state_gmms)
-    else:
-        state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
+    state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
+
 
     return (state_gmms, state_order, conf_matrix, thresholds,
             primary_means, primary_stds, primary_weights)
@@ -627,27 +638,23 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
     conf_matrix_pct = conf_matrix * 100.0
 
     if plot:
-        x_plot    = np.linspace(xlims[0], xlims[1], 500)
-        x_col     = x_plot.reshape(-1, 1)
+        x_plot = np.linspace(xlims[0], xlims[1], 500)
         bin_width = bins_dist[1] - bins_dist[0]
 
-        for idx, gmm in enumerate(state_gmms):
-            n_shots   = len(I_projs[idx])
-            scale_s   = n_shots * bin_width
-            state_pdf = np.exp(gmm.score_samples(x_col))
+        for idx, projection in enumerate(I_projs):
+            core, retained = _dominant_core(projection)
+            mu = float(np.mean(core))
+            sigma = max(float(np.std(core)), 1e-12)
+            scale_s = len(projection) * bin_width
             c = default_colors[idx % len(default_colors)]
-
-            for comp_i in range(gmm.n_components):
-                w   = float(gmm.weights_[comp_i])
-                mu  = float(gmm.means_[comp_i, 0])
-                sig = float(np.sqrt(gmm.covariances_[comp_i, 0, 0]))
-                comp_pdf = w * _norm.pdf(x_plot, mu, sig)
-                axs[1, 0].fill_between(x_plot, 0, comp_pdf * scale_s, alpha=0.15, color=c)
-                axs[1, 0].plot(x_plot, comp_pdf * scale_s, color=c, linewidth=0.9, linestyle="--")
-
-            axs[1, 0].plot(x_plot, state_pdf * scale_s, color=c, linewidth=1.8, alpha=0.85,
-                           label=f"GMM {state_labels[idx]}")
-
+            core_pdf = _norm.pdf(x_plot, mu, sigma) * retained
+            axs[1, 0].plot(
+                x_plot,
+                core_pdf * scale_s,
+                color=c,
+                linewidth=1.8,
+                label=f"Core {state_labels[idx]} ({100 * retained:.0f}%)",
+            )
         for th in thresholds:
             axs[1, 0].axvline(th, color="k", linestyle="--", linewidth=1.2, label="Threshold")
 
@@ -693,9 +700,12 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
     if verbose:
         print(f"Rotation angle : {theta_rad * 180 / np.pi:.2f} deg")
         print(f"Threshold Fid. : {100 * fid:.3f}%")
-        for idx, (lbl, gmm) in enumerate(zip(state_labels, state_gmms)):
-            print(f"  |{lbl}?? components={gmm.n_components}  "
-                  f"mean={gmm_means[idx]:.3f}  std={gmm_stds[idx]:.3f}")
+        for lbl, projection in zip(state_labels, I_projs):
+            core, retained = _dominant_core(projection)
+            print(
+                f"  {lbl}: core={100 * retained:.1f}%  "
+                f"mean={np.mean(core):.3f}  std={np.std(core):.3f}"
+            )
         print(f"Thresholds     : {[f'{t:.3f}' for t in thresholds]}")
         print("Confusion Matrix (%):\n", np.round(conf_matrix_pct, 1))
 
@@ -771,5 +781,5 @@ def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
 
 __all__ = [
     "HistogramAnalysis", "histogram_metrics", "plot_hist", "general_hist",
-    "hist", "_fit_gmm", "_bic_gmm",
+    "hist", "fast_histogram_metrics", "_fit_gmm", "_bic_gmm",
 ]

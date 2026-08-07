@@ -387,6 +387,9 @@ class RandomizedBenchmarking(BaseExperiment):
                     fmt="none", ecolor=c, capsize=3, zorder=4)
         ax.scatter(self.x, avg, s=60, color=c, marker=marker,
                    edgecolors="black", label=label, zorder=5)
+        result = getattr(self, "result", None)
+        if result is not None and all(id(figure) != id(ax.figure) for figure in result.figures):
+            result.figures.append(ax.figure)
         return epc, epc_err, p_fit, p_fit_err, pCov
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None, title=None):
@@ -442,6 +445,7 @@ class RandomizedBenchmarking(BaseExperiment):
             },
             comment=str(dict_val), tag="RB",
             result=self.result,
+            figures=self._analysis_figures_for_save(),
         )
         print(f"RB data saved to {file_path}")
 
