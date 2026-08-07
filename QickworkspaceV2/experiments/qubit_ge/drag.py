@@ -186,6 +186,7 @@ class DragCalibration(BaseExperiment):
             fit_params=self.fit_params,
             fit_errors=self.fit_errors,
             fit_result={k: (v, None) for k, v in fit_result.items()},
+            figures=[self._last_analysis_figure] if getattr(self, "_last_analysis_figure", None) is not None else [],
             scalar_result=float(optimal_alpha) if optimal_alpha is not None else None,
             quality=QualityFlag.NO_INFORMATION,
             interrupted=interrupted,
@@ -352,6 +353,7 @@ class DragCalibration(BaseExperiment):
         fig.suptitle(self.TITLE_PREFIX, fontsize=13)
         fig.tight_layout()
         plt.show()
+        self._last_analysis_figure = fig
 
         optimal_alpha = round(float(optimal_alpha), 6)
         self.fit_params = np.array([optimal_alpha])

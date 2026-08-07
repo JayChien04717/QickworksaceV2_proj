@@ -69,71 +69,80 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             self._lorentzian_fallback(data, freqs, iq, exc)
 
     def plot(self, data: ExperimentData) -> None:
-        """Plot the operation.
-
-        Parameters
-        ----------
-        data : ExperimentData
-            Input data to process.
-        """
-        import matplotlib.pyplot as plt
+        """Render the stored ABCD fit with the framework's standard dashboard."""
+        from ..plotter.plot_utils import plot_fit_result
 
         if data.x_axis is None or data.raw_iq is None:
             return
 
-        f0    = (data.fit_result.get("f_res[MHz]") or data.fit_result.get("f0_MHz") or (None,))[0]
+        f0 = (
+            data.fit_result.get("f_res[MHz]")
+            or data.fit_result.get("f0_MHz")
+            or (None,)
+        )[0]
         kappa = data.fit_result.get("kappa_MHz", (None,))[0]
-        Qi    = data.fit_result.get("Qi",  (None,))[0]
-        Qc    = data.fit_result.get("Qc",  (None,))[0]
-        Ql    = data.fit_result.get("Ql",  (None,))[0]
-
-        title = "Resonator Spectroscopy"
-        if f0:    title += f"  |  f_res = {f0:.4f} MHz"
-        if kappa: title += f",  κ = {kappa:.3f} MHz"
-
-        # Lorentzian fallback (data.fit_params set) → use our standard panel
-        if data.fit_params is None:
-            try:
-                try:
-                    from abcd_rf_fit import analyze
-                except ImportError:
-                    from ..tools.abcd_rf_fit.abcd_rf_fit import analyze
-
-                solve_type = data.config.get("_solve_type", "hm")
-                fit_obj = analyze(
-                    data.x_axis * 1e6, data.raw_iq, solve_type, fit_edelay=True
-                )
-                fit_obj.plot(title=title)
-                plt.tight_layout()
-                plt.show()
-                return
-            except Exception:
-                pass  # fall through to Lorentzian panel
-
-        from ..tools.fitting import lorfunc
-
-        if data.fit_params is not None:
-            fit_params = data.fit_params
-        elif f0 is not None and kappa is not None:
-            amp    = np.max(np.abs(data.raw_iq)) - np.min(np.abs(data.raw_iq))
-            offset = np.min(np.abs(data.raw_iq))
-            fit_params = np.array([offset, -amp, f0, kappa / 2])
-        else:
-            fit_params = None
+        qi = data.fit_result.get("Qi", (None,))[0]
+        qc = data.fit_result.get("Qc", (None,))[0]
 
         lines = []
-        if f0:    lines.append(f"f_res  = {f0:.4f} MHz")
-        if kappa: lines.append(f"κ      = {kappa:.3f} MHz")
-        if Qi:    lines.append(f"Qi     = {int(Qi):,}")
-        if Qc:    lines.append(f"Qc     = {int(Qc):,}")
-        if Ql:    lines.append(f"Ql     = {int(Ql):,}")
+        if f0 is not None:
+            lines.append(f"f_res     = {f0:.3f} MHz")
+        if kappa is not None:
+            lines.append(f"linewidth = {kappa:.3f} MHz")
+        if qi is not None:
+            lines.append(f"Qi        = {int(qi):,}")
+        if qc is not None:
+            lines.append(f"Qc        = {int(qc):,}")
 
-        self._show_fit(
-            data, lorfunc, fit_params,
-            xlabel="Frequency (MHz)",
-            title=title,
-            result_text="\n".join(lines),
+        fit_entry = data.analysis_data.get("fit_curve", {})
+        fit_curve = (
+            fit_entry.get("values")
+            if isinstance(fit_entry, dict)
+            else fit_entry
         )
+        fit_params = None
+        fit_function = lambda values, *_: np.zeros_like(values, dtype=float)
+        channel_curves = {}
+        if fit_curve is not None:
+            fit_curve = np.asarray(fit_curve).reshape(-1)
+            x_values = np.asarray(data.x_axis, dtype=float).reshape(-1)
+            if fit_curve.size == x_values.size:
+                amplitude_curve = np.abs(fit_curve)
+
+                def fit_function(values, *_):
+                    return np.interp(values, x_values, amplitude_curve)
+
+                fit_params = np.empty(0)
+                if np.iscomplexobj(fit_curve):
+                    channel_curves = {
+                        "abs": amplitude_curve,
+                        "real": np.real(fit_curve),
+                        "imag": np.imag(fit_curve),
+                        "phase": np.unwrap(np.angle(fit_curve)),
+                    }
+                else:
+                    channel_curves = {"abs": amplitude_curve}
+
+        quality = (
+            data.quality.value
+            if data.quality is not None
+            else "no_information"
+        )
+        figure = plot_fit_result(
+            np.asarray(data.x_axis),
+            np.asarray(data.raw_iq),
+            fit_function,
+            fit_params,
+            x_label="Frequency (MHz)",
+            title="Resonator Spectroscopy",
+            result_text="\n".join(lines),
+            quality=quality,
+            fit_channel="abs",
+            channel_fit_curves=channel_curves,
+        )
+        if all(id(saved) != id(figure) for saved in data.figures):
+            data.figures.append(figure)
+        return figure
 
     def _lorentzian_fallback(self, data, freqs, iq, original_exc):
         """Fit a Lorentzian if circle fit fails.
@@ -179,62 +188,48 @@ class ResonatorSpecAnalysis(BaseAnalysis):
 
 
 class DispersiveShiftAnalysis(BaseAnalysis):
-    """Fit |g> and |e> resonator traces and report both 2chi and chi."""
+    """Empirical |g>/|e> resonator shift and readout-frequency SNR."""
 
     thresholds = {}
 
     def _run(self, data: ExperimentData) -> None:
-        """Run the operation.
-
-        Parameters
-        ----------
-        data : ExperimentData
-            Input data to process.
-        """
+        """Extract empirical g/e resonance points without any curve fit."""
         traces = np.asarray(data.raw_iq)
-        if data.x_axis is None or traces.ndim < 2 or traces.shape[0] != 2:
+        frequency = np.asarray(data.x_axis, dtype=float)
+        if frequency.ndim != 1 or traces.shape != (2, frequency.size):
             data.quality = QualityFlag.BAD
             data.quality_message = "Expected raw_iq with shape (2, frequency)"
             return
 
-        fitted = []
-        for state, trace in zip(("g", "e"), traces):
-            spectrum = ExperimentData(
-                experiment_type=f"resonator_spec_{state}",
-                raw_iq=np.squeeze(trace),
-                x_axis=np.asarray(data.x_axis),
-                config=dict(data.config),
-            )
-            ResonatorSpecAnalysis().run(spectrum)
-            frequency = (
-                spectrum.fit_result.get("f_res[MHz]")
-                or spectrum.fit_result.get("f0_MHz")
-            )
-            if frequency is None:
-                data.quality = QualityFlag.BAD
-                data.quality_message = f"Could not fit resonator spectrum for |{state}>"
-                return
-            fitted.append((float(frequency[0]), frequency[1]))
+        responses = []
+        resonance_indices = []
+        for trace in traces:
+            magnitude = np.abs(trace)
+            # Hanger/notch response: smooth three bins, then take the empirical
+            # minimum. This rejects single-bin noise without a resonator fit.
+            padded = np.pad(magnitude, (1, 1), mode="edge")
+            smoothed = np.convolve(padded, np.ones(3) / 3.0, mode="valid")
+            responses.append(smoothed)
+            resonance_indices.append(int(np.nanargmin(smoothed)))
 
-        f_g, f_e = fitted[0][0], fitted[1][0]
+        f_g = float(frequency[resonance_indices[0]])
+        f_e = float(frequency[resonance_indices[1]])
         shift = f_e - f_g
-        errors = [item[1] for item in fitted]
-        shift_error = None
-        if all(error is not None and np.isfinite(error) for error in errors):
-            shift_error = float(np.hypot(*errors))
         data.fit_result = {
-            "f_res_g_MHz": fitted[0],
-            "f_res_e_MHz": fitted[1],
-            "resonator_shift_MHz": (shift, shift_error),
-            "abs_resonator_shift_MHz": (abs(shift), shift_error),
-            "chi_MHz": (shift / 2, None if shift_error is None else shift_error / 2),
-            "abs_chi_MHz": (
-                abs(shift) / 2,
-                None if shift_error is None else shift_error / 2,
-            ),
+            "f_res_g_MHz": (f_g, None),
+            "f_res_e_MHz": (f_e, None),
+            "resonator_shift_MHz": (shift, None),
+            "abs_resonator_shift_MHz": (abs(shift), None),
+            "chi_MHz": (shift / 2.0, None),
+            "abs_chi_MHz": (abs(shift) / 2.0, None),
         }
-        data.scalar_result = shift / 2
-
+        data.analysis_data["dispersive_response"] = {
+            "values": np.asarray(responses),
+            "dims": ["state", "frequency"],
+        }
+        data.metadata["chi_method"] = "empirical_smoothed_magnitude_minimum"
+        data.scalar_result = shift / 2.0
+        data.quality = QualityFlag.GOOD
     def plot(self, data: ExperimentData) -> None:
         """Plot the operation.
 
@@ -252,7 +247,15 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         f_e = data.get_param("f_res_e_MHz")
         chi = data.get_param("chi_MHz")
 
-        fig, ax = plt.subplots(figsize=(8, 5))
+        snr_entry = data.analysis_data.get("readout_snr")
+        snr = snr_entry.get("values") if isinstance(snr_entry, dict) else snr_entry
+        has_snr = snr is not None and np.size(snr) == np.size(data.x_axis)
+        fig, axes = plt.subplots(
+            2 if has_snr else 1, 1,
+            figsize=(9, 8 if has_snr else 5), sharex=has_snr,
+        )
+        axes = np.atleast_1d(axes)
+        ax = axes[0]
         ax.plot(data.x_axis, np.abs(traces[0]), label="|g>")
         ax.plot(data.x_axis, np.abs(traces[1]), label="|e>")
         if f_g is not None:
@@ -262,11 +265,40 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         title = "Dispersive Shift"
         if chi is not None:
             title += f" | chi = {chi:.4f} MHz, 2chi = {2 * chi:.4f} MHz"
-        ax.set(title=title, xlabel="Frequency (MHz)", ylabel="|IQ| (ADC unit)")
+        ax.set(title=title, ylabel="|IQ| (ADC unit)")
         ax.legend()
         ax.grid(alpha=0.25)
+
+        if has_snr:
+            snr = np.asarray(snr, dtype=float)
+            best_frequency = data.get_param("best_readout_frequency_MHz")
+            best_index = int(np.nanargmax(snr))
+            if best_frequency is None:
+                best_frequency = float(np.asarray(data.x_axis)[best_index])
+            snr_ax = axes[1]
+            snr_ax.plot(data.x_axis, snr, ".-", color="C2")
+            snr_ax.axvline(
+                best_frequency, color="red", linestyle="--",
+                label=f"best = {best_frequency:.6f} MHz",
+            )
+            snr_ax.scatter(
+                [best_frequency], [snr[best_index]],
+                marker="*", s=120, color="red", zorder=3,
+            )
+            snr_ax.set(
+                title=f"Readout-frequency SNR | max = {snr[best_index]:.3f}",
+                xlabel="Frequency (MHz)", ylabel="SNR",
+            )
+            snr_ax.legend()
+            snr_ax.grid(alpha=0.25)
+        else:
+            ax.set_xlabel("Frequency (MHz)")
+
         fig.tight_layout()
+        if fig not in data.figures:
+            data.figures.append(fig)
         plt.show()
+        return fig
 
 
 class ResonatorPunchoutAnalysis(BaseAnalysis):

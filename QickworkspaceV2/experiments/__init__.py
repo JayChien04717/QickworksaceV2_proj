@@ -4,7 +4,7 @@ from .qubit_ge import (
     QubitSpec, QubitSpecFlux, TimeRabi, PowerRabi, PowerRabiReset,
     ActiveResetRabi,
 )
-from .coherence import Ramsey, ACStark, SpinEcho, T1, RamseyEf, T1Ef
+from .coherence import Ramsey, ActiveResetRamsey, ACStark, SpinEcho, T1, RamseyEf, T1Ef
 from .qubit_ef import ResonatorSpec_ef, QubitSpecEf, PowerRabiEf, QubitTemp
 from .characterization import (
     AllXY, RandomizedBenchmarking, AutoRB,
@@ -22,7 +22,7 @@ __all__ = [
     "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
-    "Ramsey", "ACStark", "SpinEcho", "T1",
+    "Ramsey", "ActiveResetRamsey", "ACStark", "SpinEcho", "T1",
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "RamseyEf", "T1Ef", "QubitTemp",
     "AllXY",
     "RandomizedBenchmarking", "AutoRB",

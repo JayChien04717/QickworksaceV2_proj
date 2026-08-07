@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import RBAnalysis
 from ...tools.fitting import fitrb, rb_func, rb_error, error_fit_err
@@ -52,6 +53,29 @@ def _safe_rb_file_suffix(label):
     for char in '<>:"/\\|?*':
         suffix = suffix.replace(char, "_")
     return suffix
+
+
+def _rb_sample_matrix(raw, n_depths, n_samples, iq_process,
+                      threshold_discrimination=False):
+    """Return one processed scalar for each (depth, randomized sample)."""
+    values = np.asarray(raw)
+    processed = np.real(values) if iq_process == "real" else np.abs(values)
+    expected = int(n_depths) * int(n_samples)
+    if expected <= 0 or processed.size % expected:
+        raise ValueError(
+            "RB data cannot be reshaped to "
+            f"(depth={n_depths}, sample={n_samples}); got {values.shape}"
+        )
+    grouped = processed.reshape(n_depths, n_samples, -1)
+    if threshold_discrimination:
+        # Older QICK scalar returns can retain [population, Q-placeholder].
+        # Select the population rather than averaging it with the placeholder.
+        above_threshold = (
+            grouped[..., 0] if grouped.shape[2] == 2 else grouped.mean(axis=2)
+        )
+        # QICK reports the above-threshold/e declaration; RB plots g survival.
+        return 1.0 - above_threshold
+    return grouped.mean(axis=2)
 
 
 class RBProgram(BaseProgram):
@@ -122,6 +146,7 @@ class RandomizedBenchmarking(BaseExperiment):
         self._number_sample = None
         self._interleaved = None
         self._iq_process = "abs"
+        self._threshold_discrimination = False
 
     def run(
         self,
@@ -170,7 +195,15 @@ class RandomizedBenchmarking(BaseExperiment):
         """
         from ...tools.rb_generator import single_qb_rb, INTERLEAVE_GATES
 
-        self._iq_process = iq_process
+        threshold = self._get_readout_threshold()
+        threshold_discrimination = threshold is not None
+        self._threshold_discrimination = threshold_discrimination
+        self._iq_process = "real" if threshold_discrimination else iq_process
+        if threshold_discrimination:
+            print(
+                f"[RB] QICK threshold={threshold!r}; "
+                "reporting ground survival P(g)=1-P(I>threshold)."
+            )
         self.x = np.arange(1, max_circuit_depth, delta_clifford)
         self._number_sample = number_sample
         self._interleaved = interleaved_gate
@@ -221,10 +254,14 @@ class RandomizedBenchmarking(BaseExperiment):
                 for sample_idx in tqdm(
                     range(number_sample), desc="Samples", leave=False
                 ):
-                    acquired = programs_matrix[idx][sample_idx].acquire(
-                        self.soc, rounds=1, progress=False
+                    iq_data = acquire_values(
+                        programs_matrix[idx][sample_idx],
+                        self.soc,
+                        rounds=1,
+                        progress=False,
+                        threshold=threshold,
+                        scalar_readout=True,
                     )
-                    iq_data = acquired[0][0].dot([1, 1j])
                     previous = rb_accum[idx][sample_idx]
                     rb_accum[idx][sample_idx] = (
                         iq_data if previous is None else previous + iq_data
@@ -236,23 +273,33 @@ class RandomizedBenchmarking(BaseExperiment):
         ]
 
         raw_iq = np.asarray(self.rb_result)
-        _proc = np.real if iq_process == "real" else np.abs
-        avg = _proc(raw_iq).reshape(n_depths, -1).mean(axis=1)
+        avg = _rb_sample_matrix(
+            raw_iq, n_depths, number_sample, self._iq_process,
+            threshold_discrimination,
+        ).mean(axis=1)
+        metadata = {
+            "qubit": self.cfg.get("name"),
+            "iq_process": self._iq_process,
+            "number_sample": number_sample,
+            "interleaved_gate": interleaved_gate,
+            "prefix": prefix,
+            "seeds": seeds_matrix,
+            "gate_sequences": sequences_matrix,
+            "randomized_depth_order": self.x[depth_indices].tolist(),
+        }
+        if threshold_discrimination:
+            metadata.update({
+                "threshold": threshold,
+                "threshold_discrimination": True,
+                "raw_threshold_population": "above_threshold",
+                "reported_population": "ground_survival",
+            })
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=raw_iq,
             x_axis=self.x.astype(float),
             y_axis=avg,
-            metadata={
-                "qubit": self.cfg.get("name"),
-                "iq_process": iq_process,
-                "number_sample": number_sample,
-                "interleaved_gate": interleaved_gate,
-                "prefix": prefix,
-                "seeds": seeds_matrix,
-                "gate_sequences": sequences_matrix,
-                "randomized_depth_order": self.x[depth_indices].tolist(),
-            },
+            metadata=metadata,
             axes={
                 "depth": {"values": self.x.astype(float), "label": "Circuit depth", "unit": "# Cliffords"},
                 "sample": {"values": np.arange(number_sample), "unit": "#"},
@@ -307,8 +354,18 @@ class RandomizedBenchmarking(BaseExperiment):
             raise RuntimeError("Call run() first.")
         _proc = np.real if self._iq_process == "real" else np.abs
         raw = np.array(self.rb_result)
-        amp = _proc(raw)
-        avg = amp.reshape(len(self.x), -1).mean(axis=1)
+        # Acquisition can retain singleton/readout dimensions after the
+        # (depth, randomized-sample) axes. Treat every value belonging to a
+        # depth consistently for the mean, SEM, and individual traces.
+        threshold_discrimination = getattr(
+            self, "_threshold_discrimination",
+            self._get_readout_threshold() is not None,
+        )
+        samples = _rb_sample_matrix(
+            raw, len(self.x), self._number_sample, self._iq_process,
+            threshold_discrimination,
+        )
+        avg = samples.mean(axis=1)
         pOpt, pCov = fitrb(self.x, avg)
         p_fit = pOpt[0]
         p_fit_err = float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
@@ -321,14 +378,18 @@ class RandomizedBenchmarking(BaseExperiment):
             _, ax = plt.subplots(figsize=(7, 5))
         c = color or "steelblue"
         if show_individual:
-            for s in range(amp.shape[1]):
-                ax.scatter(self.x, amp[:, s], s=6, color="gray", alpha=0.25, linewidths=0, zorder=1)
+            for s in range(samples.shape[1]):
+                ax.scatter(self.x, samples[:, s], s=6, color="gray", alpha=0.25, linewidths=0, zorder=1)
         xfit = np.linspace(self.x.min(), self.x.max(), 400)
         ax.plot(xfit, rb_func(xfit, *pOpt), color=c, linewidth=2.0, zorder=3)
-        ax.errorbar(self.x, avg, yerr=amp.std(axis=1)/np.sqrt(amp.shape[1]),
+        sem = samples.std(axis=1) / np.sqrt(samples.shape[1])
+        ax.errorbar(self.x, avg, yerr=sem,
                     fmt="none", ecolor=c, capsize=3, zorder=4)
         ax.scatter(self.x, avg, s=60, color=c, marker=marker,
                    edgecolors="black", label=label, zorder=5)
+        result = getattr(self, "result", None)
+        if result is not None and all(id(figure) != id(ax.figure) for figure in result.figures):
+            result.figures.append(ax.figure)
         return epc, epc_err, p_fit, p_fit_err, pCov
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None, title=None):
@@ -371,9 +432,20 @@ class RandomizedBenchmarking(BaseExperiment):
             filepath=file_path,
             x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
             y_info={"name": "Sample Number", "unit": "", "values": np.arange(self._number_sample, dtype=float)},
-            z_info={"name": "Signal", "unit": "ADC unit", "values": np.array(self.rb_result).T},
+            z_info={
+                "name": "Signal", "unit": "ADC unit",
+                "values": _rb_sample_matrix(
+                    self.rb_result, len(self.x), self._number_sample,
+                    self._iq_process,
+                    getattr(
+                        self, "_threshold_discrimination",
+                        self._get_readout_threshold() is not None,
+                    ),
+                ).T,
+            },
             comment=str(dict_val), tag="RB",
             result=self.result,
+            figures=self._analysis_figures_for_save(),
         )
         print(f"RB data saved to {file_path}")
 
@@ -533,7 +605,14 @@ class AutoRB:
             print(f"  Gate '{label}': F = {f_gate*100:.4f}%, EPC = {epc_gate*100:.4f} ± {epc_gate_err*100:.4f} %")
 
         ax.set_xlabel("Circuit Depth (# Cliffords)")
-        ax.set_ylabel("Signal (a.u.)")
+        if getattr(
+            ref_rb, "_threshold_discrimination",
+            ref_rb._get_readout_threshold() is not None,
+        ):
+            ax.set_ylabel("Ground-state survival probability")
+            ax.set_ylim(-0.02, 1.02)
+        else:
+            ax.set_ylabel("Signal (a.u.)")
         ax.legend()
         ax.grid(True, alpha=0.3)
         fig.tight_layout()

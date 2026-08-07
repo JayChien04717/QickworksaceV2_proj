@@ -15,25 +15,25 @@ from ...analysis.rb import AllXYAnalysis
 
 
 ALLXY_SEQUENCE = [
-    ("I",   "I"),
-    ("X",   "X"),
-    ("Y",   "Y"),
-    ("X",   "Y"),
-    ("Y",   "X"),
+    ("I", "I"),
+    ("X", "X"),
+    ("Y", "Y"),
+    ("X", "Y"),
+    ("Y", "X"),
     ("X/2", "I"),
     ("Y/2", "I"),
     ("X/2", "Y/2"),
     ("Y/2", "X/2"),
     ("X/2", "Y"),
     ("Y/2", "X"),
-    ("X",   "Y/2"),
-    ("Y",   "X/2"),
+    ("X", "Y/2"),
+    ("Y", "X/2"),
     ("X/2", "X"),
-    ("X",   "X/2"),
+    ("X", "X/2"),
     ("Y/2", "Y"),
-    ("Y",   "Y/2"),
-    ("X",   "I"),
-    ("Y",   "I"),
+    ("Y", "Y/2"),
+    ("X", "I"),
+    ("Y", "I"),
     ("X/2", "X/2"),
     ("Y/2", "Y/2"),
 ]
@@ -122,8 +122,13 @@ class AllXY(BaseExperiment):
                 final_delay=self.cfg["relax_delay"],
                 cfg=self.cfg,
             )
-            iq_list = prog.acquire(self.soc, rounds=py_avg, progress=False)
-            allxy_lst.append(iq_list[0][0].dot([1, 1j]))
+            iq_list = prog.acquire(
+                self.soc, rounds=py_avg, progress=False, threshold=self.cfg["threshold"]
+            )
+            if self.cfg["threshold"] is not None:
+                allxy_lst.append(np.real(iq_list[0][0].dot([1, 1j])))
+            else:
+                allxy_lst.append(iq_list[0][0].dot([1, 1j]))
         self.allxy_lst = np.array(allxy_lst)
 
         result = ExperimentData(
@@ -160,11 +165,23 @@ class AllXY(BaseExperiment):
         _proc = np.real if self._iq_process == "real" else np.abs
         amp = _proc(self.allxy_lst)
         if amp[0] < amp[-1]:
-            ref = [np.min(amp)] * 5 + [(np.max(amp) + np.min(amp)) / 2] * 12 + [np.max(amp)] * 4
+            ref = (
+                [np.min(amp)] * 5
+                + [(np.max(amp) + np.min(amp)) / 2] * 12
+                + [np.max(amp)] * 4
+            )
         else:
-            ref = [np.max(amp)] * 5 + [(np.max(amp) + np.min(amp)) / 2] * 12 + [np.min(amp)] * 4
+            ref = (
+                [np.max(amp)] * 5
+                + [(np.max(amp) + np.min(amp)) / 2] * 12
+                + [np.min(amp)] * 4
+            )
         if len(ref) != len(amp):
-            ref = ref[:len(amp)] if len(ref) > len(amp) else ref + [ref[-1]] * (len(amp) - len(ref))
+            ref = (
+                ref[: len(amp)]
+                if len(ref) > len(amp)
+                else ref + [ref[-1]] * (len(amp) - len(ref))
+            )
         plt.figure(figsize=(10, 5))
         plt.plot(amp, "bo", label="Data")
         plt.plot(ref, "r-", label="Reference Line")
@@ -187,9 +204,16 @@ class AllXY(BaseExperiment):
         config_all : Any, default: None
             Value for ``config_all``.
         """
-        from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
+        from ...tools.system_tool import (
+            hdf5_generator,
+            get_next_filename_labber,
+            config_to_yaml,
+        )
+
         save_dir = BaseExperiment._data_path
-        file_path = get_next_filename_labber(save_dir, f"{self.EXPT_NAME}_{qb_idx}", yoko_value)
+        file_path = get_next_filename_labber(
+            save_dir, f"{self.EXPT_NAME}_{qb_idx}", yoko_value
+        )
         config_yaml = (
             config_all.to_yaml(q_id=qb_idx)
             if config_all is not None
@@ -197,7 +221,11 @@ class AllXY(BaseExperiment):
         )
         hdf5_generator(
             filepath=file_path,
-            x_info={"name": "Sequence", "unit": "None", "values": np.arange(len(ALLXY_SEQUENCE))},
+            x_info={
+                "name": "Sequence",
+                "unit": "None",
+                "values": np.arange(len(ALLXY_SEQUENCE)),
+            },
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
             comment=str(config_yaml),
             tag=self.TAG,

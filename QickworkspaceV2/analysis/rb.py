@@ -34,7 +34,16 @@ class RBAnalysis(BaseAnalysis):
         from ..tools.fitting import fitrb, rb_func
 
         x = data.x_axis  # Clifford lengths
-        raw = np.abs(np.asarray(data.raw_iq))
+        threshold_discrimination = bool(
+            data.metadata.get("threshold_discrimination")
+        )
+        fit_channel = "real" if threshold_discrimination else "abs"
+        raw_iq = np.asarray(data.raw_iq)
+        raw = (
+            1.0 - np.real(raw_iq)
+            if threshold_discrimination
+            else np.abs(raw_iq)
+        )
         y = raw if raw.ndim == 1 else raw.reshape(len(data.x_axis), -1).mean(axis=1)
 
         try:
@@ -58,7 +67,10 @@ class RBAnalysis(BaseAnalysis):
             }
             data.scalar_result = fidelity
             fit_curve = rb_func(x, *popt)
-            data.metadata.update({"fit_model": "rb_decay", "fit_channel": "abs"})
+            data.metadata.update({
+                "fit_model": "rb_decay",
+                "fit_channel": fit_channel,
+            })
             data.analysis_data.update({
                 "fit_input": {"values": y, "dims": ["x"]},
                 "fit_curve": {"values": fit_curve, "dims": ["x"]},

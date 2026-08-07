@@ -1,4 +1,4 @@
-﻿"""
+"""
 AutoCalibrate: Rebuilt ge calibration pipeline using the composite framework.
 
 Reproduces the full qick_workspace auto_calibrate.py logic with:
@@ -644,59 +644,45 @@ class AutoCalibrate:
         return T1_val
 
 
-    def step_ss_opt(self, shots=1000, coarse_pts=(5, 3, 3), bo_n_iter=15, bo_xi=0.02):
-        """Return the step ss opt result.
+    def step_ss_opt(self, shots=1000, coarse_pts=(5, 5)):
+        """Optimize only readout length and gain with empirical shot metrics."""
+        from ..experiments.setup.single_shot import SingleShot_ge_opt, SingleShot_gef
 
-        Parameters
-        ----------
-        shots : Any, default: 1000
-            Value for ``shots``.
-        coarse_pts : Any, default: (5, 3, 3)
-            Value for ``coarse_pts``.
-        bo_n_iter : Any, default: 15
-            Value for ``bo_n_iter``.
-        bo_xi : Any, default: 0.02
-            Value for ``bo_xi``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        from ..experiments.setup.single_shot import SingleShot_ge_opt, SingleShot_gef, hist
         run_cfg = self._cfg()
-        freq_centre = run_cfg["res_freq_ge"]
-        n_freq, n_gain, n_len = coarse_pts
+        n_len, n_gain = coarse_pts
+        length0 = float(run_cfg["ro_length"])
+        gain0 = float(run_cfg["res_gain_ge"])
         sweep_para = {
-            "freq":   np.linspace(freq_centre - 1.0, freq_centre + 8.0, n_freq),
-            "gain":   np.linspace(0.07, 0.10, n_gain),
-            "length": np.linspace(2.0, 4.0, n_len),
+            "length": np.linspace(max(0.5, 0.6 * length0), 1.4 * length0, n_len),
+            "gain": np.linspace(max(0.01, 0.6 * gain0), min(0.95, 1.4 * gain0), n_gain),
         }
-        self._log("ss_opt", f"Phase 1: coarse grid {n_freq}×{n_gain}×{n_len} = {n_freq*n_gain*n_len} pts")
-        ssh_opt = SingleShot_ge_opt(run_cfg)
-        ssh_opt.run(shots, sweep_para=sweep_para)
-        self._log("ss_opt", f"Phase 2: GP surrogate + {bo_n_iter} online BO steps")
-        length, gain, freq = ssh_opt.analyze(bo_n_iter=bo_n_iter, bo_xi=bo_xi, pareto=True)
+        self._log("ss_opt", f"Empirical length x gain grid: {n_len}x{n_gain}")
+        optimizer = SingleShot_ge_opt(run_cfg)
+        optimizer.run(shots, sweep_para=sweep_para)
+        length, gain = optimizer.analyze()
 
-        self._update("ro_length",   length)
+        self._update("ro_length", length)
         self._update("res_gain_ge", gain)
-        self._update("res_freq_ge", freq)
         self._update("res_phase", 0)
 
         run_cfg = self._cfg()
-        ssh = SingleShot_gef(run_cfg)
-        ssh.run(5000, shot_f=False)
-        ssh_result = ssh.plot(fid_avg=True, verbose=True)
-        phase    = float(ssh_result[2])
-        fidelity = float(ssh_result[0][0]) if hasattr(ssh_result[0], "__len__") else float(ssh_result[0])
+        single_shot = SingleShot_gef(run_cfg)
+        single_shot.run(5000, shot_f=False)
+        result = single_shot.plot(fid_avg=True, verbose=True)
+        phase = float(result[2])
+        fidelity = float(result[0][0]) if hasattr(result[0], "__len__") else float(result[0])
         self._update("res_phase", phase)
 
-        self.results.update(dict(ro_length=length, res_gain_ge=gain, res_freq_ge=freq,
-                                 res_phase_deg=phase, readout_fidelity=fidelity))
-        self._log("ss_opt", f"Best: length={length:.3f} µs, gain={gain:.5f}, freq={freq:.4f} MHz")
-        self._log("ss_opt", f"res_phase={phase:.2f} deg, fidelity={fidelity:.4f}")
-        return length, gain, freq
-
+        self.results.update(dict(
+            ro_length=length, res_gain_ge=gain,
+            res_freq_ge=run_cfg["res_freq_ge"],
+            res_phase_deg=phase, readout_fidelity=fidelity,
+        ))
+        self._log(
+            "ss_opt",
+            f"Best: length={length:.3f} us, gain={gain:.5f}, fidelity={fidelity:.4f}",
+        )
+        return length, gain
 
     def _gp_predict_zero_crossing(self, freq_vals: list[float], error_vals: list[float]) -> float | None:
         """Return the gp predict zero crossing result.

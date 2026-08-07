@@ -147,6 +147,9 @@ def hdf5_generator(
         except Exception:
             data_root = None
 
+    if figures is None and result is not None:
+        figures = getattr(result, "figures", None)
+
     saver = LabberHDF5Saver(
         filename_mode=filename_mode,
         embed_native=embed_native,

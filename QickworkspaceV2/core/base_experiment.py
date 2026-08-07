@@ -356,10 +356,36 @@ class BaseExperiment:
             result = analysis_inst.run(result)
             if ctx.plot_analysis:
                 renderer = getattr(analysis_inst, "render", analysis_inst.plot)
-                renderer(result)
+                self._render_and_capture_analysis(renderer, result)
             self.result = result
 
         return result
+
+    @staticmethod
+    def _render_and_capture_analysis(renderer, result):
+        """Render analysis and retain every Matplotlib figure it creates."""
+        import matplotlib.pyplot as plt
+
+        before = set(plt.get_fignums())
+        rendered = renderer(result)
+        candidates = []
+        if hasattr(rendered, "savefig"):
+            candidates.append(rendered)
+        elif isinstance(rendered, (list, tuple)):
+            candidates.extend(item for item in rendered if hasattr(item, "savefig"))
+        candidates.extend(plt.figure(number) for number in plt.get_fignums() if number not in before)
+        known = {id(figure) for figure in result.figures}
+        for figure in candidates:
+            if id(figure) not in known:
+                result.figures.append(figure)
+                known.add(id(figure))
+        return rendered
+
+    def _analysis_figures_for_save(self):
+        """Return figures explicitly rendered by ``plot_analysis=True`` or ``plot()``."""
+        if self.result is None:
+            return []
+        return list(self.result.figures)
 
     def plot(
         self,
@@ -417,7 +443,7 @@ class BaseExperiment:
         result = analysis_inst.run(result)
         self.result = result
         renderer = getattr(analysis_inst, "render", analysis_inst.plot)
-        renderer(result)
+        self._render_and_capture_analysis(renderer, result)
         return result
 
     def _plot_raw_result(self, result: ExperimentData) -> None:
@@ -640,6 +666,7 @@ class BaseExperiment:
             comment=comment,
             tag=self.TAG,
             result=self.result,
+            figures=self._analysis_figures_for_save(),
             filename_mode=filename_mode,
         )
         print(f"Data saved to {saved_path}")
@@ -777,6 +804,8 @@ class BaseExperiment:
         """
         if not hasattr(self.cfg, "get"):
             return None
+        if self.cfg.get("threshold") is None and self.cfg.get("theshold") is not None:
+            raise KeyError("Config key 'theshold' is misspelled; use 'threshold'.")
         return self.cfg.get("threshold")
 
 

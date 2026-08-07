@@ -371,7 +371,8 @@ class ResultBuilder:
         ExperimentData
             Result of the operation.
         """
-        metadata = {"iq_process": ctx.iq_process, **acq.metadata}
+        iq_process = "real" if acq.metadata.get("threshold_discrimination") else ctx.iq_process
+        metadata = {"iq_process": iq_process, **acq.metadata}
         required_keys = dict.fromkeys((
             "fit_channel",
             *getattr(experiment.Analysis, "REQUIRED_CONFIG_KEYS", ()),

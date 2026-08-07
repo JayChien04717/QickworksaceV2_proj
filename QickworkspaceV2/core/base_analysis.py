@@ -124,7 +124,7 @@ class BaseAnalysis(ABC):
             xlabel = data.x_name or "x"
             if data.x_unit:
                 xlabel = f"{xlabel} ({data.x_unit})"
-        plot_fit_result(
+        figure = plot_fit_result(
             x,
             raw_iq,
             lambda values, *_: np.zeros_like(values, dtype=float),
@@ -135,6 +135,9 @@ class BaseAnalysis(ABC):
             quality=data.quality.value,
             fit_channel=data.metadata.get("fit_channel", "abs"),
         )
+        if all(id(saved) != id(figure) for saved in data.figures):
+            data.figures.append(figure)
+        return figure
 
     @staticmethod
     def _raw_plot_trace(data: "ExperimentData"):
@@ -216,12 +219,18 @@ class BaseAnalysis(ABC):
         quality = data.quality.value if data.quality is not None else "no_information"
         fit_channel = data.metadata.get("fit_channel", "abs")
         fit_snr = data.metadata.get("fit_channel_snr")
+        channel_fit_curves = {}
+        for channel, payload in (data.analysis_data.get("fit_curves") or {}).items():
+            if isinstance(payload, dict) and "values" in payload:
+                channel_fit_curves[channel] = payload["values"]
+            else:
+                channel_fit_curves[channel] = payload
         if fit_channel:
             channel_text = f"channel = {fit_channel}"
             if fit_snr is not None:
                 channel_text += f"  SNR={fit_snr:.2f}"
             result_text = f"{result_text}\n{channel_text}" if result_text else channel_text
-        plot_fit_result(
+        figure = plot_fit_result(
             data.x_axis, data.raw_iq, simfunc, fit_params,
             x_label=xlabel,
             title=title,
@@ -229,7 +238,11 @@ class BaseAnalysis(ABC):
             quality=quality,
             extra_lines=extra_lines,
             fit_channel=fit_channel,
+            channel_fit_curves=channel_fit_curves,
         )
+        if all(id(saved) != id(figure) for saved in data.figures):
+            data.figures.append(figure)
+        return figure
 
     @staticmethod
     def _channel_data(iq_data, channel: str):
@@ -274,81 +287,74 @@ class BaseAnalysis(ABC):
         raise ValueError(f"Unknown fit_channel '{channel}'")
 
     def _fit_channel(self, data, fitfunc, simfunc, *, fitparams=None, channels=None):
-        """Fit one or more IQ channels and return the best result.
+        """Fit IQ channels, retain every successful curve, and return the primary fit.
 
-                        ``data.config['fit_channel']`` defaults to ``'auto'``.  In auto mode the
-                        score is the fitted curve span divided by residual standard deviation.
-
-        Parameters
-        ----------
-        data : Any
-            Input data to process.
-        fitfunc : Any
-            Value for ``fitfunc``.
-        simfunc : Any
-            Value for ``simfunc``.
-        fitparams : Any, default: None
-            Value for ``fitparams``.
-        channels : Any, default: None
-            Value for ``channels``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-
-        Raises
-        ------
-        RuntimeError
-            If the operation cannot be completed.
-        ValueError
-            If the operation cannot be completed.
+        Auto mode selects the curve with the highest fitted-span/residual-noise
+        score.  An explicitly requested channel remains primary, while the
+        other channels are still fitted for analysis dashboards and the data
+        library viewer.
         """
         if data.x_axis is None or data.raw_iq is None:
             raise ValueError("Missing x_axis or raw_iq")
 
-        requested_value = self._config_value(data, "fit_channel", "auto")
-        requested = requested_value.lower() if isinstance(requested_value, str) else "auto"
-        requested = requested or "auto"
-        if requested == "auto":
-            channels = channels or ("abs", "real", "imag", "phase")
+        aliases = {"amplitude": "abs", "amp": "abs", "i": "real", "q": "imag"}
+        if data.metadata.get("threshold_discrimination"):
+            requested = "real"
+            fit_channels = ("real",)
         else:
-            channels = (requested,)
+            requested_value = self._config_value(data, "fit_channel", "auto")
+            requested = requested_value.lower() if isinstance(requested_value, str) else "auto"
+            requested = aliases.get(requested or "auto", requested or "auto")
+            fit_channels = tuple(channels or ("abs", "real", "imag", "phase"))
+            fit_channels = tuple(dict.fromkeys(aliases.get(item, item) for item in fit_channels))
+            if requested != "auto" and requested not in fit_channels:
+                fit_channels = (requested, *fit_channels)
 
         x = np.asarray(data.x_axis)
-        best = None
+        channel_results = {}
         errors = []
-        for channel in channels:
+        for channel in fit_channels:
             try:
                 y = np.asarray(self._channel_data(data.raw_iq, channel), dtype=float)
                 local_fitparams = list(fitparams) if fitparams is not None else None
                 popt, pcov, _ = fitfunc(x, y, fitparams=local_fitparams)
-                fit_y = simfunc(x, *popt)
+                popt = np.asarray(popt)
+                fit_y = np.asarray(simfunc(x, *popt), dtype=float)
                 residual = y - fit_y
                 noise = float(np.nanstd(residual))
                 span = float(np.nanmax(fit_y) - np.nanmin(fit_y))
                 score = span / max(noise, 1e-12)
-                if not np.all(np.isfinite(popt)) or not np.isfinite(score):
+                if not np.all(np.isfinite(popt)) or not np.all(np.isfinite(fit_y)) or not np.isfinite(score):
                     raise RuntimeError("non-finite fit result")
-                candidate = (score, channel, y, np.asarray(popt), pcov)
-                if best is None or candidate[0] > best[0]:
-                    best = candidate
+                channel_results[channel] = (score, channel, y, popt, pcov, fit_y)
             except Exception as exc:
                 errors.append(f"{channel}: {exc}")
 
-        if best is None:
+        if not channel_results:
             raise RuntimeError("; ".join(errors) if errors else "no channels fit")
 
-        score, channel, y, popt, pcov = best
+        if requested != "auto" and requested in channel_results:
+            best = channel_results[requested]
+        else:
+            best = max(channel_results.values(), key=lambda candidate: candidate[0])
+        score, channel, y, popt, pcov, fit_y = best
         data.metadata["fit_channel"] = channel
         data.metadata["fit_channel_snr"] = float(score)
-        fit_y = np.asarray(simfunc(np.asarray(data.x_axis), *popt), dtype=float)
+        data.metadata["fit_channel_scores"] = {
+            name: float(candidate[0]) for name, candidate in channel_results.items()
+        }
+        data.metadata["fit_channel_errors"] = errors
         data.analysis_data.update({
             "fit_input": {"values": np.asarray(y, dtype=float), "dims": ["x"]},
             "fit_curve": {"values": fit_y, "dims": ["x"]},
-            "residual": {
-                "values": np.asarray(y, dtype=float) - fit_y,
-                "dims": ["x"],
+            "residual": {"values": np.asarray(y, dtype=float) - fit_y, "dims": ["x"]},
+            "fit_inputs": {
+                name: {"values": candidate[2], "dims": ["x"]}
+                for name, candidate in channel_results.items()
+            },
+            "fit_curves": {
+                name: {"values": candidate[5], "dims": ["x"]}
+                for name, candidate in channel_results.items()
             },
         })
         return y, popt, pcov, channel, float(score)

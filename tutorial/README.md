@@ -72,7 +72,7 @@ The repository also includes a local viewer:
 python hdf5_viewer/hdf5_viewer_server.py
 ```
 
-Open `http://127.0.0.1:8000`, choose a data folder, and use **Rebuild** if the
+Open `http://127.0.0.1:8765`, choose a data folder, and use **Rebuild** if the
 catalog is missing or stale. On Windows, `hdf5_viewer/start_hdf5_viewer.bat` launches the
 same server.
 
