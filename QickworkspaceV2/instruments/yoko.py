@@ -56,8 +56,8 @@ class YOKOGS200(DCSourceInstrument):
         self.ramp_progress_leave = False
 
         self._output_map = {
-            "on": "1", "1": "1", 1: "1", True: "1",
-            "off": "0", "0": "0", 0: "0", False: "0",
+            "on": "1", "1": "1", 1: "1",
+            "off": "0", "0": "0", 0: "0",
         }
         self._output_map_inv = {"1": "on", "0": "off"}
         self._mode_map = {"voltage": "VOLT", "current": "CURR"}

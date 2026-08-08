@@ -1,49 +1,47 @@
 # Core execution workflow
 
-`BaseExperiment.run()` 負責完整的 experiment lifecycle。執行方式與 readout
-方式是兩個獨立維度：`Direct`、`Live` 決定 acquisition 如何執行；
-`Threshold` 只決定 acquisition data 如何解碼，因此也可以搭配 live plot。
+`BaseExperiment.run()` owns the common experiment lifecycle. Experiment classes
+provide a QICK program and sweep axes; core code handles acquisition, result
+construction, optional analysis, plotting, and storage.
 
 ```mermaid
 flowchart LR
-    User["BaseExperiment.run()"] --> Options["RunContext<br/>解析本次執行選項"]
-    Options --> Program["build_program()<br/>建立 QICK Program"]
-    Program --> Axes["SweepResolver<br/>解析 x / y axes"]
-    Axes --> Execution{"Execution mode"}
-
-    Execution --> Direct["Direct<br/>single acquire<br/>rounds = py_avg"]
-    Execution --> Live["Live<br/>incremental acquire + render"]
-
-    Direct --> Instrument{"Instrument sweep?"}
-    Live --> Instrument
-    Instrument -->|No| Single["Program acquisition"]
-    Instrument -->|Yoko| OuterLoop["Yoko outer loop"]
-
-    Single --> Readout{"Readout mode"}
-    OuterLoop --> Readout
-    Readout -->|IQ| IQ["Complex IQ values"]
-    Readout -->|Threshold| Threshold["Discriminated population"]
-
-    IQ --> Acq["AcquisitionResult"]
-    Threshold --> Acq
-    Acq --> Builder["ResultBuilder<br/>fit + metadata + dimensions"]
-    Builder --> Analysis["Analysis.run()"]
-    Analysis --> Result["ExperimentData"]
-
-    Result --> Plot["Plotting<br/>independent and optional"]
-    Result --> Storage["HDF5 / Legacy Labber<br/>independent and optional"]
+    Run["BaseExperiment.run()"] --> Context["RunContext"]
+    Context --> Program["Build QICK program"]
+    Program --> Axes["Resolve x/y sweep axes"]
+    Axes --> Acquire["AcquisitionRunner"]
+    Acquire --> Decode["Decode IQ or threshold population"]
+    Decode --> Result["AcquisitionResult"]
+    Result --> Builder["ResultBuilder"]
+    Builder --> Analysis["Optional Analysis.run()"]
+    Analysis --> Data["ExperimentData"]
+    Data --> Plot["Optional plotting"]
+    Data --> Save["Native HDF5 or legacy Labber save"]
 ```
+
+## Data contract
+
+- `ExperimentData.raw_iq` is the primary trace used by analysis.
+- `x_axis` and `y_axis` are sweep coordinates only.
+- A multi-readout program keeps all readouts in `raw_data["readouts"]` with a
+  leading `readout` dimension. `get_readout()` retrieves an index or named
+  readout while preserving the single-readout API.
+- `analysis_data` contains derived arrays such as fit curves, residuals, and
+  verification populations; it is not a substitute for raw acquisition data.
+- `dataset_dims` names every stored dataset dimension for native HDF5.
 
 ## Responsibility map
 
 | Responsibility | Core module |
 | --- | --- |
 | Experiment lifecycle and public `run()` API | `base_experiment.py` |
-| Run options, sweep resolution, execution dispatch, result building | `experiment_components.py` |
-| Shared QICK acquisition and IQ/threshold decoding | `acquisition.py` |
-| QICK program setup and pulse sequence base | `base_program.py`, `qubit_pulse.py` |
+| Run options, sweep resolution, dispatch, and result building | `experiment_components.py` |
+| QICK acquisition and IQ/threshold decoding | `acquisition.py` |
+| QICK program, pulse, measurement, and active-reset setup | `base_program.py`, `qubit_pulse.py` |
 | Analysis lifecycle | `base_analysis.py` |
-| Typed experiment result | `experiment_data.py` |
+| Typed experiment result and compatibility helpers | `experiment_data.py` |
 
-The execution branches converge on `AcquisitionResult`, so fitting, analysis,
-plotting, and storage do not need separate threshold-specific paths.
+Specialized experiments may override acquisition when QICK returns a different
+physical layout (for example decimated TOF, shots, mux channels, or two active-
+reset readouts). They should still return `ExperimentData` and declare dataset
+dimensions explicitly.

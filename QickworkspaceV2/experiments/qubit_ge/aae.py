@@ -10,6 +10,8 @@ from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
+from ...core.experiment_data import ExperimentData, QualityFlag
 from ...core.base_program import BaseProgram
 
 
@@ -128,7 +130,9 @@ class PowerRabiChevron(BaseExperiment):
         """
         cfg = self.cfg
         prog = self._create_program()
-        gains = self._extract_sweep_axis(prog)
+        gains = self._resolve_axis(
+            self._extract_sweep_axis(prog), cfg.get("steps")
+        )
         if "iter_start" in cfg and "iter_stop" in cfg:
             iters = np.arange(
                 cfg["iter_start"],
@@ -175,6 +179,7 @@ class PowerRabiChevron(BaseExperiment):
         display(fig, display_id=plot_display_id)
 
         interrupted = False
+        completed_rows = 0
         try:
             for y_idx, iter_val in enumerate(
                 tqdm(iters, desc="Outer Sweep: Iterations")
@@ -182,10 +187,15 @@ class PowerRabiChevron(BaseExperiment):
                 self.cfg["iteration"] = int(iter_val)
                 prog = self._create_program()
 
-                iq_list = prog.acquire(self.soc, rounds=py_avg, progress=False)
-                iq_data_row = iq_list[0][0].dot([1, 1j])
+                iq_data_row = acquire_values(
+                    prog,
+                    self.soc,
+                    rounds=py_avg,
+                    progress=False,
+                )
 
                 iqdata_full[y_idx, :] = iq_data_row
+                completed_rows = y_idx + 1
                 data_to_plot = np.abs(iqdata_full)
 
                 mesh.set_array(data_to_plot.ravel())
@@ -206,11 +216,52 @@ class PowerRabiChevron(BaseExperiment):
         clear_output(wait=True)
         plt.close(fig)
 
-        if interrupted:
-            print(f"Interrupted at iteration {iters[y_idx]}.")
+        if interrupted and completed_rows:
+            print(f"Interrupted after iteration {iters[completed_rows - 1]}.")
 
-        self.iqdata = iqdata_full
-        return self._post_fit()
+        self.iqdata = iqdata_full[:completed_rows]
+        self._sweep_vals_y = iters[:completed_rows]
+        if completed_rows == 0:
+            result = ExperimentData(
+                experiment_type=self.EXPT_NAME,
+                quality=QualityFlag.BAD,
+                quality_message="No data acquired",
+                interrupted=True,
+            )
+            self.result = result
+            return result
+
+        optimal_gain = self._post_fit()
+        result = ExperimentData(
+            experiment_type=self.EXPT_NAME,
+            raw_iq=self.iqdata,
+            x_axis=gains,
+            y_axis=self._sweep_vals_y,
+            fit_params=self.fit_params,
+            fit_errors=self.fit_errors,
+            fit_result={"optimal_gain": (optimal_gain, None)},
+            scalar_result=float(optimal_gain),
+            figures=[self._last_analysis_figure],
+            quality=QualityFlag.NO_INFORMATION,
+            interrupted=interrupted,
+            avg_count=py_avg,
+            x_name=self.X_SAVE_NAME,
+            x_unit=self.X_SAVE_UNIT,
+            x_scale=self.X_SAVE_SCALE,
+            y_name=self.Y_SAVE_NAME,
+            y_unit=self.Y_SAVE_UNIT,
+            y_scale=self.Y_SAVE_SCALE,
+            metadata={"iq_process": "abs"},
+            dataset_dims={"iq": ["y", "x"]},
+            analysis_data={
+                "summed_signal": {
+                    "values": np.sum(np.abs(self.iqdata), axis=0),
+                    "dims": ["x"],
+                }
+            },
+        )
+        self.result = result
+        return result
 
     def analyze_and_plot(self):
         """Return the analyze and plot result.
@@ -350,7 +401,12 @@ class PowerRabiChevron(BaseExperiment):
         ax1.grid(True, alpha=0.2)
         plt.tight_layout()
         plt.show()
+        self._last_analysis_figure = fig
 
+        optimal_gain = float(optimal_gain)
+        self.fit_params = np.array([optimal_gain])
+        self.fit_errors = None
+        self._chevron_fit_result = {"optimal_gain": optimal_gain}
         return optimal_gain
 
     def _save_comment(self, dict_val):
@@ -366,8 +422,8 @@ class PowerRabiChevron(BaseExperiment):
         Any
             Result of the operation.
         """
-        if self.fit_params:
-            g = self.fit_params.get("optimal_gain", "N/A")
+        if getattr(self, "_chevron_fit_result", None):
+            g = self._chevron_fit_result["optimal_gain"]
             return f"Power Rabi Chevron\nOptimal gain = {g}\n{dict_val}"
         return f"{dict_val}"
 

@@ -11,7 +11,7 @@ from IPython.display import display, clear_output, update_display
 
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
-from ...core.experiment_data import ExperimentData, QualityFlag
+from ...core.experiment_data import ExperimentData
 
 
 class LoopbackProgram(BaseProgram):

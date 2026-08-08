@@ -30,8 +30,6 @@ class T1Analysis(BaseAnalysis):
             return
         from ..tools.fitting import expfunc, fitexp
 
-        x = data.x_axis
-
         try:
             _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
             err = np.sqrt(np.diag(pcov))
@@ -114,8 +112,6 @@ class RamseyAnalysis(BaseAnalysis):
         """
         from ..tools.fitting import decaysin, fitdecaysin
 
-        x = data.x_axis
-
         try:
             _, popt, pcov, channel, score = self._fit_channel(
                 data, fitdecaysin, decaysin
@@ -151,8 +147,6 @@ class RamseyAnalysis(BaseAnalysis):
             Input data to process.
         """
         from ..tools.fitting import expfunc, fitexp
-
-        x = data.x_axis
 
         try:
             _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
@@ -233,7 +227,6 @@ class SpinEchoAnalysis(BaseAnalysis):
             return
 
         virtual_detune = self._config_value(data, "virtual_detune", 0.0)
-        x = data.x_axis
         detune = None
         detune_err = None
 
@@ -335,8 +328,6 @@ class PowerRabiAnalysis(BaseAnalysis):
             return
         from ..tools.fitting import fitsin, fix_phase, sinfunc
 
-        x = data.x_axis
-
         try:
             _, popt, pcov, channel, score = self._fit_channel(data, fitsin, sinfunc)
             err = np.sqrt(np.diag(pcov))
@@ -423,8 +414,6 @@ class TimeRabiAnalysis(BaseAnalysis):
         if data.x_axis is None or data.raw_iq is None:
             return
         from ..tools.fitting import decaysin, fitdecaysin
-
-        x = data.x_axis
 
         try:
             _, popt, pcov, channel, score = self._fit_channel(

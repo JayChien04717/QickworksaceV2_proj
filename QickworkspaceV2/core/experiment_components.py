@@ -33,6 +33,13 @@ class SweepAxes:
 
 @dataclass
 class AcquisitionResult:
+    """Hardware output before it is promoted to :class:`ExperimentData`.
+
+    ``raw_iq`` is the primary trace consumed by analysis.  Additional raw
+    datasets, including multi-readout matrices, belong in ``raw_data`` with
+    matching entries in ``dataset_dims`` and ``axes``.
+    """
+
     raw_iq: Any = None
     interrupted: bool = False
     avg_count: int = 0
@@ -43,7 +50,10 @@ class AcquisitionResult:
     fit_result: dict = field(default_factory=dict)
     scalar_result: Optional[float] = None
     metadata: dict = field(default_factory=dict)
+    axes: dict = field(default_factory=dict)
+    raw_data: dict = field(default_factory=dict)
     analysis_data: dict = field(default_factory=dict)
+    dataset_dims: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -398,6 +408,7 @@ class ResultBuilder:
         old_result = experiment._post_fit(axes.x)
         result = ExperimentData(
             **common, raw_iq=acq.raw_iq, x_axis=axes.x, y_axis=axes.y,
+            axes=dict(acq.axes), raw_data=dict(acq.raw_data),
             analysis_data=dict(acq.analysis_data),
             fit_params=experiment.fit_params if experiment.fit_params is not None else acq.fit_params,
             fit_errors=experiment.fit_errors if experiment.fit_errors is not None else acq.fit_errors,
@@ -410,7 +421,8 @@ class ResultBuilder:
         if not result.fit_result and result.fit_params is not None:
             result.fit_result = experiment._build_fit_result()
         raw = np.asarray(acq.raw_iq)
-        result.dataset_dims["iq"] = _infer_iq_dims(raw.shape, axes)
+        result.dataset_dims.update(acq.dataset_dims)
+        result.dataset_dims.setdefault("iq", _infer_iq_dims(raw.shape, axes))
         return result
 
 

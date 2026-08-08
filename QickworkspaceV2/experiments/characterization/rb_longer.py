@@ -25,6 +25,7 @@ from qick.asm_v2 import AsmInst, AsmV2, Macro
 
 from ...analysis.rb import RBAnalysis
 from ...core.base_program import BaseProgram
+from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.rb_generator import (
     INTERLEAVE_GATES,
@@ -631,11 +632,12 @@ class RandomizedBenchmarkingLonger(RandomizedBenchmarking):
                         name: 0 if value is None else len(value)
                         for name, value in program.binprog.items()
                     }
-                acquired = program.acquire(
-                    self.soc, rounds=py_avg, progress=False
-                )
-                rb_result[depth_index][sample_index] = acquired[0][0].dot(
-                    [1, 1j]
+                rb_result[depth_index][sample_index] = acquire_values(
+                    program,
+                    self.soc,
+                    rounds=py_avg,
+                    progress=False,
+                    scalar_readout=True,
                 )
 
         self.rb_result = rb_result

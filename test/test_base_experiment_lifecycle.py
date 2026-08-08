@@ -134,6 +134,21 @@ class BaseExperimentLifecycleTests(unittest.TestCase):
             "formatted config",
         )
 
+    def test_run_rejects_invalid_average_count_before_building_program(self):
+        experiment = _LifecycleExperiment({"steps": 2})
+
+        with self.assertRaisesRegex(ValueError, "py_avg must be at least 1"):
+            experiment.run(py_avg=0, liveplot=False)
+
+        self.assertFalse(hasattr(experiment, "created_program"))
+
+    def test_run_normalizes_iq_process_alias(self):
+        experiment = _LifecycleExperiment({"steps": 2})
+
+        result = experiment.run(py_avg=1, iq_process="I", liveplot=False)
+
+        self.assertEqual(result.metadata["iq_process"], "real")
+
 
 if __name__ == "__main__":
     unittest.main()

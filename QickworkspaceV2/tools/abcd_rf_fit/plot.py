@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
 from .utils import get_prefix, dB, deg
 # from .resonators import resonator_dict
 
@@ -115,7 +114,7 @@ def format_fig(fig, ignored_axes=None, cbar_axes = None):
     
     for ax in fig.axes:
         if ax not in ignored_axes:
-            if not ax in cbar_axes:
+            if ax not in cbar_axes:
                 ax.tick_params(direction='in', which='both', color=[0, 0, 0, 0.5], colors=[0, 0, 0, 0.75])
                 ax.yaxis.set_ticks_position('both')
                 ax.xaxis.set_ticks_position('both')

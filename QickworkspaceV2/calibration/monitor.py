@@ -5,7 +5,6 @@ Calibration monitor: async drift detection with configurable callbacks.
 from __future__ import annotations
 
 import threading
-import time
 from typing import Callable
 
 

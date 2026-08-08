@@ -540,14 +540,35 @@ class BaseExperiment:
         _RunContext
             Result of the operation.
         """
-        resolved_liveplot = self.LivePlot if liveplot is None else liveplot
-        resolved_iq_process = iq_process if iq_process is not None else self.IQ_PROCESS
+        if isinstance(py_avg, bool) or not isinstance(py_avg, (int, np.integer)):
+            raise TypeError("py_avg must be an integer")
+        if py_avg < 1:
+            raise ValueError("py_avg must be at least 1")
+
+        resolved_liveplot = self.LivePlot if liveplot is None else bool(liveplot)
+        requested_process = iq_process if iq_process is not None else self.IQ_PROCESS
+        process_aliases = {
+            "amp": "abs",
+            "amplitude": "abs",
+            "i": "real",
+            "avgi": "real",
+            "q": "imag",
+            "avgq": "imag",
+        }
+        resolved_iq_process = process_aliases.get(
+            str(requested_process).lower(),
+            str(requested_process).lower(),
+        )
+        if resolved_iq_process not in {"all", "abs", "real", "imag", "phase"}:
+            raise ValueError(
+                "iq_process must be 'all', 'abs', 'real', 'imag', or 'phase'"
+            )
         self._yoko_mode = kwargs.get("yoko_mode", None)
         self.iqdata = None
         self.fit_params = None
         self.fit_errors = None
         return _RunContext(
-            py_avg=py_avg,
+            py_avg=int(py_avg),
             iq_process=resolved_iq_process,
             show_final_plot=show_final_plot,
             liveplot=resolved_liveplot,

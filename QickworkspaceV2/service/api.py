@@ -112,7 +112,7 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
             from ..data.serializer import experiment_to_json
             _set_job(job_id, status="done", result=experiment_to_json(result),
                      finished_at=datetime.now().isoformat())
-        except Exception as exc:
+        except Exception:
             _set_job(job_id, status="error", error=traceback.format_exc(),
                      finished_at=datetime.now().isoformat())
 
@@ -209,7 +209,7 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
                 cal.run(skip=tuple(req.skip))
                 _set_job(job_id, status="done", result=cal.results,
                          finished_at=datetime.now().isoformat())
-            except Exception as exc:
+            except Exception:
                 _set_job(job_id, status="error", error=traceback.format_exc(),
                          finished_at=datetime.now().isoformat())
 
