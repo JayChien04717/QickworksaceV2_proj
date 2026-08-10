@@ -10,6 +10,7 @@ import numpy as np
 from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram, resolve_gate
+from ...core.acquisition import acquire_values
 from ...core.base_experiment import BaseExperiment
 from ...core.experiment_data import ExperimentData, QualityFlag
 
@@ -111,7 +112,10 @@ class Tomography(BaseExperiment):
                 self.soccfg, reps=self.cfg["reps"],
                 final_delay=self.cfg["relax_delay"], cfg=cfg,
             )
-            iq = prog.acquire(self.soc, rounds=pyavg, progress=False)[0][0].dot([1, 1j])
+            iq = acquire_values(
+                prog, self.soc, rounds=pyavg, progress=False,
+                scalar_readout=True,
+            )
             if cal_label == "ground":
                 self.iq_g = iq
             else:
@@ -143,7 +147,10 @@ class Tomography(BaseExperiment):
                 self.soccfg, reps=self.cfg["reps"],
                 final_delay=self.cfg["relax_delay"], cfg=cfg,
             )
-            tomo_data[axis] = prog.acquire(self.soc, rounds=pyavg, progress=False)[0][0].dot([1, 1j])
+            tomo_data[axis] = acquire_values(
+                prog, self.soc, rounds=pyavg, progress=False,
+                scalar_readout=True,
+            )
         return tomo_data
 
     def _project_to_expect(self, iq_data, iq_g, iq_e):
@@ -320,8 +327,10 @@ class Tomography(BaseExperiment):
                 im = ax.matshow(data, cmap=cmap, norm=norm)
                 ax.set_title(title, fontsize=16)
                 fig.colorbar(im, ax=ax, shrink=0.8)
-                ax.set_xticks([0, 1]); ax.set_yticks([0, 1])
-                ax.set_xticklabels(labels_k); ax.set_yticklabels(labels_b)
+                ax.set_xticks([0, 1])
+                ax.set_yticks([0, 1])
+                ax.set_xticklabels(labels_k)
+                ax.set_yticklabels(labels_b)
                 ax.xaxis.set_ticks_position("bottom")
                 for i in range(2):
                     for j in range(2):
@@ -345,8 +354,10 @@ class Tomography(BaseExperiment):
                 colors = cmap(norm(dz))
                 ax.bar3d(x_pos, y_pos, np.zeros(4), 0.8, 0.8, dz, color=colors, shade=True)
                 ax.set_title(title, fontsize=16)
-                ax.set_xticks([0.4, 1.4]); ax.set_yticks([0.4, 1.4])
-                ax.set_xticklabels(labels_k); ax.set_yticklabels(labels_b)
+                ax.set_xticks([0.4, 1.4])
+                ax.set_yticks([0.4, 1.4])
+                ax.set_xticklabels(labels_k)
+                ax.set_yticklabels(labels_b)
                 z_max = max(np.max(np.abs(data)), 1e-9)
                 ax.set_zlim(-z_max, z_max)
             plt.tight_layout(rect=[0, 0.03, 1, 0.95])

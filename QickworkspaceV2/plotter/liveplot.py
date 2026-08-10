@@ -3,7 +3,6 @@ from typing import Any, Callable
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
-import math
 
 from ..core.acquisition import acquire_values
 from ..tools.units import auto_unit
@@ -844,7 +843,7 @@ def _liveplot_sweep_yoko(
     ax.set_ylabel(dynamic_y_label)
 
     plot_display_id = f"live-plot-yoko-swapped-{np.random.randint(1e9)}"
-    display_handle = display(fig, display_id=plot_display_id)
+    display(fig, display_id=plot_display_id)
 
     try:
         for idx, val in enumerate(

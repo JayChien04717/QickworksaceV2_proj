@@ -36,7 +36,7 @@ def ry(theta):
                      [np.sin(theta/2), np.cos(theta/2)]])
 
 
-I = np.eye(2, dtype=complex)
+IDENTITY = np.eye(2, dtype=complex)
 X_half  = rx( np.pi/2)
 mX_half = rx(-np.pi/2)
 Y_half  = ry( np.pi/2)
@@ -45,7 +45,7 @@ X = X_half @ X_half
 Y = Y_half @ Y_half
 
 gate_map = {
-    "I":    I,
+    "I":    IDENTITY,
     "X/2":  X_half,
     "-X/2": mX_half,
     "Y/2":  Y_half,
@@ -84,7 +84,7 @@ clifford_decompositions = [
 # Build Clifford matrices — list left-to-right = gate applied first to |ψ⟩
 clifford_matrices = []
 for decomp in clifford_decompositions:
-    mat = I.copy()
+    mat = IDENTITY.copy()
     for g in decomp:
         mat = gate_map[g] @ mat
     clifford_matrices.append(mat)
@@ -208,7 +208,7 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
 
     for sample_idx in range(n_sample):
         sequence_indices = []
-        current_mat = I.copy()
+        current_mat = IDENTITY.copy()
         interleave_pulse_log = []
 
         for _ in range(n_clifford):
@@ -260,7 +260,7 @@ def verify_sequence(full_sequence):
     Any
         Result of the operation.
     """
-    mat = I.copy()
+    mat = IDENTITY.copy()
     for g in full_sequence:
         mat = gate_map[g] @ mat
     return _matrix_distance(mat, I2) < 1e-6

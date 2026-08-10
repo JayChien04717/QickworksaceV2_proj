@@ -1,9 +1,14 @@
 import json
 import os
 import time
+from io import BytesIO
+from pathlib import Path
+from typing import Iterable, Mapping
 
 import h5py
 import numpy as np
+
+from . import hdf5_store as native
 
 _STEP_NAME_API = "Step index API"
 vlen_bytes = h5py.special_dtype(vlen=bytes)
@@ -640,7 +645,6 @@ class LogFile(object):
                 col = 0
 
             if "Data" not in grp:
-                chn_names_list = []
                 step_names = []
                 if "Step list" in f:
                     for step_row in f["Step list"]:
@@ -1305,17 +1309,6 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
                 log_inst_cfg.attrs[name] = 0.0j if is_complex else 0.0
 
     return LogFile(resolved_path)
-
-from datetime import timezone
-from io import BytesIO
-from pathlib import Path
-from typing import Iterable, Mapping
-
-import h5py
-import numpy as np
-
-from . import hdf5_store as native
-
 
 EMBEDDED_GROUP = "metagroup"
 PARTIAL_GROUP = "metagroup__partial"

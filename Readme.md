@@ -153,6 +153,18 @@ Two-dimensional plots fall back from `"all"` to amplitude. The acquired data
 remains complex in `result.raw_iq`; `iq_process` selects plotting/analysis
 presentation and is recorded in `result.metadata`.
 
+Multi-readout experiments keep `result.raw_iq` as the primary analysis trace
+and store the complete readout matrix in `result.raw_data["readouts"]`. Read a
+specific trace by index or label:
+
+```python
+pre_reset = result.get_readout("pre_reset")
+post_reset = result.get_readout("post_reset")
+```
+
+`result.y_axis` is reserved for a second sweep coordinate and never contains
+processed IQ.
+
 Analysis runs automatically when an experiment binds an `Analysis` class, but
 the analysis figure is opt-in:
 
@@ -317,9 +329,9 @@ for driver and manager details.
 ## Development and validation
 
 - Never import `qick_workspace` from inside `QickworkspaceV2/`.
-- Native HDF5/ID/catalog behavior has hardware-independent unittest coverage
-  in `tests/test_hdf5_store.py`; experiment validation remains notebook- and
-  hardware-in-the-loop driven.
+- Hardware-independent data, analysis, persistence, and experiment-contract
+  tests run with `python -m unittest discover -s test -v`; program validation
+  remains notebook- and hardware-in-the-loop driven.
 - The experiment registry in `core/experiment_registry.py` is the stable list
   for generic clients. Experimental classes may exist without registry entries.
 - Keep hardware-dependent imports lazy where possible so analysis and data

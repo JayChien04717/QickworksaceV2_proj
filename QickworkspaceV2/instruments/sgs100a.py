@@ -4,8 +4,8 @@ from typing import Literal, Union, Tuple
 from .base import RFSourceInstrument
 
 ON_OFF_MAP = {
-    "on": "1", "1": "1", 1: "1", True: "1",
-    "off": "0", "0": "0", 0: "0", False: "0",
+    "on": "1", "1": "1", 1: "1",
+    "off": "0", "0": "0", 0: "0",
 }
 ON_OFF_MAP_INV = {"1": "on", "0": "off"}
 

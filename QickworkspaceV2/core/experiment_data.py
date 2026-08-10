@@ -265,6 +265,38 @@ class ExperimentData:
             return entry[1]
         return default
 
+    def get_readout(self, readout: int | str = 0):
+        """Return one raw readout while keeping ``raw_iq`` backward compatible.
+
+        Multi-readout experiments store their complete matrix in
+        ``raw_data['readouts']`` and label its first dimension with the
+        ``readout`` axis.  Single-readout results simply return ``raw_iq`` for
+        index 0.
+        """
+        payload = self.raw_data.get("readouts")
+        if payload is None:
+            if readout in (0, "0"):
+                return self.raw_iq
+            raise IndexError("This result contains only the primary readout")
+
+        values = payload.get("values") if isinstance(payload, dict) else payload
+        values = np.asarray(values)
+        if isinstance(readout, str) and not readout.isdigit():
+            labels_payload = self.axes.get("readout")
+            labels = (
+                labels_payload.get("values")
+                if isinstance(labels_payload, dict)
+                else labels_payload
+            )
+            labels = [str(label) for label in np.asarray(labels).reshape(-1)]
+            try:
+                readout = labels.index(readout)
+            except ValueError as exc:
+                raise KeyError(
+                    f"Unknown readout {readout!r}; available labels: {labels}"
+                ) from exc
+        return values[int(readout)]
+
 
     def to_dict(self) -> dict:
         """Return a JSON-serialisable dict (numpy arrays → lists).

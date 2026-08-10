@@ -13,7 +13,19 @@ python -c "import QickworkspaceV2; print(QickworkspaceV2.__version__)"
 python -c "from QickworkspaceV2 import BaseExperiment; print(BaseExperiment)"
 ```
 
-There is no full experiment test suite or lint script. Native HDF5/ID/catalog tests run with `python -m unittest discover -s tests -v`; experiment validation remains notebook-driven + hardware-in-the-loop. `QICKBackend` and `SimulatedBackend` have been removed; offline validation covers hardware-independent analysis, configuration, persistence, and registry code.
+There is no lint or type-check command. The hardware-independent suite runs in
+the lab QICK environment:
+
+```powershell
+C:\Users\cluster\anaconda3\envs\qick_gui\python.exe -m unittest discover -s test -v
+C:\Users\cluster\anaconda3\envs\qick_gui\python.exe -m compileall -q QickworkspaceV2 test
+```
+
+The default system `python` may not contain NumPy or QICK. Experiment validation
+remains notebook-driven plus hardware-in-the-loop. `QICKBackend` and
+`SimulatedBackend` have been removed; offline validation covers
+hardware-independent analysis, configuration, persistence, data contracts, and
+registry code.
 
 ## Architecture
 
@@ -45,10 +57,11 @@ Every experiment inherits from `BaseExperiment` (`core/base_experiment.py`). The
 
 `BaseProgram` (`core/base_program.py`) wraps `AveragerProgramV2`. Key helper methods:
 - `setup_resonator(cfg, prefix="ge")` / `setup_qubit_gen(cfg, prefix)`
-- `setup_qb_pulse(cfg, shape, name, gain_key)` — declares a named pulse
+- `setup_qb_pulse(cfg, prefix, ..., name, gain_key)` — declares a transition-aware named pulse
 - `setup_standard_gates(cfg, prefix)` — registers `x180_ge`, `y180_ge`, `x90_ge`, etc.
 - `apply_cool(cfg)` + `cooling_body()` — active-reset cooling
-- `measure(cfg)` — fire readout, collect ADC
+- `measure(cfg, pins=...)` — fire readout and collect ADC with optional marker pins
+- `setup_active_reset(cfg)` + `activate_reset(cfg)` — configure and execute tProc feedback reset
 
 In `_body()`, call `self.pulse(ch=..., name=..., t=0)` then `self.delay_auto(dt)` then `self.measure(cfg)`.
 
@@ -75,6 +88,26 @@ store.update_from_dict("Q1", {...})
 ### IQ Data Convention
 
 Raw hardware data remains complex in `ExperimentData.raw_iq`. `iq_process` controls the live/analysis display channel and is recorded in `ExperimentData.metadata`; `"all"` is the 1D default, while 2D views fall back to amplitude. `ExperimentData.y_axis` is the optional second sweep axis, not processed IQ data.
+
+For programs with more than one readout per point, `raw_iq` remains the primary
+analysis trace for backward compatibility. The complete matrix is stored in
+`raw_data["readouts"]` with dimensions beginning in `"readout"`; use
+`result.get_readout(index_or_label)` to retrieve one readout. Never place
+processed IQ in `y_axis`.
+
+### Hardware Test Safety
+
+- Hardware tests may connect only to QICK/Pyro unless the user explicitly adds
+  an instrument to the scope.
+- Do not instantiate, read, or control Yoko, SGS100A, MG3692, or other RF-source
+  drivers during QICK-only validation.
+- Before acquisition, inspect every config key containing `gain`; every scalar
+  gain and every sweep endpoint must be strictly below `0.1`.
+- Keep cooling disabled unless it is the feature under test. A fitting failure
+  without a connected chip is expected; validate program compilation and data
+  shape instead.
+- Connect through `BaseExperiment.connect_pyro4(...)`, using `ns_port` and
+  `proxy_name`; do not bypass the framework session with a direct Pyro helper.
 
 ### Native HDF5 Storage
 

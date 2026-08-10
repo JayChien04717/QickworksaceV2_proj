@@ -1,7 +1,14 @@
-from sqlite3 import paramstyle
 import numpy as np
 from scipy.interpolate import interp1d
-from .abcd_rf_fit import *
+from .resonators import (
+    ResonatorParams,
+    hanger,
+    hanger_mismatched,
+    reflection,
+    reflection_mismatched,
+    resonator_dict,
+    transmission,
+)
 
 
 def get_background(freq, non_uniform_background=False):
@@ -117,4 +124,3 @@ def get_synthetic_signal(geometry="r"):
     noise = 0.2 * np.mean(np.abs(signal)) * np.random.rand() * white_noise
 
     return freq, signal + noise, params
-

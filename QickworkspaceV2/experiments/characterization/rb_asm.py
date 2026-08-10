@@ -59,6 +59,7 @@ from qick.asm_v2 import AsmInst, Macro
 
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
+from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import RBAnalysis
 from ...tools.fitting import fitrb, rb_func, rb_error, error_fit_err
@@ -412,9 +413,12 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                     final_delay=self.cfg["relax_delay"],
                     cfg=self.cfg,
                 )
-                iq_data = (
-                    prog.acquire(self.soc, rounds=py_avg, progress=False)[0][0]
-                    .dot([1, 1j])
+                iq_data = acquire_values(
+                    prog,
+                    self.soc,
+                    rounds=py_avg,
+                    progress=False,
+                    scalar_readout=True,
                 )
                 rblist.append(iq_data)
             rb_result[idx] = rblist

@@ -1,5 +1,5 @@
 ﻿"""
-QickworkspaceV2 ??IBM/IQM-style automated quantum calibration framework.
+QickworkspaceV2 automated quantum calibration framework.
 
 Quick start
 -----------
@@ -57,7 +57,6 @@ _LAZY_EXPORTS = {
     "PowerRabiReset": ".experiments.qubit_ge",
     "ActiveResetRabi": ".experiments.qubit_ge",
     "Ramsey": ".experiments.coherence",
-    "ActiveResetRamsey": ".experiments.coherence",
     "ACStark": ".experiments.coherence",
     "SpinEcho": ".experiments.coherence",
     "T1": ".experiments.coherence",
@@ -80,23 +79,7 @@ _LAZY_EXPORTS = {
 
 
 def __getattr__(name):
-    """Return the getattr result.
-
-    Parameters
-    ----------
-    name : Any
-        Name of the target object.
-
-    Returns
-    -------
-    Any
-        Result of the operation.
-
-    Raises
-    ------
-    AttributeError
-        If the operation cannot be completed.
-    """
+    """Load optional public objects only when they are first requested."""
     module_name = _LAZY_EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -120,7 +103,7 @@ __all__ = [
     "Chi", "CKP", "ChiKappaPower", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
-    "Ramsey", "ActiveResetRamsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
+    "Ramsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "QubitTemp",
     "AllXY", "RandomizedBenchmarking", "AutoRB", "Tomography",
     "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",

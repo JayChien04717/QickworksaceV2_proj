@@ -1,0 +1,49 @@
+{
+  "method": {
+    "projection": "median-center g-to-e IQ axis",
+    "fit": "two labeled main Gaussian histogram components (g + e)",
+    "pooled_sigma": "sqrt((sigma_g^2 + sigma_e^2) / 2)",
+    "amplitude_gain": "distance_on / distance_off",
+    "noise_gain": "pooled_sigma_on / pooled_sigma_off",
+    "effective_gain": "amplitude_gain / noise_gain"
+  },
+  "datasets": {
+    "TWPA off (no pump)": {
+      "label": "TWPA off (no pump)",
+      "path": "D:\\Labber_Data\\Jay\\purcell_tmon\\withTWPA\\2026\\08\\Data_0807\\s000_singleshot_ge_Q1_nopump_20260807T015709765200Z-8CPM1YPC15DT9.hdf5",
+      "rotation_deg": 79.02909185043124,
+      "g_center": 0.8329944879939778,
+      "e_center": 1.0682049773513391,
+      "g_sigma": 0.4846619530484933,
+      "e_sigma": 0.4997881310824826,
+      "distance": 0.23521048935736133,
+      "pooled_sigma": 0.4922831424615821,
+      "amplitude_snr": 0.47779513265725365
+    },
+    "TWPA on": {
+      "label": "TWPA on",
+      "path": "D:\\Labber_Data\\Jay\\purcell_tmon\\withTWPA\\2026\\08\\Data_0807\\s000_singleshot_ge_Q1_20260807T012628261453Z-CRWX6JW1D2SF6.hdf5",
+      "rotation_deg": 105.70008579472236,
+      "g_center": 7.206809252977824,
+      "e_center": 9.428015803812897,
+      "g_sigma": 0.6906737984940527,
+      "e_sigma": 0.8656768381886238,
+      "distance": 2.221206550835073,
+      "pooled_sigma": 0.7830793970289527,
+      "amplitude_snr": 2.8365023511823395
+    }
+  },
+  "comparison": {
+    "amplitude_gain": 9.443484246403386,
+    "power_gain": 89.17939471206893,
+    "gain_db": 19.502645203336094,
+    "g_noise_amplitude_gain": 1.4250629622353432,
+    "e_noise_amplitude_gain": 1.732087627438589,
+    "pooled_noise_amplitude_gain": 1.590709348919183,
+    "pooled_noise_power_gain": 2.530356232738891,
+    "noise_gain_db": 4.031816670342966,
+    "effective_amplitude_gain": 5.936649742342822,
+    "effective_power_snr_gain": 35.24381016325909,
+    "effective_gain_db": 15.470828532993128
+  }
+}

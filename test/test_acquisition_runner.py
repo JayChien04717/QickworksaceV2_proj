@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 
-from QickworkspaceV2.core.acquisition import decode_acquisition
+from QickworkspaceV2.core.acquisition import decode_acquisition, decode_readouts
 
 from QickworkspaceV2.core.experiment_components import (
     AcquisitionResult,
@@ -191,6 +191,16 @@ class AcquisitionRunnerTests(unittest.TestCase):
 
         self.assertEqual(values.shape, (100,))
         np.testing.assert_allclose(values, np.linspace(0.0, 1.0, 100))
+
+    def test_multi_readout_decoder_retains_readout_axis(self):
+        first = np.column_stack(([1.0, 2.0], [3.0, 4.0]))
+        second = np.column_stack(([5.0, 6.0], [7.0, 8.0]))
+
+        values = decode_readouts([np.stack((first, second))], threshold=False)
+
+        self.assertEqual(values.shape, (2, 2))
+        np.testing.assert_array_equal(values[0], [1 + 3j, 2 + 4j])
+        np.testing.assert_array_equal(values[1], [5 + 7j, 6 + 8j])
 
 if __name__ == "__main__":
     unittest.main()

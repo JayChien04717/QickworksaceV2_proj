@@ -381,8 +381,8 @@ def _optimize_multistate_rotation(iqshots, max_samples_per_state=3000):
     """Jointly optimize the projection angle and ordered state thresholds."""
     rng = np.random.default_rng(0)
     sampled = []
-    for I, Q in iqshots:
-        cloud = np.asarray(I) + 1j * np.asarray(Q)
+    for i_values, q_values in iqshots:
+        cloud = np.asarray(i_values) + 1j * np.asarray(q_values)
         if cloud.size > max_samples_per_state:
             cloud = cloud[rng.choice(cloud.size, max_samples_per_state, replace=False)]
         sampled.append(cloud)
@@ -557,15 +557,21 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
             Any
                 Result of the operation.
             """
-            I = c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
-            Q = c.real * np.sin(theta_rad) + c.imag * np.cos(theta_rad)
-            return I, Q
+            i_rotated = c.real * np.cos(theta_rad) - c.imag * np.sin(theta_rad)
+            q_rotated = c.real * np.sin(theta_rad) + c.imag * np.cos(theta_rad)
+            return i_rotated, q_rotated
     else:
         theta_rad = 0.0
-        _rot_I  = lambda c: np.abs(c)
-        _rot_IQ = lambda c: (c.real, c.imag)
 
-    all_c    = np.concatenate([I + 1j * Q for I, Q in iqshots])
+        def _rot_I(c):
+            return np.abs(c)
+
+        def _rot_IQ(c):
+            return c.real, c.imag
+
+    all_c = np.concatenate(
+        [i_values + 1j * q_values for i_values, q_values in iqshots]
+    )
     proj_all = _rot_I(all_c)
     span     = (proj_all.max() - proj_all.min()) / 2
     mid      = (proj_all.max() + proj_all.min()) / 2
@@ -597,8 +603,8 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
     rotated_scatter = []
     scatter_centers = []
 
-    for idx, (I, Q) in enumerate(iqshots):
-        cmplx        = I + 1j * Q
+    for idx, (i_values, q_values) in enumerate(iqshots):
+        cmplx        = i_values + 1j * q_values
         I_new, Q_new = _rot_IQ(cmplx)
         proj         = _rot_I(cmplx)
         I_projs.append(proj)
@@ -607,10 +613,10 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         lbl       = state_labels[idx]
 
         if plot:
-            unrotated_scatter.append((I, Q, color, lbl))
+            unrotated_scatter.append((i_values, q_values, color, lbl))
             rotated_scatter.append((I_new, Q_new, color, lbl))
             scatter_centers.append((
-                np.mean(I), np.mean(Q), np.mean(I_new), np.mean(Q_new),
+                np.mean(i_values), np.mean(q_values), np.mean(I_new), np.mean(Q_new),
                 color, marker,
             ))
             _, bins_dist = plot_hist(
@@ -673,7 +679,7 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         cm_labels = [f"|{lbl}⟩" for lbl in state_labels]
         ax_cm = axs[1, 1]
         ax_cm.clear()
-        im = ax_cm.imshow(conf_matrix_pct, cmap="Reds", vmin=0, vmax=100)
+        ax_cm.imshow(conf_matrix_pct, cmap="Reds", vmin=0, vmax=100)
         ax_cm.set_xticks(np.arange(n_states))
         ax_cm.set_yticks(np.arange(n_states))
         ax_cm.set_xticklabels(cm_labels)

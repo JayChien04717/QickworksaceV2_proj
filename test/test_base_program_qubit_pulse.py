@@ -1,7 +1,16 @@
 import unittest
 from unittest.mock import Mock
 
+from QickworkspaceV2.core.base_program import BaseProgram
 from QickworkspaceV2.core.qubit_pulse import QubitPulseMixin
+
+
+class _ConcreteBaseProgram(BaseProgram):
+    def _initialize(self, cfg):
+        pass
+
+    def _body(self, cfg):
+        pass
 
 
 def _config():
@@ -36,6 +45,35 @@ def _program():
 
 
 class QubitPulseTests(unittest.TestCase):
+    def test_measure_accepts_custom_marker_pins(self):
+        program = _ConcreteBaseProgram.__new__(_ConcreteBaseProgram)
+        program.pulse = Mock()
+        program.trigger = Mock()
+
+        program.measure(
+            {"res_ch": 2, "ro_ch": 0, "trig_time": 0.4},
+            pins=[1],
+        )
+
+        program.pulse.assert_called_once_with(ch=2, name="res_pulse", t=0)
+        program.trigger.assert_called_once_with(ros=[0], pins=[1], t=0.4)
+
+    def test_cooling_body_allows_one_configured_channel(self):
+        program = _ConcreteBaseProgram.__new__(_ConcreteBaseProgram)
+        program.pulse = Mock()
+        program.delay_auto = Mock()
+
+        applied = program.cooling_body(
+            {"cooling": True, "cool_ch1": 3},
+            ring_down=0.25,
+        )
+
+        self.assertTrue(applied)
+        program.pulse.assert_called_once_with(
+            ch=3, name="cool_pulse1", t=0
+        )
+        program.delay_auto.assert_called_once_with(0.25, tag="Ring down")
+
     def test_qubit_generator_uses_qick_declare_gen_api(self):
         program = _program()
         cfg = _config()

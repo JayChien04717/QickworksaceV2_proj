@@ -6,7 +6,6 @@ Hanger resonator models, randomized benchmarking, and more.
 """
 
 import traceback
-from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import scipy as sp
@@ -55,11 +54,11 @@ def fix_phase(p):
     elif phase < -180:
         phase += 360
     if phase < 0:
-        pi_gain  = (1 / 2 - phase / 180) / 2 / p[1]
-        pi2_gain = (0     - phase / 180) / 2 / p[1]
+        pi_gain = (1 / 2 - phase / 180) / 2 / p[1]
+        pi2_gain = (0 - phase / 180) / 2 / p[1]
     else:
-        pi_gain  = (3 / 2 - phase / 180) / 2 / p[1]
-        pi2_gain = (1     - phase / 180) / 2 / p[1]
+        pi_gain = (3 / 2 - phase / 180) / 2 / p[1]
+        pi2_gain = (1 - phase / 180) / 2 / p[1]
     return pi_gain, pi2_gain
 
 
@@ -91,6 +90,7 @@ def fourier_init(xdata, ydata, debug=False):
     max_phase = phase[max_ind]
     if debug:
         import matplotlib.pyplot as plt
+
         fig, ax = plt.subplots(2, 1, sharex=True, figsize=(4, 6))
         ax[0].plot(freqs, mag, ".")
         ax[0].set_ylabel("Amplitude")
@@ -126,11 +126,15 @@ def validate_bounds(fitparams, bounds):
             lo_safe = lo if np.isfinite(lo) else param - 1
             hi_safe = hi if np.isfinite(hi) else param + 1
             fitparams[i] = (lo_safe + hi_safe) / 2
-            print(f"fitparam[{i}]={param:.4g} out of bounds [{lo:.4g}, {hi:.4g}] → reset to {fitparams[i]:.4g}")
+            print(
+                f"fitparam[{i}]={param:.4g} out of bounds [{lo:.4g}, {hi:.4g}] → reset to {fitparams[i]:.4g}"
+            )
     return fitparams
 
 
-def generic_fit(fitfunc, xdata, ydata, fitparams, bounds=None, error_message="Warning: fit failed!"):
+def generic_fit(
+    fitfunc, xdata, ydata, fitparams, bounds=None, error_message="Warning: fit failed!"
+):
     """Generic curve-fitting wrapper using scipy Trust Region Reflective.
 
     Parameters
@@ -277,9 +281,14 @@ def _find_best_fit_simple(fits, fit_errors):
     return int(np.argmin(_calculate_normalized_errors(fits, fit_errors)))
 
 
-def get_best_fit(data, fitfunc=None, prefixes=["fit"],
-                 check_measures=("amps", "avgi", "avgq"),
-                 get_best_data_params=(), override=None):
+def get_best_fit(
+    data,
+    fitfunc=None,
+    prefixes=["fit"],
+    check_measures=("amps", "avgi", "avgq"),
+    get_best_data_params=(),
+    override=None,
+):
     """Compare fits across measurement channels and return the best one.
 
     Parameters
@@ -314,7 +323,9 @@ def get_best_fit(data, fitfunc=None, prefixes=["fit"],
     if override is not None and override in check_measures:
         best_index = list(check_measures).index(override)
     elif fitfunc is not None:
-        best_index = _find_best_fit_with_snr(data, fits, fit_errors, check_measures, fitfunc)
+        best_index = _find_best_fit_with_snr(
+            data, fits, fit_errors, check_measures, fitfunc
+        )
     else:
         best_index = _find_best_fit_simple(fits, fit_errors)
     best_measure = check_measures[best_index % len(check_measures)]
@@ -323,7 +334,6 @@ def get_best_fit(data, fitfunc=None, prefixes=["fit"],
         result.append(data[f"{param}_{best_measure}"])
     result.append(best_measure)
     return result
-
 
 
 def expfunc(x, *p):
@@ -383,10 +393,19 @@ def fitexp(xdata, ydata, fitparams=None):
     """
     if fitparams is None:
         fitparams = [None] * 3
-    if fitparams[0] is None: fitparams[0] = ydata[-1]
-    if fitparams[1] is None: fitparams[1] = ydata[0] - ydata[-1]
-    if fitparams[2] is None: fitparams[2] = (xdata[-1] - xdata[0]) / 4
-    return generic_fit(expfunc, xdata, ydata, fitparams, error_message="Warning: Fit exponential failed!")
+    if fitparams[0] is None:
+        fitparams[0] = ydata[-1]
+    if fitparams[1] is None:
+        fitparams[1] = ydata[0] - ydata[-1]
+    if fitparams[2] is None:
+        fitparams[2] = (xdata[-1] - xdata[0]) / 4
+    return generic_fit(
+        expfunc,
+        xdata,
+        ydata,
+        fitparams,
+        error_message="Warning: Fit exponential failed!",
+    )
 
 
 def fitexp2(xdata, ydata, fitparams=None):
@@ -408,12 +427,21 @@ def fitexp2(xdata, ydata, fitparams=None):
     """
     if fitparams is None:
         fitparams = [None] * 4
-    if fitparams[0] is None: fitparams[0] = ydata[-1]
-    if fitparams[1] is None: fitparams[1] = ydata[0] - ydata[-1]
-    if fitparams[2] is None: fitparams[2] = xdata[0]
-    if fitparams[3] is None: fitparams[3] = (xdata[-1] - xdata[0]) / 4
-    return generic_fit(expfunc2, xdata, ydata, fitparams, error_message="Warning: Fit exponential2 failed!")
-
+    if fitparams[0] is None:
+        fitparams[0] = ydata[-1]
+    if fitparams[1] is None:
+        fitparams[1] = ydata[0] - ydata[-1]
+    if fitparams[2] is None:
+        fitparams[2] = xdata[0]
+    if fitparams[3] is None:
+        fitparams[3] = (xdata[-1] - xdata[0]) / 4
+    return generic_fit(
+        expfunc2,
+        xdata,
+        ydata,
+        fitparams,
+        error_message="Warning: Fit exponential2 failed!",
+    )
 
 
 def lorfunc(x, *p):
@@ -454,11 +482,21 @@ def fitlor(xdata, ydata, fitparams=None):
     """
     if fitparams is None:
         fitparams = [None] * 4
-    if fitparams[0] is None: fitparams[0] = (ydata[0] + ydata[-1]) / 2
-    if fitparams[1] is None: fitparams[1] = max(ydata) - min(ydata)
-    if fitparams[2] is None: fitparams[2] = xdata[np.argmax(abs(ydata - fitparams[0]))]
-    if fitparams[3] is None: fitparams[3] = (max(xdata) - min(xdata)) / 10
-    return generic_fit(lorfunc, xdata, ydata, fitparams, error_message="Warning: Fit Lorentzian failed!")
+    if fitparams[0] is None:
+        fitparams[0] = (ydata[0] + ydata[-1]) / 2
+    if fitparams[1] is None:
+        fitparams[1] = max(ydata) - min(ydata)
+    if fitparams[2] is None:
+        fitparams[2] = xdata[np.argmax(abs(ydata - fitparams[0]))]
+    if fitparams[3] is None:
+        fitparams[3] = (max(xdata) - min(xdata)) / 10
+    return generic_fit(
+        lorfunc,
+        xdata,
+        ydata,
+        fitparams,
+        error_message="Warning: Fit Lorentzian failed!",
+    )
 
 
 def asym_lorfunc(x, *p):
@@ -501,13 +539,23 @@ def fit_asym_lor(xdata, ydata, fitparams=None):
         fitparams = [None] * 5
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = (ydata[0] + ydata[-1]) / 2
-    if fitparams[1] is None: fitparams[1] = max(ydata) - min(ydata)
-    if fitparams[2] is None: fitparams[2] = xdata[np.argmax(abs(ydata - fitparams[0]))]
-    if fitparams[3] is None: fitparams[3] = (max(xdata) - min(xdata)) / 10
-    if fitparams[4] is None: fitparams[4] = 0
-    return generic_fit(asym_lorfunc, xdata, ydata, fitparams, error_message="Warning: Fit asymmetric Lorentzian failed!")
-
+    if fitparams[0] is None:
+        fitparams[0] = (ydata[0] + ydata[-1]) / 2
+    if fitparams[1] is None:
+        fitparams[1] = max(ydata) - min(ydata)
+    if fitparams[2] is None:
+        fitparams[2] = xdata[np.argmax(abs(ydata - fitparams[0]))]
+    if fitparams[3] is None:
+        fitparams[3] = (max(xdata) - min(xdata)) / 10
+    if fitparams[4] is None:
+        fitparams[4] = 0
+    return generic_fit(
+        asym_lorfunc,
+        xdata,
+        ydata,
+        fitparams,
+        error_message="Warning: Fit asymmetric Lorentzian failed!",
+    )
 
 
 def sinfunc(x, *p):
@@ -551,15 +599,26 @@ def fitsin(xdata, ydata, fitparams=None, debug=False):
     if fitparams is None:
         fitparams = [None] * 4
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
-    if fitparams[0] is None: fitparams[0] = 1 / 2 * (max(ydata) - min(ydata))
-    if fitparams[1] is None: fitparams[1] = max_freq
-    if fitparams[2] is None: fitparams[2] = max_phase * 180 / np.pi
-    if fitparams[3] is None: fitparams[3] = np.mean(ydata)
+    if fitparams[0] is None:
+        fitparams[0] = 1 / 2 * (max(ydata) - min(ydata))
+    if fitparams[1] is None:
+        fitparams[1] = max_freq
+    if fitparams[2] is None:
+        fitparams[2] = max_phase * 180 / np.pi
+    if fitparams[3] is None:
+        fitparams[3] = np.mean(ydata)
     bounds = (
         [0.5 * fitparams[0], 1e-3, -360, np.min(ydata)],
         [2 * fitparams[0], 1000, 360, np.max(ydata)],
     )
-    return generic_fit(sinfunc, xdata, ydata, fitparams, bounds=bounds, error_message="Warning: Fit sinusoidal failed!")
+    return generic_fit(
+        sinfunc,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit sinusoidal failed!",
+    )
 
 
 def decaysin(x, *p):
@@ -578,7 +637,12 @@ def decaysin(x, *p):
         Result of the operation.
     """
     yscale, freq, phase_deg, decay, y0 = p
-    return (yscale * np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) * np.exp(-x / decay) + y0)
+    return (
+        yscale
+        * np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180)
+        * np.exp(-x / decay)
+        + y0
+    )
 
 
 def fitdecaysin(xdata, ydata, fitparams=None, debug=False):
@@ -603,25 +667,40 @@ def fitdecaysin(xdata, ydata, fitparams=None, debug=False):
     if fitparams is None:
         fitparams = [None] * 5
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
-    if fitparams[0] is None: fitparams[0] = (max(ydata) - min(ydata)) / 2
-    if fitparams[1] is None: fitparams[1] = max_freq
-    if fitparams[2] is None: fitparams[2] = max_phase * 180 / np.pi + 90
-    if fitparams[3] is None: fitparams[3] = max(xdata) - min(xdata)
-    if fitparams[4] is None: fitparams[4] = np.mean(ydata)
+    if fitparams[0] is None:
+        fitparams[0] = (max(ydata) - min(ydata)) / 2
+    if fitparams[1] is None:
+        fitparams[1] = max_freq
+    if fitparams[2] is None:
+        fitparams[2] = max_phase * 180 / np.pi + 90
+    if fitparams[3] is None:
+        fitparams[3] = max(xdata) - min(xdata)
+    if fitparams[4] is None:
+        fitparams[4] = np.mean(ydata)
     bounds = (
-        [0.75 * fitparams[0], 0.1 * max_freq, -360, 0.3 * (max(xdata) - min(xdata)), np.min(ydata)],
+        [
+            0.75 * fitparams[0],
+            0.1 * max_freq,
+            -360,
+            0.3 * (max(xdata) - min(xdata)),
+            np.min(ydata),
+        ],
         [1.25 * fitparams[0], 1.5 * max_freq, 360, np.inf, np.max(ydata)],
     )
     fitparams = validate_bounds(fitparams, bounds)
     pOpt = fitparams
     pCov = np.full(shape=(len(fitparams), len(fitparams)), fill_value=np.inf)
     try:
-        pOpt, pCov = sp.optimize.curve_fit(decaysin, xdata, ydata, p0=fitparams, bounds=bounds)
+        pOpt, pCov = sp.optimize.curve_fit(
+            decaysin, xdata, ydata, p0=fitparams, bounds=bounds
+        )
     except RuntimeError:
         try:
             fitparams[2] = -fitparams[2]
-            pOpt, pCov = sp.optimize.curve_fit(decaysin, xdata, ydata, p0=fitparams, bounds=bounds)
-        except:
+            pOpt, pCov = sp.optimize.curve_fit(
+                decaysin, xdata, ydata, p0=fitparams, bounds=bounds
+            )
+        except Exception:
             print("Warning: Fit decaying sine failed!")
             pOpt = [np.nan] * len(pOpt)
     return pOpt, pCov, fitparams
@@ -643,7 +722,12 @@ def decayslopesin(x, *p):
         Result of the operation.
     """
     yscale, freq, phase_deg, decay, y0, slope = p
-    return (yscale * (np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) + slope) * np.exp(-x / decay) + y0)
+    return (
+        yscale
+        * (np.sin(2 * np.pi * freq * x + phase_deg * np.pi / 180) + slope)
+        * np.exp(-x / decay)
+        + y0
+    )
 
 
 def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
@@ -668,12 +752,18 @@ def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
     if fitparams is None:
         fitparams = [None] * 6
     max_freq, max_phase = fourier_init(xdata, ydata, debug)
-    if fitparams[0] is None: fitparams[0] = max(ydata) - min(ydata)
-    if fitparams[1] is None: fitparams[1] = max_freq
-    if fitparams[2] is None: fitparams[2] = max_phase * 180 / np.pi + 90
-    if fitparams[3] is None: fitparams[3] = (max(xdata) - min(xdata)) / 4
-    if fitparams[4] is None: fitparams[4] = np.mean(ydata)
-    if fitparams[5] is None: fitparams[5] = 0
+    if fitparams[0] is None:
+        fitparams[0] = max(ydata) - min(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = max_freq
+    if fitparams[2] is None:
+        fitparams[2] = max_phase * 180 / np.pi + 90
+    if fitparams[3] is None:
+        fitparams[3] = (max(xdata) - min(xdata)) / 4
+    if fitparams[4] is None:
+        fitparams[4] = np.mean(ydata)
+    if fitparams[5] is None:
+        fitparams[5] = 0
     bounds = (
         [0.6 * fitparams[0], 1e-3, -360, 0.1, np.min(ydata), -np.inf],
         [1.5 * fitparams[0], 1e3, 360, np.inf, np.max(ydata), np.inf],
@@ -686,12 +776,16 @@ def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
     except RuntimeError:
         try:
             fitparams[2] = fitparams[2] - 90
-            pOpt, pCov = sp.optimize.curve_fit(decayslopesin, xdata, ydata, p0=fitparams)
-        except:
+            pOpt, pCov = sp.optimize.curve_fit(
+                decayslopesin, xdata, ydata, p0=fitparams
+            )
+        except Exception:
             try:
                 fitparams[2] = fitparams[2] + 180
-                pOpt, pCov = sp.optimize.curve_fit(decayslopesin, xdata, ydata, p0=fitparams)
-            except:
+                pOpt, pCov = sp.optimize.curve_fit(
+                    decayslopesin, xdata, ydata, p0=fitparams
+                )
+            except Exception:
                 print("Warning: Fit decaying slope sine failed!")
                 pOpt = [np.nan] * len(pOpt)
     return pOpt, pCov, fitparams
@@ -746,25 +840,60 @@ def fittwofreq_decaysin(xdata, ydata, fitparams=None):
         max_ind = np.argwhere(fourier == sorted_fourier[-2])[0][0]
     max_freq = np.abs(fft_freqs[max_ind])
     max_phase = fft_phases[max_ind]
-    if fitparams[0] is None: fitparams[0] = max(ydata) - min(ydata)
-    if fitparams[1] is None: fitparams[1] = max_freq
-    if fitparams[2] is None: fitparams[2] = max_phase * 180 / np.pi
-    if fitparams[3] is None: fitparams[3] = max(xdata) - min(xdata)
-    if fitparams[4] is None: fitparams[4] = np.mean(ydata)
-    if fitparams[5] is None: fitparams[5] = xdata[0]
-    if fitparams[6] is None: fitparams[6] = 1
-    if fitparams[7] is None: fitparams[7] = 1 / 10
-    if fitparams[8] is None: fitparams[8] = 0
-    if fitparams[9] is None: fitparams[9] = 0
+    if fitparams[0] is None:
+        fitparams[0] = max(ydata) - min(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = max_freq
+    if fitparams[2] is None:
+        fitparams[2] = max_phase * 180 / np.pi
+    if fitparams[3] is None:
+        fitparams[3] = max(xdata) - min(xdata)
+    if fitparams[4] is None:
+        fitparams[4] = np.mean(ydata)
+    if fitparams[5] is None:
+        fitparams[5] = xdata[0]
+    if fitparams[6] is None:
+        fitparams[6] = 1
+    if fitparams[7] is None:
+        fitparams[7] = 1 / 10
+    if fitparams[8] is None:
+        fitparams[8] = 0
+    if fitparams[9] is None:
+        fitparams[9] = 0
     bounds = (
-        [0.75*fitparams[0], 0.1/(max(xdata)-min(xdata)), -360, 0.3*(max(xdata)-min(xdata)),
-         np.min(ydata), xdata[0]-(xdata[-1]-xdata[0]), 0.9, 0.01, -360, -0.1],
-        [1.25*fitparams[0], 15/(max(xdata)-min(xdata)), 360, np.inf,
-         np.max(ydata), xdata[-1]+(xdata[-1]-xdata[0]), 1.1, 10, 360, 0.1],
+        [
+            0.75 * fitparams[0],
+            0.1 / (max(xdata) - min(xdata)),
+            -360,
+            0.3 * (max(xdata) - min(xdata)),
+            np.min(ydata),
+            xdata[0] - (xdata[-1] - xdata[0]),
+            0.9,
+            0.01,
+            -360,
+            -0.1,
+        ],
+        [
+            1.25 * fitparams[0],
+            15 / (max(xdata) - min(xdata)),
+            360,
+            np.inf,
+            np.max(ydata),
+            xdata[-1] + (xdata[-1] - xdata[0]),
+            1.1,
+            10,
+            360,
+            0.1,
+        ],
     )
-    return generic_fit(twofreq_decaysin, xdata, ydata, fitparams, bounds=bounds,
-                       error_message="Warning: Fit two-frequency decaying sine failed!")
-
+    return generic_fit(
+        twofreq_decaysin,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit two-frequency decaying sine failed!",
+    )
 
 
 def gaussian(x, a, x0, sigma, y0):
@@ -812,15 +941,26 @@ def fit_gauss(xdata, ydata, fitparams=None):
         fitparams = [None] * 4
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = np.max(ydata)
-    if fitparams[1] is None: fitparams[1] = xdata[np.argmax(ydata)]
-    if fitparams[2] is None: fitparams[2] = (np.max(xdata) - np.min(xdata)) / 8
-    if fitparams[3] is None: fitparams[3] = np.min(ydata)
+    if fitparams[0] is None:
+        fitparams[0] = np.max(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = xdata[np.argmax(ydata)]
+    if fitparams[2] is None:
+        fitparams[2] = (np.max(xdata) - np.min(xdata)) / 8
+    if fitparams[3] is None:
+        fitparams[3] = np.min(ydata)
     bounds = (
         [fitparams[0] * 0.5, np.min(xdata), fitparams[2] * 0.1, 0],
         [fitparams[0] * 1.5, np.max(xdata), fitparams[2] * 10, np.max(ydata)],
     )
-    return generic_fit(gaussian, xdata, ydata, fitparams, bounds=bounds, error_message="Warning: Fit Gaussian failed!")
+    return generic_fit(
+        gaussian,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit Gaussian failed!",
+    )
 
 
 def double_gaussian(x, a1, b1, c1, a2, b2, c2):
@@ -848,7 +988,9 @@ def double_gaussian(x, a1, b1, c1, a2, b2, c2):
     Any
         Result of the operation.
     """
-    return a1 * np.exp(-((x - b1) ** 2) / (2 * c1**2)) + a2 * np.exp(-((x - b2) ** 2) / (2 * c2**2))
+    return a1 * np.exp(-((x - b1) ** 2) / (2 * c1**2)) + a2 * np.exp(
+        -((x - b2) ** 2) / (2 * c2**2)
+    )
 
 
 def fit_doublegauss(xdata, ydata, fitparams):
@@ -874,13 +1016,13 @@ def fit_doublegauss(xdata, ydata, fitparams):
     lb = [0, mug - delta_mu_g, 0, 0, mue - delta_mu_e, 0]
     ub = [np.inf, mug + delta_mu_g, np.inf, np.inf, mue + delta_mu_e, np.inf]
     try:
-        pOpt, pCov = sp.optimize.curve_fit(double_gaussian, xdata, ydata, p0=fitparams,
-                                           bounds=(lb, ub), maxfev=10000)
+        pOpt, pCov = sp.optimize.curve_fit(
+            double_gaussian, xdata, ydata, p0=fitparams, bounds=(lb, ub), maxfev=10000
+        )
     except Exception:
         pOpt = fitparams
         pCov = np.zeros((6, 6))
     return pOpt, pCov
-
 
 
 def hangerfunc(x, *p):
@@ -977,12 +1119,18 @@ def fithanger(xdata, ydata, fitparams=None):
     """
     if fitparams is None:
         fitparams = [None] * 6
-    if fitparams[0] is None: fitparams[0] = xdata[np.argmin(np.abs(ydata))]
-    if fitparams[1] is None: fitparams[1] = 8
-    if fitparams[2] is None: fitparams[2] = 3
-    if fitparams[3] is None: fitparams[3] = 0
-    if fitparams[4] is None: fitparams[4] = max(ydata)
-    if fitparams[5] is None: fitparams[5] = 0
+    if fitparams[0] is None:
+        fitparams[0] = xdata[np.argmin(np.abs(ydata))]
+    if fitparams[1] is None:
+        fitparams[1] = 8
+    if fitparams[2] is None:
+        fitparams[2] = 3
+    if fitparams[3] is None:
+        fitparams[3] = 0
+    if fitparams[4] is None:
+        fitparams[4] = max(ydata)
+    if fitparams[5] is None:
+        fitparams[5] = 0
     bounds = (
         [np.min(xdata), 0, 0, -np.inf, 0, -np.inf],
         [np.max(xdata), np.inf, np.inf, np.inf, np.inf, np.inf],
@@ -991,13 +1139,16 @@ def fithanger(xdata, ydata, fitparams=None):
     pOpt = fitparams
     pCov = np.full(shape=(len(fitparams), len(fitparams)), fill_value=np.inf)
     try:
-        pOpt, pCov = sp.optimize.curve_fit(hangerS21func_sloped, xdata, ydata, p0=fitparams, bounds=bounds)
-        pOpt, pCov = sp.optimize.curve_fit(hangerS21func_sloped, xdata, ydata, p0=pOpt, bounds=bounds)
+        pOpt, pCov = sp.optimize.curve_fit(
+            hangerS21func_sloped, xdata, ydata, p0=fitparams, bounds=bounds
+        )
+        pOpt, pCov = sp.optimize.curve_fit(
+            hangerS21func_sloped, xdata, ydata, p0=pOpt, bounds=bounds
+        )
     except RuntimeError:
         print("Warning: Fit hanger failed!")
         traceback.print_exc()
     return pOpt, pCov, fitparams
-
 
 
 def rb_func(depth, p, a, b):
@@ -1118,9 +1269,12 @@ def fitrb(xdata, ydata, fitparams=None, p_bounds=(0.0, 1.0), maxfev=10000):
         fitparams = [p0, a0, b0]
     else:
         fitparams = list(fitparams)
-        if fitparams[0] is None: fitparams[0] = p0
-        if fitparams[1] is None: fitparams[1] = a0
-        if fitparams[2] is None: fitparams[2] = b0
+        if fitparams[0] is None:
+            fitparams[0] = p0
+        if fitparams[1] is None:
+            fitparams[1] = a0
+        if fitparams[2] is None:
+            fitparams[2] = b0
     a_mag = max(abs(a0) * 10, 1.0)
     b_mag = max(abs(b0) * 10 + abs(a0) * 10, 1.0)
     bounds = (
@@ -1132,16 +1286,18 @@ def fitrb(xdata, ydata, fitparams=None, p_bounds=(0.0, 1.0), maxfev=10000):
     pOpt = fitparams
     pCov = np.full((3, 3), np.inf)
     try:
-        pOpt, pCov = sp.optimize.curve_fit(rb_func, x, y, p0=fitparams, bounds=bounds,
-                                           maxfev=maxfev, method="trf")
+        pOpt, pCov = sp.optimize.curve_fit(
+            rb_func, x, y, p0=fitparams, bounds=bounds, maxfev=maxfev, method="trf"
+        )
         print(f"[fitrb] p={pOpt[0]:.6f}  a={pOpt[1]:.4f}  b={pOpt[2]:.4f}")
-        print(f"[fitrb] σ(p)={np.sqrt(pCov[0, 0]):.2e}  σ(a)={np.sqrt(pCov[1, 1]):.2e}  σ(b)={np.sqrt(pCov[2, 2]):.2e}")
+        print(
+            f"[fitrb] σ(p)={np.sqrt(pCov[0, 0]):.2e}  σ(a)={np.sqrt(pCov[1, 1]):.2e}  σ(b)={np.sqrt(pCov[2, 2]):.2e}"
+        )
     except RuntimeError:
         print("Warning: RB fit failed!")
         traceback.print_exc()
         pOpt = [np.nan] * 3
     return pOpt, pCov
-
 
 
 def adiabatic_amp(t, amp_max, beta, period):
@@ -1216,7 +1372,6 @@ def adiabatic_iqamp(t, amp_max, mu, beta, period):
     return np.real(iamp), np.real(qamp)
 
 
-
 def probg_Xhalf(n, *p):
     """Ground-state probability for repeated X/2 pulse sequence.
 
@@ -1274,7 +1429,9 @@ def probg_Xhalf_decay(n, *p):
     """
     a, delta, decay = p
     delta = delta * np.pi / 180
-    return a + (0.5 * (-1) ** n * np.cos(np.pi / 2 + 2 * n * delta)) * np.exp(-n / decay)
+    return a + (0.5 * (-1) ** n * np.cos(np.pi / 2 + 2 * n * delta)) * np.exp(
+        -n / decay
+    )
 
 
 def fit_probg_Xhalf(xdata, ydata, fitparams=None):
@@ -1298,11 +1455,19 @@ def fit_probg_Xhalf(xdata, ydata, fitparams=None):
         fitparams = [None] * 2
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = np.average(ydata)
-    if fitparams[1] is None: fitparams[1] = 0.0
+    if fitparams[0] is None:
+        fitparams[0] = np.average(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = 0.0
     bounds = ([min(ydata), -20.0], [max(ydata), 20.0])
-    return generic_fit(probg_Xhalf, xdata, ydata, fitparams, bounds=bounds,
-                       error_message="Warning: Fit X/2 rotation error failed!")
+    return generic_fit(
+        probg_Xhalf,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit X/2 rotation error failed!",
+    )
 
 
 def fit_probg_X(xdata, ydata, fitparams=None):
@@ -1326,11 +1491,19 @@ def fit_probg_X(xdata, ydata, fitparams=None):
         fitparams = [None] * 2
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = np.average(ydata)
-    if fitparams[1] is None: fitparams[1] = 0.0
+    if fitparams[0] is None:
+        fitparams[0] = np.average(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = 0.0
     bounds = ([min(ydata), -20.0], [max(ydata), 20.0])
-    return generic_fit(probg_X, xdata, ydata, fitparams, bounds=bounds,
-                       error_message="Warning: Fit X rotation error failed!")
+    return generic_fit(
+        probg_X,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit X rotation error failed!",
+    )
 
 
 def fit_probg_Xhalf_decay(xdata, ydata, fitparams=None):
@@ -1354,13 +1527,21 @@ def fit_probg_Xhalf_decay(xdata, ydata, fitparams=None):
         fitparams = [None] * 3
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = np.average(ydata)
-    if fitparams[1] is None: fitparams[1] = 0.0
-    if fitparams[2] is None: fitparams[2] = 10
+    if fitparams[0] is None:
+        fitparams[0] = np.average(ydata)
+    if fitparams[1] is None:
+        fitparams[1] = 0.0
+    if fitparams[2] is None:
+        fitparams[2] = 10
     bounds = ([min(ydata), -20.0, 1], [max(ydata), 20.0, 100])
-    return generic_fit(probg_Xhalf_decay, xdata, ydata, fitparams, bounds=bounds,
-                       error_message="Warning: Fit decaying X/2 rotation error failed!")
-
+    return generic_fit(
+        probg_Xhalf_decay,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit decaying X/2 rotation error failed!",
+    )
 
 
 def poisson(n, *p):
@@ -1403,6 +1584,14 @@ def fit_poisson(xdata, ydata, fitparams=None):
         fitparams = [None] * 1
     else:
         fitparams = list(fitparams)
-    if fitparams[0] is None: fitparams[0] = ydata[0]
+    if fitparams[0] is None:
+        fitparams[0] = ydata[0]
     bounds = ([0], [10])
-    return generic_fit(poisson, xdata, ydata, fitparams, bounds=bounds, error_message="Warning: Fit Poisson failed!")
+    return generic_fit(
+        poisson,
+        xdata,
+        ydata,
+        fitparams,
+        bounds=bounds,
+        error_message="Warning: Fit Poisson failed!",
+    )

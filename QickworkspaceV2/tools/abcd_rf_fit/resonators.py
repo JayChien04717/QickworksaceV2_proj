@@ -181,7 +181,7 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
     Exception
         If the operation cannot be completed.
     """
-    if type(geometry) == str:
+    if isinstance(geometry, str):
         resonator_func = resonator_dict[geometry]
     else:
         resonator_func = geometry
@@ -478,7 +478,6 @@ class ResonatorParams(object):
             Result of the operation.
         """
         kappa = {False: "kappa/2pi", True: r"$\kappa/2\pi$"}
-        kappa_i = {False: "kappa_i/2pi", True: r"$\kappa_i/2\pi$"}
         kappa_c = {False: "kappa_c/2pi", True: r"$\kappa_c/2\pi$"}
         f_0 = {False: "f_0", True: r"$f_0$"}
         phi_0 = {False: "phi_0", True: r"$\varphi_0$"}

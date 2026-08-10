@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram, resolve_gate
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import AllXYAnalysis
 
@@ -83,6 +84,10 @@ class AllXY(BaseExperiment):
 
     EXPT_NAME = "s014_AllXY_ge"
     TAG = "AllXY"
+    X_LABEL = "Gate pair"
+    TITLE_PREFIX = "AllXY"
+    X_SAVE_NAME = "Gate pair"
+    X_SAVE_UNIT = "index"
     Analysis = AllXYAnalysis
 
     def __init__(self, config):
@@ -114,6 +119,7 @@ class AllXY(BaseExperiment):
         """
         self._iq_process = iq_process
         allxy_lst = []
+        threshold = self._get_readout_threshold()
         for gate in tqdm(ALLXY_SEQUENCE, desc="AllXY"):
             self.cfg["allxy_gates"] = gate
             prog = AllXYProgram(
@@ -122,24 +128,31 @@ class AllXY(BaseExperiment):
                 final_delay=self.cfg["relax_delay"],
                 cfg=self.cfg,
             )
-            iq_list = prog.acquire(
-                self.soc, rounds=py_avg, progress=False, threshold=self.cfg["threshold"]
+            value = acquire_values(
+                prog,
+                self.soc,
+                rounds=py_avg,
+                progress=False,
+                threshold=threshold,
+                scalar_readout=True,
             )
-            if self.cfg["threshold"] is not None:
-                allxy_lst.append(np.real(iq_list[0][0].dot([1, 1j])))
-            else:
-                allxy_lst.append(iq_list[0][0].dot([1, 1j]))
+            allxy_lst.append(np.asarray(value).reshape(-1)[0])
         self.allxy_lst = np.array(allxy_lst)
+        self.iqdata = self.allxy_lst
 
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.allxy_lst,
             x_axis=np.arange(len(ALLXY_SEQUENCE), dtype=float),
-            y_axis=self.allxy_lst,
-            x_name="Gate pair",
-            x_unit="index",
-            y_name="Signal",
-            y_unit="ADC",
+            x_name=self.X_SAVE_NAME,
+            x_unit=self.X_SAVE_UNIT,
+            metadata={
+                "iq_process": "real" if threshold is not None else iq_process,
+                "threshold": threshold,
+                "threshold_discrimination": threshold is not None,
+            },
+            avg_count=py_avg,
+            dataset_dims={"iq": ["x"]},
             quality=QualityFlag.NO_INFORMATION,
         )
         if self.Analysis is not None:

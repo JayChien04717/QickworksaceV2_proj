@@ -18,6 +18,7 @@ import numpy as np
 import xarray as xr
 
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
 from .twpa import TWPAFluxProgram
 
 
@@ -225,8 +226,12 @@ class TWPACalibrator:
         )
 
     def _trace(self, program: TWPAFluxProgram) -> np.ndarray:
-        iq = program.acquire(self.soc, rounds=self.plan.py_avg, progress=False)
-        return np.asarray(iq[0][0]).dot([1, 1j])
+        return acquire_values(
+            program,
+            self.soc,
+            rounds=self.plan.py_avg,
+            progress=False,
+        )
 
     def _reference_template(self, frequency: np.ndarray) -> xr.Dataset:
         shape = (self.plan.flux_values.size, frequency.size)

@@ -101,7 +101,10 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             else fit_entry
         )
         fit_params = None
-        fit_function = lambda values, *_: np.zeros_like(values, dtype=float)
+
+        def fit_function(values, *_):
+            return np.zeros_like(values, dtype=float)
+
         channel_curves = {}
         if fit_curve is not None:
             fit_curve = np.asarray(fit_curve).reshape(-1)
@@ -339,8 +342,6 @@ class LorentzianAnalysis(BaseAnalysis):
             return
         from ..tools.fitting import fitlor, lorfunc
 
-        x = data.x_axis
-
         try:
             _, popt, pcov, channel, score = self._fit_channel(data, fitlor, lorfunc)
             err = np.sqrt(np.diag(pcov))
@@ -378,14 +379,18 @@ class LorentzianAnalysis(BaseAnalysis):
                 result_text=data.quality_message or "Lorentzian fit unavailable",
             )
             return
-        f0    = data.fit_result.get("f0_MHz",        (None,))[0]
-        kappa = data.fit_result.get("linewidth_MHz",  (None,))[0]
+        f0 = data.fit_result.get("f0_MHz", (None,))[0]
+        linewidth = data.fit_result.get("linewidth_MHz", (None,))[0]
         title = "Qubit Spectroscopy"
-        if f0:    title += f"  |  f0 = {f0:.3f} MHz"
-        if kappa: title += f",  κ = {kappa:.3f} MHz"
+        if f0 is not None:
+            title += f"  |  f0 = {f0:.3f} MHz"
+        if linewidth is not None:
+            title += f", linewidth = {linewidth:.3f} MHz"
         lines = []
-        if f0:    lines.append(f"f0     = {f0:.3f} MHz")
-        if kappa: lines.append(f"κ      = {kappa:.3f} MHz")
+        if f0 is not None:
+            lines.append(f"f0        = {f0:.3f} MHz")
+        if linewidth is not None:
+            lines.append(f"linewidth = {linewidth:.3f} MHz")
         self._show_fit(
             data, lorfunc, data.fit_params,
             xlabel="Frequency (MHz)",

@@ -41,6 +41,13 @@ class ActiveResetTests(unittest.TestCase):
             "soc", rounds=3, threshold=0.4, angle=0.0, progress=True
         )
         np.testing.assert_allclose(result.raw_iq, pre)
+        np.testing.assert_allclose(
+            result.raw_data["readouts"], np.stack((pre, post))
+        )
+        self.assertEqual(result.dataset_dims["readouts"], ["readout", "x"])
+        self.assertEqual(
+            result.axes["readout"]["values"], ["pre_reset", "post_reset"]
+        )
 
     def test_feedback_threshold_is_normalized_threshold_times_length(self):
         prog = ActiveResetRabiProgram.__new__(ActiveResetRabiProgram)

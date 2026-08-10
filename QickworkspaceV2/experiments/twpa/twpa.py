@@ -1,5 +1,5 @@
 """
-TWPA experiments ??s002d-g: TWPA characterization experiments.
+TWPA experiments s002d-g: TWPA characterization experiments.
 """
 
 from __future__ import annotations
@@ -20,17 +20,14 @@ except ImportError:
 
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
 from ...tools.scoring import (
     score_ai_twpa_c_gain_data,
     find_best_operation_point,
     plot_gain_at_operation_point,
     plot_operation_point_parameters,
 )
-from ...tools.electrical_length import (
-    plot_electrical_length,
-    set_units_on_plot_axis,
-    estimate_electrical_length,
-)
+from ...tools.electrical_length import set_units_on_plot_axis, estimate_electrical_length
 
 # ?�?� s002d: TWPAFlux ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
 
@@ -316,7 +313,7 @@ class TWPAGain:
 
     def stop(self):
         self._stop = True
-        print("Stop requested ??will halt after the current pump_freq step.")
+        print("Stop requested; the scan will halt after the current pump-frequency step.")
 
     def run(
         self,
@@ -370,7 +367,7 @@ class TWPAGain:
                     )
                 except KeyboardInterrupt:
                     tqdm.write(
-                        "\nKeyboardInterrupt ??saving collected data and stopping."
+                        "\nKeyboardInterrupt: saving collected data and stopping."
                     )
                     self._stop = True
                 if not self._stop:
@@ -388,7 +385,7 @@ class TWPAGain:
                     reference=reference, save_dir=temp_folder, filename="temp_gain"
                 )
                 print(
-                    f"[saved] {len(self._slices)}/{len(self.pump_freqs)} pump_freq steps ??{temp_folder}"
+                    f"[saved] {len(self._slices)}/{len(self.pump_freqs)} pump-frequency steps: {temp_folder}"
                 )
 
     def _build_gain_xarray(self):
@@ -887,12 +884,16 @@ class TWPAPowerScan:
                 tqdm.write(f"  pump_power = {pp:+.1f} dBm")
                 self.pump.power = pp
                 try:
-                    iq_list = _prog.acquire(_soc, rounds=py_avg, progress=False)
+                    iq_data = acquire_values(
+                        _prog,
+                        _soc,
+                        rounds=py_avg,
+                        progress=False,
+                    )
                 except KeyboardInterrupt:
                     tqdm.write("\nKeyboardInterrupt.")
                     self._stop = True
                     break
-                iq_data = iq_list[0][0].dot([1, 1j])
                 s21_1d = xr.DataArray(
                     iq_data,
                     dims=["frequency"],
@@ -906,7 +907,7 @@ class TWPAPowerScan:
                     "Gain (dB)" if _ref_row is not None else "Amplitude"
                 )
                 _ax_live.set_title(
-                    f"TWPA Power Scan  [{len(self._collected_powers)}/{len(self.pump_powers)}]  ?? latest: {pp:+.1f} dBm\n"
+                    f"TWPA Power Scan  [{len(self._collected_powers)}/{len(self.pump_powers)}]  latest: {pp:+.1f} dBm\n"
                     f"pump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA"
                 )
                 _ax_live.grid(True, alpha=0.3)

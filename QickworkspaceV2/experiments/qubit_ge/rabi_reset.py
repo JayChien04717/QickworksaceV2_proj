@@ -14,6 +14,7 @@ from qick.asm_v2 import QickSweep1D
 
 from ...analysis.qubit import PowerRabiAnalysis
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import decode_readouts
 from ...core.base_program import BaseProgram
 from ...core.experiment_components import AcquisitionResult
 
@@ -41,16 +42,6 @@ class ActiveResetRabiProgram(BaseProgram):
         self.setup_resonator(cfg, prefix="ge")
         self.setup_qubit_gen(cfg, prefix="ge")
 
-        ro_ch = cfg["ro_ch"]
-
-        tproc_ch = self.soccfg["readouts"][ro_ch].get("tproc_ch")
-        if tproc_ch is None or int(tproc_ch) < 0:
-            raise RuntimeError(
-                f"readout channel {ro_ch} has no tProc feedback input "
-                "('tproc_ch'); measurement-based active reset is unavailable "
-                "with this firmware/readout channel"
-            )
-
         self.add_loop("gainloop", cfg["steps"])
 
         # Current QickworkspaceV2 convention is to supply qb_gain_ge as a
@@ -61,52 +52,13 @@ class ActiveResetRabiProgram(BaseProgram):
             cfg["qb_gain_ge"] = QickSweep1D("gainloop", cfg["start"], stop)
 
         self.setup_qb_pulse(cfg, "ge", name="rabi_pulse")
-        self.setup_qb_pulse(
-            cfg,
-            "ge",
-            name="reset_pi",
-            gain_key="pi_gain_ge",
-        )
-        # Reserve the same waveform slot in the no-reset control while
-        # applying zero drive.
-        self.setup_qb_pulse(
-            cfg,
-            "ge",
-            name="reset_idle",
-            gain_override=0,
-        )
-
-        reset_mode = str(cfg.get("reset_mode", "conditional")).lower()
-        if reset_mode not in {"conditional", "always", "never"}:
-            raise ValueError(
-                "reset_mode must be 'conditional', 'always', or 'never'"
-            )
-        self.reset_mode = reset_mode
-
-        # Feedback reads the raw accumulator, so store the configured
-        # normalized threshold in accumulator units.
-        threshold_raw = int(round(cfg["threshold"] * cfg["ro_length"]))
-        self.reset_threshold_normalized = float(cfg["threshold"])
-        self.reset_threshold_raw = threshold_raw
-        self.reset_readout_length = float(cfg["ro_length"])
-        self.reset_component = "I"
-        self.ground_test = "<"
-        self.add_reg("reset_threshold")
-        self.write_reg("reset_threshold", threshold_raw)
+        self.setup_active_reset(cfg)
 
     def _readout(self, cfg):
-        """Play the readout tone and trigger the configured ADC.
-
-        Parameters
-        ----------
-        cfg : Any
-            Experiment configuration mapping.
-        """
-        self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)
-        self.trigger(
-            ros=[cfg["ro_ch"]],
+        """Trigger a readout using the active-reset marker pins."""
+        self.measure(
+            cfg,
             pins=cfg.get("reset_trigger_pins", [0]),
-            t=cfg["trig_time"],
         )
 
     def _body(self, cfg):
@@ -154,8 +106,8 @@ class ActiveResetRabi(BaseExperiment):
         non-thresholded QICK acquisition.
 
     Optional keys are ``reset_mode`` (``"conditional"``, ``"always"``, or
-    ``"never"``), ``read_wait``, and ``reset_post_delay``. Feedback uses I;
-    values below threshold are ground and skip the reset pulse.
+    ``"never"``), ``reset_component`` (I or Q), ``reset_excited_if``,
+    ``read_wait``, ``feedback_slack``, and ``reset_post_delay``.
     """
 
     EXPT_NAME = "s005c_power_rabi_active_reset_ge"
@@ -260,25 +212,16 @@ class ActiveResetRabi(BaseExperiment):
             angle=angle,
             progress=True,
         )
-        channel_data = np.asarray(acquired[0])
-        if channel_data.shape[0] < 2:
+        readouts = decode_readouts(acquired, threshold=threshold is not None)
+        if readouts.shape[0] < 2:
             raise RuntimeError(
                 "active-reset Rabi expected two readouts per shot, got "
-                f"shape {channel_data.shape}"
+                f"shape {readouts.shape}"
             )
 
         if threshold is not None:
-            if channel_data.shape[-1] != 2:
-                raise RuntimeError(
-                    "thresholded active-reset data must end in the QICK "
-                    f"[population, Q-placeholder] axis, got {channel_data.shape}"
-                )
-            # QICK retains a final two-component axis after software
-            # thresholding. Only component 0 contains the population;
-            # component 1 is a zero placeholder and must not reach plotting.
-            threshold_data = np.asarray(channel_data[..., 0], dtype=float)
-            pre_reset = threshold_data[0]
-            post_reset = threshold_data[1]
+            pre_reset = np.asarray(readouts[0], dtype=float)
+            post_reset = np.asarray(readouts[1], dtype=float)
             # QICK threshold acquisition reports P(component >= threshold).
             # Convert it when the configured excited cloud is below threshold.
             if prog.ground_test == ">=":
@@ -288,13 +231,8 @@ class ActiveResetRabi(BaseExperiment):
             self.post_reset_population = post_reset
             self.reset_verification_iq = post_reset
         else:
-            if channel_data.ndim < 3 or channel_data.shape[-1] != 2:
-                raise RuntimeError(
-                    "non-thresholded active-reset data must end in an I/Q axis, "
-                    f"got shape {channel_data.shape}"
-                )
-            pre_reset = channel_data[0].dot([1, 1j])
-            post_reset = channel_data[1].dot([1, 1j])
+            pre_reset = readouts[0]
+            post_reset = readouts[1]
             self.reset_verification_iq = post_reset
 
         self.iqdata = pre_reset
@@ -319,7 +257,17 @@ class ActiveResetRabi(BaseExperiment):
 
         return AcquisitionResult(
             raw_iq=pre_reset,
+            axes={
+                "readout": {
+                    "values": ["pre_reset", "post_reset"],
+                    "label": "Readout",
+                }
+            },
+            raw_data={
+                "readouts": np.stack((pre_reset, post_reset)),
+            },
             analysis_data=analysis_data,
+            dataset_dims={"readouts": ["readout", "x"]},
             avg_count=ctx.py_avg,
             metadata={
                 "active_reset": True,

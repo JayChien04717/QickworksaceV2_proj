@@ -130,6 +130,36 @@ class DataContractTests(unittest.TestCase):
             )
             self.assertTrue(validate_file(path).valid)
 
+    def test_hdf5_round_trip_preserves_named_multi_readouts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "multi-readout.h5"
+            readouts = np.array([
+                [1 + 1j, 2 + 2j],
+                [3 + 3j, 4 + 4j],
+            ])
+            result = ExperimentData(
+                experiment_type="active_reset",
+                raw_iq=readouts[0],
+                x_axis=np.array([0.0, 1.0]),
+                axes={"readout": {"values": ["pre_reset", "post_reset"]}},
+                raw_data={"readouts": readouts},
+                dataset_dims={
+                    "iq": ["x"],
+                    "readouts": ["readout", "x"],
+                },
+            )
+
+            result.save(path, catalog=False)
+            restored = ExperimentData.load(path)
+
+            np.testing.assert_array_equal(
+                restored.get_readout("pre_reset"), readouts[0]
+            )
+            np.testing.assert_array_equal(
+                restored.get_readout("post_reset"), readouts[1]
+            )
+            self.assertTrue(validate_file(path).valid)
+
     def test_calibration_store_saves_atomically_and_reloads(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "calibration.json"

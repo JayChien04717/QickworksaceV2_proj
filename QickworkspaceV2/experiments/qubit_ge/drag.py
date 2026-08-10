@@ -11,7 +11,6 @@ from scipy.optimize import curve_fit
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
 from ...core.experiment_data import ExperimentData, QualityFlag
-from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
 from ...plotter.liveplot import liveplotfun
 
 
@@ -197,6 +196,8 @@ class DragCalibration(BaseExperiment):
             y_name=self.Y_SAVE_NAME,
             y_unit=self.Y_SAVE_UNIT,
             y_scale=self.Y_SAVE_SCALE,
+            metadata={"iq_process": "abs"},
+            dataset_dims={"iq": ["y", "x"]},
         )
         self.result = result
         return result

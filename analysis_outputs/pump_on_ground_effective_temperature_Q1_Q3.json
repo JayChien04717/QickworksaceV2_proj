@@ -1,0 +1,71 @@
+{
+  "method": {
+    "step_1": "fit prepared-g and prepared-e main Gaussian peaks independently",
+    "step_2": "fit prepared-g histogram to two Gaussians with centers fixed at the fitted g/e main centers; amplitudes and sigmas are fitted",
+    "sigma_bounds": "0.5 to 1.5 times the independently fitted state-main sigma",
+    "population_ratio": "Gaussian area ratio Pg/Pe=(Ag*sigma_g)/(Ae*sigma_e)",
+    "temperature": "T_eff=h*f/[k_B*ln(Pg/Pe)]",
+    "bootstrap_resamples": 250,
+    "interpretation": "apparent equilibrium temperature if all e-like ground-histogram weight is thermal population"
+  },
+  "results": {
+    "Q1": {
+      "file": "D:\\Labber_Data\\Jay\\purcell_tmon\\withTWPA\\2026\\08\\Data_0807\\s000_singleshot_ge_Q1_20260807T012628261453Z-CRWX6JW1D2SF6.hdf5",
+      "frequency_MHz": 3631.3605935224505,
+      "rotation_deg": 105.70008579472236,
+      "fitted_g_main_center": 7.206810531910372,
+      "fitted_g_main_sigma": 0.6906838883401615,
+      "fitted_e_main_center": 9.428014706254178,
+      "fitted_e_main_sigma": 0.8656818789620423,
+      "ground_double_fit_g_sigma": 0.6879227842943372,
+      "ground_double_fit_e_like_sigma": 0.4328409394810212,
+      "ground_main_fraction": 0.9878313945598413,
+      "ground_e_like_fraction": 0.012168605440158704,
+      "main_to_second_area_ratio": 81.17868554598792,
+      "effective_temperature_mK": 39.638750857721384,
+      "e_like_fraction_95pct_CI": [
+        0.007862525448754529,
+        0.017641683727913932
+      ],
+      "area_ratio_95pct_CI": [
+        55.69069773141196,
+        126.55836456239574
+      ],
+      "temperature_mK_95pct_CI": [
+        36.018026604854796,
+        43.35570796516642
+      ],
+      "secondary_sigma_at_fit_bound": true,
+      "bootstrap_successes": 250
+    },
+    "Q3": {
+      "file": "D:\\Labber_Data\\Jay\\purcell_tmon\\withTWPA\\2026\\08\\Data_0807\\s000_singleshot_ge_Q3_20260807T020742125175Z-BYPSZN3X1GH43.hdf5",
+      "frequency_MHz": 3136.3324292636107,
+      "rotation_deg": -77.08919585979997,
+      "fitted_g_main_center": -2.929307721706196,
+      "fitted_g_main_sigma": 0.860875240315812,
+      "fitted_e_main_center": 0.1019842303223565,
+      "fitted_e_main_sigma": 0.827883456240787,
+      "ground_double_fit_g_sigma": 0.8394369712352372,
+      "ground_double_fit_e_like_sigma": 0.7514733887541728,
+      "ground_main_fraction": 0.9080300430175208,
+      "ground_e_like_fraction": 0.09196995698247915,
+      "main_to_second_area_ratio": 9.873115882727946,
+      "effective_temperature_mK": 65.73464855087889,
+      "e_like_fraction_95pct_CI": [
+        0.0834468335982827,
+        0.10088718513012015
+      ],
+      "area_ratio_95pct_CI": [
+        8.912065459035217,
+        10.983866878833696
+      ],
+      "temperature_mK_95pct_CI": [
+        62.810702281054986,
+        68.81221233195991
+      ],
+      "secondary_sigma_at_fit_bound": false,
+      "bootstrap_successes": 250
+    }
+  }
+}
