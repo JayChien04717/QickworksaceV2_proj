@@ -34,7 +34,8 @@ Quick start
 from .core.experiment_data import ExperimentData, QualityFlag
 from .core.base_analysis import BaseAnalysis
 from .core.base_experiment import BaseExperiment
-from .core.composite import BatchExperiment, ParallelExperiment
+from .core.experiment_components import SweepAxis
+from .core.composite import run_batch, run_parallel, summarize_results
 from .calibration import CalibrationStore, CalibrationGraph, CalibrationNode, CalibrationMonitor, AutoCalibrate
 
 _LAZY_EXPORTS = {
@@ -44,6 +45,7 @@ _LAZY_EXPORTS = {
     "hist": ".experiments.setup",
     "TOF": ".experiments.setup",
     "ResonatorSpec": ".experiments.resonator",
+    "BroadbandResonatorSpec": ".experiments.resonator",
     "Punchout": ".experiments.resonator",
     "ResonatorSpecFlux": ".experiments.resonator",
     "DispersiveShift": ".experiments.resonator",
@@ -94,13 +96,14 @@ __version__ = "1.0.0"
 
 __all__ = [
     "ExperimentData", "QualityFlag",
-    "BaseAnalysis", "BaseExperiment",
-    "BatchExperiment", "ParallelExperiment",
+    "BaseAnalysis", "BaseExperiment", "SweepAxis",
+    "run_batch", "run_parallel", "summarize_results",
     "CalibrationStore", "CalibrationGraph", "CalibrationNode",
     "CalibrationMonitor", "AutoCalibrate",
     "ExperimentConfig",
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    "Chi", "CKP", "ChiKappaPower", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
+    "Chi", "CKP", "ChiKappaPower", "ResonatorSpec", "BroadbandResonatorSpec",
+    "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
     "Ramsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",

@@ -5,7 +5,7 @@ QubitEF/res_spec_ef — s009: Resonator spectroscopy (ef).
 from __future__ import annotations
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import ResonatorSpecAnalysis
 
 
@@ -60,34 +60,8 @@ class ResonatorSpec_ef(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = ResonatorSpecAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return ResSpecEfProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("res_pulse", "freq", as_array=True)
+    PROGRAM = ResSpecEfProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
 
     def run(self, py_avg, solve_type="hm", **kwargs):
         """Run the operation.

@@ -19,7 +19,7 @@ except ImportError:
     _HAS_IPY = False
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.acquisition import acquire_values
 from ...tools.scoring import (
     score_ai_twpa_c_gain_data,
@@ -158,17 +158,8 @@ class TWPAFlux(BaseExperiment):
     Y_SAVE_NAME = "Flux"
     Y_SAVE_UNIT = "A"
     Y_SAVE_SCALE = 1.0
-
-    def _create_program(self):
-        return TWPAFluxProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("res_pulse", "freq", as_array=True)
+    PROGRAM = TWPAFluxProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
 
     def _extract_sweep_axis_y(self, prog):
         yoko_val = self.cfg.get("yoko_value")

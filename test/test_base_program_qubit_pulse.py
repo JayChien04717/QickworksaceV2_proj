@@ -2,7 +2,6 @@ import unittest
 from unittest.mock import Mock
 
 from QickworkspaceV2.core.base_program import BaseProgram
-from QickworkspaceV2.core.qubit_pulse import QubitPulseMixin
 
 
 class _ConcreteBaseProgram(BaseProgram):
@@ -34,7 +33,7 @@ def _config():
 
 
 def _program():
-    program = QubitPulseMixin()
+    program = _ConcreteBaseProgram.__new__(_ConcreteBaseProgram)
     program.soccfg = {"gens": {1: {"has_mixer": False}, 2: {"has_mixer": True}}}
     program.declare_gen = Mock()
     program.add_gauss = Mock()

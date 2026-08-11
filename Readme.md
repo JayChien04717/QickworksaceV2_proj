@@ -284,19 +284,19 @@ The calibration package also exports `CalibrationGraph`, `CalibrationNode`, and
 
 ## Sequential and parallel composition
 
-`BatchExperiment` runs experiments sequentially and can stop on a bad quality
-flag. `ParallelExperiment` uses threads, so it must only be used when the
+`run_batch()` runs experiments sequentially and can stop on a bad quality
+flag. `run_parallel()` uses threads, so it must only be used when the
 experiments truly have independent hardware resources; it does not arbitrate
 access to a shared QICK board.
 
 ```python
-from QickworkspaceV2 import BatchExperiment
+from QickworkspaceV2 import run_batch
 
-batch = BatchExperiment(
+results = run_batch(
     [("res", ResonatorSpec(cfg_res)), ("t1", T1(cfg_t1))],
+    py_avg=5,
     stop_on_bad=True,
 )
-results = batch.run(py_avg=5)
 ```
 
 ## Instrument manager
@@ -343,12 +343,13 @@ Useful imports:
 from QickworkspaceV2 import (
     AutoCalibrate,
     BaseExperiment,
-    BatchExperiment,
     CalibrationStore,
     ExperimentConfig,
     ExperimentData,
-    ParallelExperiment,
     QualityFlag,
+    SweepAxis,
+    run_batch,
+    run_parallel,
 )
 
 from QickworkspaceV2.experiments.resonator import ResonatorSpec, Punchout

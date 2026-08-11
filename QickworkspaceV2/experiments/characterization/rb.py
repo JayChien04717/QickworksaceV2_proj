@@ -445,7 +445,7 @@ class RandomizedBenchmarking(BaseExperiment):
             },
             comment=str(dict_val), tag="RB",
             result=self.result,
-            figures=self._analysis_figures_for_save(),
+            figures=(list(self.result.figures) if self.result is not None else []),
         )
         print(f"RB data saved to {file_path}")
 

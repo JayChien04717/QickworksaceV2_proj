@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from QickworkspaceV2.calibration.store import CalibrationStore
-from QickworkspaceV2.core.experiment_components import SweepAxes, _infer_iq_dims
+from QickworkspaceV2.core.experiment_components import infer_iq_dims
 from QickworkspaceV2.core.experiment_data import ExperimentData, QualityFlag
 from QickworkspaceV2.experiments.characterization.allxy import AllXY
 from QickworkspaceV2.experiments.qubit_ef.rabi_ef import PowerRabiEf
@@ -102,8 +102,9 @@ class DataContractTests(unittest.TestCase):
         self.assertEqual(restored.children, ["child-id"])
 
     def test_dimension_inference_always_matches_rank(self):
-        axes = SweepAxes(x=np.arange(4), y=np.arange(3))
-        dims = _infer_iq_dims((2, 3, 4), axes)
+        dims = infer_iq_dims(
+            (2, 3, 4), x_axis=np.arange(4), y_axis=np.arange(3)
+        )
         self.assertEqual(dims, ["readout", "y", "x"])
 
     def test_hdf5_round_trip_preserves_complex_fit_curve(self):

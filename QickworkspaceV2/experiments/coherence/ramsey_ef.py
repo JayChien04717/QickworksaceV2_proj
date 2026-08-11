@@ -5,7 +5,7 @@ Ramsey EF (s012) — T2* and detuning for the ef transition.
 from __future__ import annotations
 
 from ...analysis.qubit import RamseyEfAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -70,37 +70,8 @@ class RamseyEf(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     Analysis = RamseyEfAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return RamseyEfProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        self.delay_times = prog.get_time_param("wait", "t", as_array=True)
-        return self.delay_times
+    PROGRAM = RamseyEfProgram
+    X_AXIS = SweepAxis.time("wait")
 
     def correct_detune(self):
         """Correct qubit ef frequency based on fitted detuning.

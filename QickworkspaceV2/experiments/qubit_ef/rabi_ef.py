@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import root_scalar
 
 from ...analysis.qubit import PowerRabiAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.fitting import decaysin, fitdecaysin
@@ -68,34 +68,8 @@ class PowerRabiEf(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     Analysis = PowerRabiAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return PowerRabiEfProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_ef_pulse", "gain", as_array=True)
+    PROGRAM = PowerRabiEfProgram
+    X_AXIS = SweepAxis.pulse("qb_ef_pulse", "gain")
 
 
 _H = 6.62607015e-34
@@ -156,34 +130,8 @@ class QubitTemp(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     Analysis = None
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return QubitTempProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_ef_pulse", "gain", as_array=True)
+    PROGRAM = QubitTempProgram
+    X_AXIS = SweepAxis.pulse("qb_ef_pulse", "gain")
 
     def run(
         self,

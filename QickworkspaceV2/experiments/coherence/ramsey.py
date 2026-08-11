@@ -5,7 +5,7 @@ Coherence/ramsey — s006: Ramsey (ge) + AC Stark.
 from __future__ import annotations
 
 from ...analysis.qubit import RamseyAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -68,37 +68,8 @@ class Ramsey(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     Analysis = RamseyAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return RamseyProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        self.delay_times = prog.get_time_param("wait", "t", as_array=True)
-        return self.delay_times
+    PROGRAM = RamseyProgram
+    X_AXIS = SweepAxis.time("wait")
 
     def correct_detune(self):
         """Correct qubit ge frequency based on fitted detuning.
@@ -194,18 +165,4 @@ class ACStark(Ramsey):
     EXPT_NAME = "s006_ac_stark"
     TAG = "ACStark"
     TITLE_PREFIX = "AC Stark Shift"
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return ACStarkProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
+    PROGRAM = ACStarkProgram

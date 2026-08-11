@@ -5,6 +5,7 @@ from __future__ import annotations
 from qick.asm_v2 import QickSweep1D
 
 from ._common import CryoscopeExperimentBase, CryoscopeProgramBase
+from ...core.base_experiment import SweepAxis
 
 
 class CryoscopeConstProgram(CryoscopeProgramBase):
@@ -41,35 +42,8 @@ class CryoscopeConst(CryoscopeExperimentBase):
     X_SAVE_UNIT = "us"
     X_SAVE_SCALE = 1.0
 
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return CryoscopeConstProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("flux_pulse", "length", as_array=True)
+    PROGRAM = CryoscopeConstProgram
+    X_AXIS = SweepAxis.pulse("flux_pulse", "length")
 
 
 def configure_const_sweep(cfg, start_us: float, stop_us: float, steps: int):

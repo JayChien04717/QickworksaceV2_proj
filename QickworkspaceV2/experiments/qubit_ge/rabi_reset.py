@@ -13,7 +13,7 @@ import numpy as np
 from qick.asm_v2 import QickSweep1D
 
 from ...analysis.qubit import PowerRabiAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.acquisition import decode_readouts
 from ...core.base_program import BaseProgram
 from ...core.experiment_components import AcquisitionResult
@@ -121,6 +121,8 @@ class ActiveResetRabi(BaseExperiment):
     LivePlot = False
 
     Analysis = PowerRabiAnalysis
+    PROGRAM = ActiveResetRabiProgram
+    X_AXIS = SweepAxis.pulse("rabi_pulse", "gain")
 
     def __init__(self, config):
         """Initialize the ActiveResetRabi instance.
@@ -135,36 +137,6 @@ class ActiveResetRabi(BaseExperiment):
         self.post_reset_population = None
         self.reset_verification_iq = None
 
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return ActiveResetRabiProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("rabi_pulse", "gain", as_array=True)
-
     def _get_readout_threshold(self):
         # ``threshold`` is used by the on-FPGA feedback logic here.  Do not let
         # BaseExperiment reinterpret it as software population discrimination.
@@ -177,17 +149,17 @@ class ActiveResetRabi(BaseExperiment):
         """
         return None
 
-    def _acquire(self, prog, axes, ctx):
+    def _acquire(self, prog, x_vals, y_vals, options):
         """Acquire experiment data.
 
         Parameters
         ----------
         prog : Any
             Value for ``prog``.
-        axes : Any
-            Value for ``axes``.
-        ctx : Any
-            Value for ``ctx``.
+        x_vals, y_vals : Any
+            Resolved sweep coordinates.
+        options : dict
+            Normalized run options.
 
         Returns
         -------
@@ -207,7 +179,7 @@ class ActiveResetRabi(BaseExperiment):
         angle = 0.0 if prog.reset_component == "I" else np.pi / 2
         acquired = prog.acquire(
             self.soc,
-            rounds=ctx.py_avg,
+            rounds=options["py_avg"],
             threshold=threshold,
             angle=angle,
             progress=True,
@@ -268,7 +240,7 @@ class ActiveResetRabi(BaseExperiment):
             },
             analysis_data=analysis_data,
             dataset_dims={"readouts": ["readout", "x"]},
-            avg_count=ctx.py_avg,
+            avg_count=options["py_avg"],
             metadata={
                 "active_reset": True,
                 "threshold_discrimination": threshold is not None,

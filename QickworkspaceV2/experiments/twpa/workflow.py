@@ -205,7 +205,11 @@ class TWPACalibrator:
         self.pump = pump_source
         self.instruments = instrument_manager
         self.yoko_name = yoko_name
-        self.soc, self.soccfg = BaseExperiment._runtime.require_hardware()
+        if BaseExperiment._soc is None:
+            raise RuntimeError(
+                "QICK session not initialised. Call BaseExperiment.setup(...) first."
+            )
+        self.soc, self.soccfg = BaseExperiment._soc, BaseExperiment._soccfg
 
     def _program(self) -> tuple[TWPAFluxProgram, np.ndarray]:
         program = TWPAFluxProgram(

@@ -61,21 +61,7 @@ class CryoscopeZeroPadding(CryoscopeExperimentBase):
     X_SAVE_NAME = "Active flux time"
     X_SAVE_UNIT = "ns"
     X_SAVE_SCALE = 1.0
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return CryoscopeZeroPaddingProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
+    PROGRAM = CryoscopeZeroPaddingProgram
 
     def _extract_sweep_axis(self, prog):
         """Extract the primary sweep axis from the program.

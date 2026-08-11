@@ -45,8 +45,9 @@ Every experiment inherits from `BaseExperiment` (`core/base_experiment.py`). The
 
 - Set class attributes: `EXPT_NAME`, `TAG`, `X_LABEL`, `TITLE_PREFIX`, `SWEEP_KEYS_TO_REMOVE`
 - Optionally bind `Analysis = SomeAnalysis` (a `BaseAnalysis` subclass)
-- Override `_create_program()` → return a `BaseProgram` instance
-- Override `_extract_sweep_axis(prog)` → return the x-axis numpy array
+- Set `PROGRAM = MyProgram`
+- Set `X_AXIS = SweepAxis.pulse(name, parameter)` or `SweepAxis.time(tag)`
+- For a two-dimensional QICK sweep, also set `Y_AXIS`; override the axis hooks only for computed or external axes
 - Optionally override `_post_fit(x_vals)` → run fitting, populate `self.fit_params` / `self.fit_errors`
 
 `run(py_avg, iq_process="all")` compiles the QICK program, streams live plots, acquires IQ data, calls `_post_fit`, runs `Analysis`, and returns `ExperimentData`. Analysis figures are opt-in through `plot_analysis=True` or a later `expt.plot()` call.
@@ -126,6 +127,6 @@ Never use `from qick_workspace...` anywhere in `QickworkspaceV2/`. The fallback 
 
 1. Create `QickworkspaceV2/experiments/<family>/<name>.py`
 2. Define `class MyProgram(BaseProgram)` with `_initialize` + `_body`
-3. Define `class MyExperiment(BaseExperiment)` with the class attributes above
+3. Define `class MyExperiment(BaseExperiment)` with `PROGRAM` and `X_AXIS` (plus `Y_AXIS` for 2D)
 4. Export from `QickworkspaceV2/experiments/<family>/__init__.py`
 5. Optionally add an `Analysis` subclass in `QickworkspaceV2/analysis/`

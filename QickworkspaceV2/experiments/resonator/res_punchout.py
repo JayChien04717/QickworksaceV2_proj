@@ -5,7 +5,7 @@ Resonator/res_punchout — s002b: Resonator punchout (2D gain × frequency).
 from __future__ import annotations
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import ResonatorPunchoutAnalysis
 
 
@@ -57,46 +57,6 @@ class Punchout(BaseExperiment):
     Y_SAVE_SCALE = 1.0
 
     Analysis = ResonatorPunchoutAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return PunchoutProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("res_pulse", "freq", as_array=True)
-
-    def _extract_sweep_axis_y(self, prog):
-        """Extract the secondary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("res_pulse", "gain", as_array=True)
+    PROGRAM = PunchoutProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
+    Y_AXIS = SweepAxis.pulse("res_pulse", "gain")
