@@ -451,6 +451,24 @@ class LogFile(object):
                         )
             return channels
 
+    def getAxis(self):
+        """Return all sweep axes in Labber step-channel order.
+
+        Returns
+        -------
+        list of dict
+            Each dictionary contains ``axis_name`` and ``axis_values``.  The
+            values are returned as independent NumPy arrays so callers can
+            modify them without changing the channel metadata.
+        """
+        return [
+            {
+                "axis_name": channel["name"],
+                "axis_values": np.array(channel["values"], copy=True),
+            }
+            for channel in self.getStepChannels()
+        ]
+
     def getLogChannels(self):
         """Return the getLogChannels result.
 
@@ -504,7 +522,12 @@ class LogFile(object):
             return channels
 
     def getData(self, name=None, entry=None, inner=None, log=-1):
-        """Retrieve channel data using the public Labber ``LogFile`` API."""
+        """Retrieve channel data using the public Labber ``LogFile`` API.
+
+        ``name`` is optional, matching Labber: omitting it selects the first
+        log channel.  Vector traces are returned at their stored maximum
+        length, with shorter entries padded by the HDF5 dataset fill value.
+        """
         channel_name = self._channel_name(self.getLogChannels(), name, kind="log")
         with h5py.File(self.file_name, "r") as f:
             grp = self._select_log_group(f, log)
@@ -526,14 +549,13 @@ class LogFile(object):
 
             if values is None and "Traces" in grp and channel_name in grp["Traces"]:
                 ds = grp[f"Traces/{channel_name}"]
-                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
                 is_complex = bool(ds.attrs.get("complex", False))
                 if is_complex:
-                    values = ds[:trace_len, 0, :].T + 1j * ds[:trace_len, 1, :].T
+                    values = ds[:, 0, :].T + 1j * ds[:, 1, :].T
                 elif ds.shape[1] == 1:
-                    values = ds[:trace_len, 0, :].T
+                    values = ds[:, 0, :].T
                 else:
-                    values = ds[:trace_len, 1, :].T
+                    values = ds[:, 1, :].T
 
             if values is None:
                 raise ValueError(f"Channel {channel_name} not found in log file.")
@@ -552,7 +574,9 @@ class LogFile(object):
             grp = self._select_log_group(f, -1)
             if "Traces" in grp and channel_name in grp["Traces"]:
                 ds = grp[f"Traces/{channel_name}"]
-                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
+                n_values = np.asarray(grp[f"Traces/{channel_name}_N"])
+                n_index = entry if len(n_values) > 1 else 0
+                trace_len = int(n_values[n_index])
                 is_complex = bool(ds.attrs.get("complex", False))
                 components = ds.shape[1]
                 has_custom_x = (components == 2 and not is_complex) or (
@@ -571,7 +595,12 @@ class LogFile(object):
                     x = ds[:trace_len, x_component, entry]
                 else:
                     t0dt_path = f"Traces/{channel_name}_t0dt"
-                    t0, dt = (grp[t0dt_path][0] if t0dt_path in grp else (0.0, 1.0))
+                    if t0dt_path in grp:
+                        t0dt = grp[t0dt_path]
+                        t0dt_index = entry if len(t0dt) > 1 else 0
+                        t0, dt = t0dt[t0dt_index]
+                    else:
+                        t0, dt = 0.0, 1.0
                     x = t0 + np.arange(trace_len) * dt
                 return x, y
 
@@ -855,10 +884,21 @@ class LogFile(object):
                             maxshape=(None, C, M),
                             chunks=(trace_len, C, max(1, M)),
                             dtype="f8",
+                            fillvalue=np.nan,
                         )
-                        traces_grp.create_dataset(name + "_N", shape=(1,), dtype="i4")
                         traces_grp.create_dataset(
-                            name + "_t0dt", shape=(1, 2), dtype="f8"
+                            name + "_N",
+                            shape=(0,),
+                            maxshape=(M,),
+                            chunks=(max(1, M),),
+                            dtype="i4",
+                        )
+                        traces_grp.create_dataset(
+                            name + "_t0dt",
+                            shape=(0, 2),
+                            maxshape=(M, 2),
+                            chunks=(max(1, M), 2),
+                            dtype="f8",
                         )
 
                         ds_trace = traces_grp[name]
@@ -880,6 +920,8 @@ class LogFile(object):
                         ds_trace.resize((trace_len, C, ds_trace.shape[2]))
 
                     ds_trace.resize((ds_trace.shape[0], C, col + 1))
+                    ds_N.resize((col + 1,))
+                    ds_t0dt.resize((col + 1, 2))
 
                     if not is_complex and x_data is None:
                         ds_trace[:trace_len, 0, col] = y_data
@@ -894,13 +936,13 @@ class LogFile(object):
                         ds_trace[:trace_len, 1, col] = np.imag(y_data)
                         ds_trace[:trace_len, 2, col] = x_data
 
-                    ds_N[0] = trace_len
+                    ds_N[col] = trace_len
                     if x_data is not None:
-                        ds_t0dt[0, 0] = 0.0
-                        ds_t0dt[0, 1] = 0.0
+                        ds_t0dt[col, 0] = 0.0
+                        ds_t0dt[col, 1] = 0.0
                     else:
-                        ds_t0dt[0, 0] = t0
-                        ds_t0dt[0, 1] = dt
+                        ds_t0dt[col, 0] = t0
+                        ds_t0dt[col, 1] = dt
 
             if "Traces" in grp:
                 traces_grp = grp["Traces"]

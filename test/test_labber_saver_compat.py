@@ -22,6 +22,7 @@ class TestLabberSaverCompatibility(unittest.TestCase):
             str(inspect.signature(LogFile.getData)),
             "(self, name=None, entry=None, inner=None, log=-1)",
         )
+        self.assertEqual(str(inspect.signature(LogFile.getAxis)), "(self)")
         self.assertEqual(
             str(inspect.signature(LogFile.getNumberOfEntries)),
             "(self, name=None, log=None)",
@@ -84,6 +85,46 @@ class TestLabberSaverCompatibility(unittest.TestCase):
                 log.getTraceXY(x_channel="Y", entry=0)[0], [10.0, 10.0, 10.0]
             )
             np.testing.assert_allclose(log.getData(inner=1), [5.0, 8.0])
+
+            axes = log.getAxis()
+            self.assertEqual(
+                [axis["axis_name"] for axis in axes],
+                ["X", "Y"],
+            )
+            np.testing.assert_allclose(axes[0]["axis_values"], [1.0, 2.0, 3.0])
+            np.testing.assert_allclose(axes[1]["axis_values"], [10.0, 20.0])
+
+    def test_vector_entries_keep_individual_length_and_linear_x_axis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = createLogFile_ForData(
+                str(Path(tmp) / "varying-vector.hdf5"),
+                [{"name": "Signal", "vector": True, "complex": False}],
+                [{"name": "Bias", "values": np.array([10.0, 20.0])}],
+                use_database=False,
+            )
+            log.addEntry(
+                {"Signal": getTraceDict(np.array([1.0, 2.0]), x0=2.0, dx=0.5)}
+            )
+            log.addEntry(
+                {
+                    "Signal": getTraceDict(
+                        np.array([3.0, 4.0, 5.0]), x0=3.0, dx=0.25
+                    )
+                }
+            )
+
+            data = log.getData()
+            self.assertEqual(data.shape, (2, 3))
+            np.testing.assert_allclose(data[0, :2], [1.0, 2.0])
+            self.assertTrue(np.isnan(data[0, 2]))
+            np.testing.assert_allclose(data[1], [3.0, 4.0, 5.0])
+
+            np.testing.assert_allclose(log.getTraceXY(entry=0)[0], [2.0, 2.5])
+            np.testing.assert_allclose(log.getTraceXY(entry=0)[1], [1.0, 2.0])
+            np.testing.assert_allclose(
+                log.getTraceXY(entry=1)[0], [3.0, 3.25, 3.5]
+            )
+            np.testing.assert_allclose(log.getTraceXY(entry=1)[1], [3.0, 4.0, 5.0])
 
 
 if __name__ == "__main__":
