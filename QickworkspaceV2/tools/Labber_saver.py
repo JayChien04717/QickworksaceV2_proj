@@ -114,44 +114,44 @@ def _create_log_path(
     return os.path.join(sPath, sLogName + ".hdf5")
 
 
-def getTraceDict(y, x=None, x0=None, x1=None, dx=None):
-    """Return the getTraceDict result.
+def getTraceDict(value=[], x0=0.0, dx=1.0, x1=None, logX=False, x=None):
+    """Create a Labber-compatible dictionary describing an ``(x, y)`` trace.
 
     Parameters
     ----------
-    y : Any
+    value : Any, default: []
         Dependent-variable values.
-    x : Any, default: None
-        Independent-variable values.
-    x0 : Any, default: None
+    x0 : Any, default: 0.0
         Value for ``x0``.
+    dx : Any, default: 1.0
+        Value for ``dx``.
     x1 : Any, default: None
         Value for ``x1``.
-    dx : Any, default: None
-        Value for ``dx``.
+    logX : bool, default: False
+        Whether to interpolate logarithmically between ``x0`` and ``x1``.
+    x : Any, default: None
+        Explicit independent-variable values.
 
     Returns
     -------
     Any
         Result of the operation.
     """
-    y = np.asarray(y)
+    y = np.asarray(value)
     d = {"y": y}
     if x is not None:
         d["x"] = np.asarray(x)
         d["t0"] = 0.0
         d["dt"] = 1.0
+    elif x1 is not None and logX:
+        d["t0"] = x0
+        d["dt"] = dx
+        d["x"] = np.geomspace(x0, x1, len(y))
     else:
-        t0 = 0.0 if x0 is None else x0
-        if dx is None:
-            if x1 is not None and len(y) > 1:
-                dt = (x1 - t0) / (len(y) - 1)
-            else:
-                dt = 1.0
-        else:
-            dt = dx
-        d["t0"] = t0
-        d["dt"] = dt
+        if x1 is not None and len(y) > 1:
+            dx = (x1 - x0) / (len(y) - 1)
+        d["t0"] = x0
+        d["dt"] = dx
     return d
 
 
@@ -192,7 +192,7 @@ def _to_str(s):
 
 
 class LogFile(object):
-    def __init__(self, file_name):
+    def __init__(self, file_name, instrument_units=False):
         """Initialize the LogFile instance.
 
         Parameters
@@ -204,6 +204,40 @@ class LogFile(object):
         if ext.lower() != ".hdf5":
             file_name = base + ".hdf5"
         self.file_name = os.path.abspath(file_name)
+        self.instrument_units = bool(instrument_units)
+
+    @staticmethod
+    def _log_group_names(h5):
+        names = [""]
+        numbered = [name for name in h5 if name.startswith("Log_")]
+        names.extend(sorted(numbered, key=lambda name: int(name.split("_", 1)[1])))
+        return names
+
+    def _select_log_group(self, h5, log=-1):
+        names = self._log_group_names(h5)
+        if log is None:
+            log = -1
+        try:
+            name = names[int(log)]
+        except (IndexError, TypeError, ValueError) as exc:
+            raise IndexError(f"Log index {log!r} is out of range") from exc
+        return h5 if name == "" else h5[name]
+
+    @staticmethod
+    def _channel_name(channels, channel, *, kind):
+        if not channels:
+            raise ValueError(f"No {kind} channels found in log file.")
+        if channel is None:
+            return channels[0]["name"]
+        if isinstance(channel, (int, np.integer)):
+            try:
+                return channels[int(channel)]["name"]
+            except IndexError as exc:
+                raise ValueError(f"{kind.title()} channel index {channel} not found.") from exc
+        name = _to_str(channel)
+        if name not in {item["name"] for item in channels}:
+            raise ValueError(f"{kind.title()} channel {name!r} not found.")
+        return name
 
     def getFilePath(self):
         """Return the getFilePath result.
@@ -215,7 +249,7 @@ class LogFile(object):
         """
         return self.file_name
 
-    def setComment(self, comment):
+    def setComment(self, comment, log=-1, set_all=True):
         """Return the setComment result.
 
         Parameters
@@ -224,9 +258,16 @@ class LogFile(object):
             Value for ``comment``.
         """
         with h5py.File(self.file_name, "r+") as f:
-            f.attrs["comment"] = _to_bytes(comment)
+            if set_all:
+                groups = [
+                    f if name == "" else f[name] for name in self._log_group_names(f)
+                ]
+            else:
+                groups = [self._select_log_group(f, log)]
+            for grp in groups:
+                grp.attrs["comment"] = _to_bytes(comment)
 
-    def getComment(self):
+    def getComment(self, log=-1):
         """Return the getComment result.
 
         Returns
@@ -235,7 +276,8 @@ class LogFile(object):
             Result of the operation.
         """
         with h5py.File(self.file_name, "r") as f:
-            return _to_str(f.attrs.get("comment", b""))
+            grp = self._select_log_group(f, log)
+            return _to_str(grp.attrs.get("comment", f.attrs.get("comment", b"")))
 
     def setProject(self, project):
         """Return the setProject result.
@@ -329,7 +371,7 @@ class LogFile(object):
                 return [_to_str(t) for t in tags]
             return []
 
-    def getNumberOfEntries(self):
+    def getNumberOfEntries(self, name=None, log=None):
         # In a completed or in-progress file, this corresponds to the size of Data/Time stamp
         # (or Log_N/Data/Time stamp).
         """Return the getNumberOfEntries result.
@@ -339,20 +381,22 @@ class LogFile(object):
         Any
             Result of the operation.
         """
+        del name  # Channels written here always share the same entry count.
         with h5py.File(self.file_name, "r") as f:
-            grp = f
-            latest_grp_name = ""
-            for key in sorted(f.keys()):
-                if key.startswith("Log_"):
-                    latest_grp_name = key
-            if latest_grp_name:
-                grp = f[latest_grp_name]
-
-            if "Data/Time stamp" in grp:
-                return grp["Data/Time stamp"].shape[0]
-            elif "Traces/Time stamp" in grp:
-                return grp["Traces/Time stamp"].shape[0]
-            return 0
+            if log is None:
+                groups = [
+                    f if item == "" else f[item]
+                    for item in self._log_group_names(f)
+                ]
+            else:
+                groups = [self._select_log_group(f, log)]
+            total = 0
+            for grp in groups:
+                if "Data/Time stamp" in grp:
+                    total += grp["Data/Time stamp"].shape[0]
+                elif "Traces/Time stamp" in grp:
+                    total += grp["Traces/Time stamp"].shape[0]
+            return total
 
     def getStepChannels(self):
         """Return the getStepChannels result.
@@ -367,6 +411,8 @@ class LogFile(object):
             if "Channels" in f:
                 for row in f["Channels"]:
                     name = _to_str(row["name"])
+                    if name == _STEP_NAME_API:
+                        continue
                     is_step = False
                     if "Step list" in f:
                         for step_row in f["Step list"]:
@@ -393,7 +439,11 @@ class LogFile(object):
                         channels.append(
                             {
                                 "name": name,
-                                "unit": _to_str(row["unitPhys"]),
+                                "unit": _to_str(
+                                    row["unitInstr"]
+                                    if self.instrument_units
+                                    else row["unitPhys"]
+                                ),
                                 "values": values,
                                 "complex": False,  # step channels are always real
                                 "vector": False,  # step channels are always scalar
@@ -442,150 +492,102 @@ class LogFile(object):
                         channels.append(
                             {
                                 "name": name,
-                                "unit": _to_str(row["unitPhys"]),
+                                "unit": _to_str(
+                                    row["unitInstr"]
+                                    if self.instrument_units
+                                    else row["unitPhys"]
+                                ),
                                 "complex": is_complex,
                                 "vector": is_vector,
                             }
                         )
             return channels
 
-    def getData(self, channel_name):
-        """Return the getData result.
-
-        Parameters
-        ----------
-        channel_name : Any
-            Name of the channel.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-
-        Raises
-        ------
-        ValueError
-            If the operation cannot be completed.
-        """
+    def getData(self, name=None, entry=None, inner=None, log=-1):
+        """Retrieve channel data using the public Labber ``LogFile`` API."""
+        channel_name = self._channel_name(self.getLogChannels(), name, kind="log")
         with h5py.File(self.file_name, "r") as f:
-            grp = f
-            latest_grp_name = ""
-            for key in sorted(f.keys()):
-                if key.startswith("Log_"):
-                    latest_grp_name = key
-            if latest_grp_name:
-                grp = f[latest_grp_name]
+            grp = self._select_log_group(f, log)
+            values = None
 
             if "Data/Channel names" in grp and "Data/Data" in grp:
                 chns = [
                     (_to_str(row["name"]), _to_str(row["info"]))
                     for row in grp["Data/Channel names"]
                 ]
-                ch_indices = [
-                    idx for idx, (name, info) in enumerate(chns) if name == channel_name
-                ]
-                if len(ch_indices) > 0:
+                indices = [idx for idx, item in enumerate(chns) if item[0] == channel_name]
+                if len(indices) == 1:
+                    values = grp["Data/Data"][:, indices[0], :].T
+                elif len(indices) == 2:
+                    real_idx = next(idx for idx in indices if chns[idx][1] == "Real")
+                    imag_idx = next(idx for idx in indices if chns[idx][1] == "Imaginary")
                     ds = grp["Data/Data"]
-                    # ds shape: (dim1, num_channels, M)
-                    if len(ch_indices) == 1:
-                        return ds[:, ch_indices[0], :].T
-                    elif len(ch_indices) == 2:
-                        # Ensure real is first
-                        real_idx = (
-                            ch_indices[0]
-                            if chns[ch_indices[0]][1] == "Real"
-                            else ch_indices[1]
-                        )
-                        imag_idx = (
-                            ch_indices[1]
-                            if chns[ch_indices[1]][1] == "Imaginary"
-                            else ch_indices[0]
-                        )
-                        return ds[:, real_idx, :].T + 1j * ds[:, imag_idx, :].T
+                    values = ds[:, real_idx, :].T + 1j * ds[:, imag_idx, :].T
 
-            if "Traces" in grp and channel_name in grp["Traces"]:
-                ds = grp["Traces/" + channel_name]
-                # ds shape: (trace_len, C, M)
-                trace_len = grp["Traces/" + channel_name + "_N"][0]
+            if values is None and "Traces" in grp and channel_name in grp["Traces"]:
+                ds = grp[f"Traces/{channel_name}"]
+                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
                 is_complex = bool(ds.attrs.get("complex", False))
-                C = ds.shape[1]
-
                 if is_complex:
-                    # Components 0: Real, 1: Imaginary
-                    return ds[:trace_len, 0, :].T + 1j * ds[:trace_len, 1, :].T
+                    values = ds[:trace_len, 0, :].T + 1j * ds[:trace_len, 1, :].T
+                elif ds.shape[1] == 1:
+                    values = ds[:trace_len, 0, :].T
                 else:
-                    if C == 1:
-                        # Component 0: Y
-                        return ds[:trace_len, 0, :].T
-                    elif C == 2:
-                        # Component 0: X, 1: Y
-                        return ds[:trace_len, 1, :].T
+                    values = ds[:trace_len, 1, :].T
 
-            raise ValueError(f"Channel {channel_name} not found in log file.")
+            if values is None:
+                raise ValueError(f"Channel {channel_name} not found in log file.")
+            if entry is not None:
+                values = values[entry]
+            if inner is not None:
+                values = values[..., inner]
+            return values
 
-    def getTraceXY(self, channel_name, entry=0):
-        """Return the getTraceXY result.
-
-        Parameters
-        ----------
-        channel_name : Any
-            Name of the channel.
-        entry : Any, default: 0
-            Value for ``entry``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-
-        Raises
-        ------
-        ValueError
-            If the operation cannot be completed.
-        """
+    def getTraceXY(self, y_channel=None, x_channel=None, entry=-1):
+        """Retrieve one ``(x, y)`` trace, defaulting to the first log channel."""
+        channel_name = self._channel_name(
+            self.getLogChannels(), y_channel, kind="log"
+        )
         with h5py.File(self.file_name, "r") as f:
-            grp = f
-            latest_grp_name = ""
-            for key in sorted(f.keys()):
-                if key.startswith("Log_"):
-                    latest_grp_name = key
-            if latest_grp_name:
-                grp = f[latest_grp_name]
-
+            grp = self._select_log_group(f, -1)
             if "Traces" in grp and channel_name in grp["Traces"]:
-                ds = grp["Traces/" + channel_name]
-                trace_len = grp["Traces/" + channel_name + "_N"][0]
+                ds = grp[f"Traces/{channel_name}"]
+                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
                 is_complex = bool(ds.attrs.get("complex", False))
-                C = ds.shape[1]
-                col = entry
-
-                has_custom_x = (C == 2 and not is_complex) or (C == 3 and is_complex)
+                components = ds.shape[1]
+                has_custom_x = (components == 2 and not is_complex) or (
+                    components == 3 and is_complex
+                )
 
                 if is_complex:
-                    y = ds[:trace_len, 0, col] + 1j * ds[:trace_len, 1, col]
+                    y = ds[:trace_len, 0, entry] + 1j * ds[:trace_len, 1, entry]
+                elif components == 1:
+                    y = ds[:trace_len, 0, entry]
                 else:
-                    if C == 1:
-                        y = ds[:trace_len, 0, col]
-                    elif C == 2:
-                        y = ds[:trace_len, 1, col]
+                    y = ds[:trace_len, 1, entry]
 
                 if has_custom_x:
-                    if is_complex:
-                        x = ds[:trace_len, 2, col]
-                    else:
-                        x = ds[:trace_len, 0, col]
+                    x_component = 2 if is_complex else 0
+                    x = ds[:trace_len, x_component, entry]
                 else:
                     t0dt_path = f"Traces/{channel_name}_t0dt"
-                    if t0dt_path in grp:
-                        t0 = grp[t0dt_path][0, 0]
-                        dt = grp[t0dt_path][0, 1]
-                    else:
-                        t0, dt = 0.0, 1.0
+                    t0, dt = (grp[t0dt_path][0] if t0dt_path in grp else (0.0, 1.0))
                     x = t0 + np.arange(trace_len) * dt
-
                 return x, y
 
-            raise ValueError(f"Channel {channel_name} not found in traces.")
+        y = np.asarray(self.getData(channel_name, entry=entry, log=-1))
+        steps = self.getStepChannels()
+        step_name = self._channel_name(steps, x_channel, kind="step")
+        step_index = next(idx for idx, item in enumerate(steps) if item["name"] == step_name)
+        step_values = np.asarray(steps[step_index]["values"])
+        if step_index == 0:
+            x = step_values
+        else:
+            outer_dims = [len(item["values"]) for item in steps[1:]]
+            flat_entry = entry if entry >= 0 else int(np.prod(outer_dims)) + entry
+            multi_index = np.unravel_index(flat_entry, outer_dims)
+            x = np.full(y.shape, step_values[multi_index[step_index - 1]])
+        return x, y
 
     def addEntry(self, data):
         """Return the addEntry result.
@@ -1304,7 +1306,9 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
                 )
                 log_inst_cfg.attrs[f"___{name}___x_name"] = _to_bytes(x_name)
                 log_inst_cfg.attrs[f"___{name}___x_unit"] = _to_bytes(x_unit)
-                log_inst_cfg.attrs[name] = np.array([], dtype=float)
+                log_inst_cfg.attrs[name] = np.array(
+                    [], dtype=complex if is_complex else float
+                )
             else:
                 log_inst_cfg.attrs[name] = 0.0j if is_complex else 0.0
 

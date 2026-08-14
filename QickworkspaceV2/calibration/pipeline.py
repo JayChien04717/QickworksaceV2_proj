@@ -5,7 +5,7 @@ Reproduces the full qick_workspace auto_calibrate.py logic with:
   - ExperimentData returns from every step
   - CalibrationStore updates after each step
   - GP-guided Ramsey frequency correction preserved
-  - BatchExperiment-compatible interface
+  - Sequential pipeline interface
 """
 
 from __future__ import annotations

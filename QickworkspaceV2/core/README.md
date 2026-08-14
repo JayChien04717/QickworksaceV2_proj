@@ -1,47 +1,54 @@
 # Core execution workflow
 
-`BaseExperiment.run()` owns the common experiment lifecycle. Experiment classes
-provide a QICK program and sweep axes; core code handles acquisition, result
-construction, optional analysis, plotting, and storage.
+`BaseExperiment.run()` contains the complete ordinary experiment lifecycle in
+one place:
 
-```mermaid
-flowchart LR
-    Run["BaseExperiment.run()"] --> Context["RunContext"]
-    Context --> Program["Build QICK program"]
-    Program --> Axes["Resolve x/y sweep axes"]
-    Axes --> Acquire["AcquisitionRunner"]
-    Acquire --> Decode["Decode IQ or threshold population"]
-    Decode --> Result["AcquisitionResult"]
-    Result --> Builder["ResultBuilder"]
-    Builder --> Analysis["Optional Analysis.run()"]
-    Analysis --> Data["ExperimentData"]
-    Data --> Plot["Optional plotting"]
-    Data --> Save["Native HDF5 or legacy Labber save"]
+```text
+validate options → build Program → resolve sweep axes → acquire QICK data
+                 → build ExperimentData → run optional Analysis
 ```
+
+Ordinary experiment classes declare their program and axes:
+
+```python
+class PowerRabi(BaseExperiment):
+    PROGRAM = PowerRabiProgram
+    X_AXIS = SweepAxis.pulse("qb_pulse", "gain")
+
+class Punchout(BaseExperiment):
+    PROGRAM = PunchoutProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
+    Y_AXIS = SweepAxis.pulse("res_pulse", "gain")
+```
+
+Computed axes may override `_extract_sweep_axis()` or
+`_extract_sweep_axis_y()`. Specialized multi-readout experiments may override
+`_acquire()` and return `AcquisitionResult`.
+
+## Core types
+
+| Type | Responsibility |
+| --- | --- |
+| `BaseProgram` | QICK program base plus resonator, qubit-pulse, cooling, measurement, and active-reset helpers |
+| `BaseExperiment` | Session, ordinary acquisition lifecycle, plotting, and legacy Labber save |
+| `SweepAxis` | Validated, human-readable 1D/2D pulse or time axis declaration |
+| `AcquisitionResult` | Raw payload from ordinary or custom acquisition |
+| `ExperimentData` | Dimensioned result, fits, metadata, quality, and native HDF5 access |
+| `BaseAnalysis` | Shared fit, quality, and rendering behavior |
+
+The previous `ExperimentRuntime`, `SweepDefinition`, `AcquisitionRunner`, and
+`ResultBuilder` wrappers were removed. They only forwarded data between stages
+and duplicated state already owned by `BaseExperiment`.
 
 ## Data contract
 
-- `ExperimentData.raw_iq` is the primary trace used by analysis.
+- `ExperimentData.raw_iq` is the primary analysis trace.
 - `x_axis` and `y_axis` are sweep coordinates only.
-- A multi-readout program keeps all readouts in `raw_data["readouts"]` with a
-  leading `readout` dimension. `get_readout()` retrieves an index or named
-  readout while preserving the single-readout API.
-- `analysis_data` contains derived arrays such as fit curves, residuals, and
-  verification populations; it is not a substitute for raw acquisition data.
-- `dataset_dims` names every stored dataset dimension for native HDF5.
+- Multiple readouts live in `raw_data["readouts"]` with a leading `readout`
+  dimension and are retrieved through `get_readout()`.
+- Derived arrays belong in `analysis_data`.
+- `dataset_dims` names every stored dataset dimension.
 
-## Responsibility map
-
-| Responsibility | Core module |
-| --- | --- |
-| Experiment lifecycle and public `run()` API | `base_experiment.py` |
-| Run options, sweep resolution, dispatch, and result building | `experiment_components.py` |
-| QICK acquisition and IQ/threshold decoding | `acquisition.py` |
-| QICK program, pulse, measurement, and active-reset setup | `base_program.py`, `qubit_pulse.py` |
-| Analysis lifecycle | `base_analysis.py` |
-| Typed experiment result and compatibility helpers | `experiment_data.py` |
-
-Specialized experiments may override acquisition when QICK returns a different
-physical layout (for example decimated TOF, shots, mux channels, or two active-
-reset readouts). They should still return `ExperimentData` and declare dataset
-dimensions explicitly.
+`run_batch()`, `run_parallel()`, and `summarize_results()` are functions rather
+than stateful wrapper classes. Never use `run_parallel()` against one shared
+QICK board.

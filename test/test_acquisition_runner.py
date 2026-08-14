@@ -5,16 +5,10 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from QickworkspaceV2.core.acquisition import decode_acquisition, decode_readouts
-
-from QickworkspaceV2.core.experiment_components import (
-    AcquisitionResult,
-    AcquisitionRunner,
-    RunContext,
-    SweepAxes,
-)
+from QickworkspaceV2.core.base_experiment import BaseExperiment
 
 
-class _Experiment:
+class _Experiment(BaseExperiment):
     soc = object()
     X_LABEL = "x"
     Y_LABEL = "y"
@@ -35,28 +29,34 @@ class _ThresholdExperiment(_Experiment):
 
 
 def _context(*, liveplot, py_avg=4, kwargs=None):
-    return RunContext(
-        py_avg=py_avg,
-        iq_process="all",
-        show_final_plot=False,
-        liveplot=liveplot,
-        plot_analysis=False,
-        kwargs=kwargs or {},
-    )
+    return {
+        "py_avg": py_avg,
+        "iq_process": "all",
+        "show_final_plot": False,
+        "liveplot": liveplot,
+        "plot_analysis": False,
+        "kwargs": kwargs or {},
+    }
 
 
-class AcquisitionRunnerTests(unittest.TestCase):
+def _experiment(cls=_Experiment):
+    experiment = cls.__new__(cls)
+    experiment.soc = cls.soc
+    experiment.iqdata = None
+    return experiment
+
+
+class AcquisitionTests(unittest.TestCase):
     def test_liveplot_false_acquires_rounds_directly_without_importing_plotter(self):
-        runner = AcquisitionRunner()
         prog = Mock()
         prog.acquire.return_value = [[np.array([[1.0, 2.0], [3.0, 4.0]])]]
         module_name = "QickworkspaceV2.plotter.liveplot"
         with patch.dict(sys.modules):
             sys.modules.pop(module_name, None)
-            result = runner.acquire(
-                _Experiment(),
+            result = _experiment()._acquire(
                 prog,
-                SweepAxes(x=np.array([0.0, 1.0]), y=None),
+                np.array([0.0, 1.0]),
+                None,
                 _context(liveplot=False, py_avg=7),
             )
             self.assertNotIn(module_name, sys.modules)
@@ -68,31 +68,30 @@ class AcquisitionRunnerTests(unittest.TestCase):
         self.assertEqual(result.avg_count, 7)
 
     def test_liveplot_true_keeps_liveplot_path(self):
-        runner = AcquisitionRunner()
-        expected = AcquisitionResult(raw_iq=np.array([1 + 2j]), avg_count=3)
+        prog = Mock()
+        with patch(
+            "QickworkspaceV2.plotter.liveplot.liveplotfun",
+            return_value=(np.array([1 + 2j]), False, 3),
+        ) as live:
+            result = _experiment()._acquire(
+                prog,
+                np.array([0.0]),
+                None,
+                _context(liveplot=True, py_avg=3),
+            )
 
-        with patch.object(runner, "_liveplot", return_value=expected) as live:
-            with patch.object(runner, "_direct") as direct:
-                result = runner.acquire(
-                    _Experiment(),
-                    Mock(),
-                    SweepAxes(x=np.array([0.0]), y=None),
-                    _context(liveplot=True, py_avg=3),
-                )
-
-        self.assertIs(result, expected)
+        np.testing.assert_array_equal(result.raw_iq, [1 + 2j])
         live.assert_called_once()
-        direct.assert_not_called()
+        prog.acquire.assert_not_called()
 
     def test_direct_threshold_uses_rounds_and_returns_real_population(self):
-        runner = AcquisitionRunner()
         prog = Mock()
         prog.acquire.return_value = [[np.array([0.75])]]
 
-        result = runner.acquire(
-            _ThresholdExperiment(),
+        result = _experiment(_ThresholdExperiment)._acquire(
             prog,
-            SweepAxes(x=np.array([0.0]), y=None),
+            np.array([0.0]),
+            None,
             _context(liveplot=False, py_avg=6),
         )
 
@@ -109,17 +108,16 @@ class AcquisitionRunnerTests(unittest.TestCase):
         self.assertTrue(result.metadata["threshold_discrimination"])
 
     def test_live_threshold_passes_readout_mode_to_liveplot(self):
-        runner = AcquisitionRunner()
         population = np.array([0.2, 0.8])
 
         with patch(
             "QickworkspaceV2.plotter.liveplot.liveplotfun",
             return_value=(population, False, 4),
         ) as liveplot:
-            result = runner.acquire(
-                _ThresholdExperiment(),
+            result = _experiment(_ThresholdExperiment)._acquire(
                 Mock(),
-                SweepAxes(x=np.array([0.0, 1.0]), y=None),
+                np.array([0.0, 1.0]),
+                None,
                 _context(liveplot=True, py_avg=4),
             )
 
@@ -136,7 +134,6 @@ class AcquisitionRunnerTests(unittest.TestCase):
         self.assertEqual(result.avg_count, 4)
 
     def test_direct_yoko_sweep_acquires_each_value_with_py_avg_rounds(self):
-        runner = AcquisitionRunner()
         prog = Mock()
         prog.acquire.side_effect = [
             [[np.array([[1.0, 2.0]])]],
@@ -144,10 +141,10 @@ class AcquisitionRunnerTests(unittest.TestCase):
         ]
         instrument = Mock()
 
-        result = runner.acquire(
-            _Experiment(),
+        result = _experiment()._acquire(
             prog,
-            SweepAxes(x=np.array([0.0]), y=np.array([0.1, 0.2])),
+            np.array([0.0]),
+            np.array([0.1, 0.2]),
             _context(
                 liveplot=False,
                 py_avg=5,

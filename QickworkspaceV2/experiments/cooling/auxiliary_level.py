@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...analysis.resonator import LorentzianAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -94,15 +94,8 @@ class AuxiliaryEfSpec(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = LorentzianAnalysis
-
-    def _create_program(self):
-        return AuxiliaryEfSpecProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("qb_ef_spec", "freq", as_array=True)
+    PROGRAM = AuxiliaryEfSpecProgram
+    X_AXIS = SweepAxis.pulse("qb_ef_spec", "freq")
 
 
 class AuxiliarySidebandSpecProgram(BaseProgram):
@@ -143,14 +136,8 @@ class AuxiliarySidebandSpec(BaseExperiment):
     X_SAVE_UNIT = "Hz"
     X_SAVE_SCALE = 1e6
 
-    def _create_program(self):
-        return AuxiliarySidebandSpecProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("aux_cool", "freq", as_array=True)
+    PROGRAM = AuxiliarySidebandSpecProgram
+    X_AXIS = SweepAxis.pulse("aux_cool", "freq")
 
 
 class AuxiliaryLevelCoolingProgram(AuxiliarySidebandSpecProgram):
@@ -176,11 +163,7 @@ class AuxiliaryLevelCooling(BaseExperiment):
     X_SAVE_SCALE = 1.0
     LivePlot = False
 
-    def _create_program(self):
-        return AuxiliaryLevelCoolingProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
+    PROGRAM = AuxiliaryLevelCoolingProgram
 
     def _extract_sweep_axis(self, prog):
         return np.array([0.0])

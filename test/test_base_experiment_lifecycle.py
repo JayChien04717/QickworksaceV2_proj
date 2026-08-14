@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from QickworkspaceV2.core.base_experiment import BaseExperiment
-from QickworkspaceV2.core.experiment_components import AcquisitionResult
+from QickworkspaceV2.core.experiment_components import AcquisitionResult, SweepAxis
 from QickworkspaceV2.core.experiment_data import ExperimentData
 
 
@@ -36,13 +36,13 @@ class _LifecycleExperiment(BaseExperiment):
         self.axis_program = prog
         return np.array([1.0, 2.0])
 
-    def _acquire(self, prog, axes, ctx):
+    def _acquire(self, prog, x_vals, y_vals, options):
         self.acquire_program = prog
-        self.acquire_context = ctx
+        self.acquire_options = options
         self.iqdata = np.array([1 + 2j, 3 + 4j])
         return AcquisitionResult(
             raw_iq=self.iqdata,
-            avg_count=ctx.py_avg,
+            avg_count=options["py_avg"],
             analysis_data={
                 "verification": {
                     "values": np.array([0.1, 0.2]),
@@ -52,13 +52,37 @@ class _LifecycleExperiment(BaseExperiment):
         )
 
 
+class _DeclaredProgram:
+    def __init__(self, soccfg, *, reps, final_delay, cfg):
+        self.constructor = (soccfg, reps, final_delay, cfg)
+
+    def get_pulse_param(self, name, parameter, *, as_array):
+        values = {
+            ("readout", "freq"): np.array([100.0, 101.0]),
+            ("readout", "gain"): np.array([0.01, 0.02, 0.03]),
+        }
+        return values[(name, parameter)]
+
+
+class _DeclarativeExperiment(BaseExperiment):
+    EXPT_NAME = "declarative_test"
+    LivePlot = False
+    PROGRAM = _DeclaredProgram
+    X_AXIS = SweepAxis.pulse("readout", "freq")
+    Y_AXIS = SweepAxis.pulse("readout", "gain")
+
+    def _acquire(self, prog, x_vals, y_vals, options):
+        self.acquired_axes = (x_vals, y_vals)
+        return AcquisitionResult(
+            raw_iq=np.ones((len(y_vals), len(x_vals)), dtype=complex),
+            avg_count=options["py_avg"],
+        )
+
+
 class BaseExperimentLifecycleTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.previous_runtime = (
-            BaseExperiment._runtime.soc,
-            BaseExperiment._runtime.soccfg,
-            BaseExperiment._runtime.data_path,
             BaseExperiment._soc,
             BaseExperiment._soccfg,
             BaseExperiment._data_path,
@@ -68,9 +92,6 @@ class BaseExperimentLifecycleTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         (
-            BaseExperiment._runtime.soc,
-            BaseExperiment._runtime.soccfg,
-            BaseExperiment._runtime.data_path,
             BaseExperiment._soc,
             BaseExperiment._soccfg,
             BaseExperiment._data_path,
@@ -84,7 +105,7 @@ class BaseExperimentLifecycleTests(unittest.TestCase):
             return ExperimentData(experiment_id="test-id", **kwargs)
 
         with patch(
-            "QickworkspaceV2.core.experiment_components.ExperimentData",
+            "QickworkspaceV2.core.base_experiment.ExperimentData",
             side_effect=build_result,
         ):
             result = experiment.run(
@@ -96,7 +117,7 @@ class BaseExperimentLifecycleTests(unittest.TestCase):
         self.assertIs(experiment._last_prog, experiment.created_program)
         self.assertIs(experiment.axis_program, experiment.created_program)
         self.assertIs(experiment.acquire_program, experiment.created_program)
-        self.assertEqual(experiment.acquire_context.py_avg, 3)
+        self.assertEqual(experiment.acquire_options["py_avg"], 3)
         np.testing.assert_array_equal(result.x_axis, np.array([1.0, 2.0]))
         np.testing.assert_array_equal(
             result.analysis_data["verification"]["values"],
@@ -148,6 +169,19 @@ class BaseExperimentLifecycleTests(unittest.TestCase):
         result = experiment.run(py_avg=1, iq_process="I", liveplot=False)
 
         self.assertEqual(result.metadata["iq_process"], "real")
+
+    def test_declarative_program_and_two_axes_are_the_fixed_interface(self):
+        cfg = {"reps": 4, "relax_delay": 0.25, "steps": 2}
+        experiment = _DeclarativeExperiment(cfg)
+
+        result = experiment.run(py_avg=2)
+
+        self.assertEqual(experiment._last_prog.constructor, (
+            experiment.soccfg, 4, 0.25, cfg
+        ))
+        np.testing.assert_array_equal(result.x_axis, [100.0, 101.0])
+        np.testing.assert_array_equal(result.y_axis, [0.01, 0.02, 0.03])
+        self.assertEqual(result.dataset_dims["iq"], ["y", "x"])
 
 
 if __name__ == "__main__":

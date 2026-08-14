@@ -1,5 +1,12 @@
 from .setup import SingleShot_gef, SingleShot_ge_opt, hist, TOF
-from .resonator import Chi, ResonatorSpec, Punchout, ResonatorSpecFlux, DispersiveShift
+from .resonator import (
+    BroadbandResonatorSpec,
+    Chi,
+    ResonatorSpec,
+    Punchout,
+    ResonatorSpecFlux,
+    DispersiveShift,
+)
 from .qubit_ge import (
     QubitSpec, QubitSpecFlux, TimeRabi, PowerRabi, PowerRabiReset,
     ActiveResetRabi,
@@ -19,7 +26,8 @@ from .cryoscope import (
 
 __all__ = [
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    "Chi", "ResonatorSpec", "Punchout", "ResonatorSpecFlux", "DispersiveShift",
+    "Chi", "ResonatorSpec", "BroadbandResonatorSpec", "Punchout",
+    "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
     "ActiveResetRabi",
     "Ramsey", "ACStark", "SpinEcho", "T1",

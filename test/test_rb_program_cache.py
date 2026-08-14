@@ -24,9 +24,6 @@ class RBProgramCacheTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.previous_runtime = (
-            BaseExperiment._runtime.soc,
-            BaseExperiment._runtime.soccfg,
-            BaseExperiment._runtime.data_path,
             BaseExperiment._soc,
             BaseExperiment._soccfg,
             BaseExperiment._data_path,
@@ -36,9 +33,6 @@ class RBProgramCacheTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         (
-            BaseExperiment._runtime.soc,
-            BaseExperiment._runtime.soccfg,
-            BaseExperiment._runtime.data_path,
             BaseExperiment._soc,
             BaseExperiment._soccfg,
             BaseExperiment._data_path,

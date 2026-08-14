@@ -66,21 +66,7 @@ class SpinEcho(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     Analysis = SpinEchoAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return SpinEchoProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
+    PROGRAM = SpinEchoProgram
 
     def _extract_sweep_axis(self, prog):
         """Extract the primary sweep axis from the program.

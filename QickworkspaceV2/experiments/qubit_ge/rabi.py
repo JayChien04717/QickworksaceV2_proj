@@ -5,7 +5,7 @@ QubitGE/rabi — s004: Time Rabi + s005: Power Rabi + s005b: Power Rabi with res
 from __future__ import annotations
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.qubit import PowerRabiAnalysis, TimeRabiAnalysis
 
 
@@ -56,34 +56,8 @@ class TimeRabi(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     Analysis = TimeRabiAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return TimeRabiProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_pulse", "length", as_array=True)
+    PROGRAM = TimeRabiProgram
+    X_AXIS = SweepAxis.pulse("qb_pulse", "length")
 
 
 
@@ -134,34 +108,8 @@ class PowerRabi(BaseExperiment):
     X_SAVE_SCALE = 1.0
 
     Analysis = PowerRabiAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return PowerRabiProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_pulse", "gain", as_array=True)
+    PROGRAM = PowerRabiProgram
+    X_AXIS = SweepAxis.pulse("qb_pulse", "gain")
 
 
 
@@ -206,16 +154,4 @@ class PowerRabiReset(PowerRabi):
     EXPT_NAME = "s005b_power_rabi_reset_ge"
     TAG = "PowerRabi"
     TITLE_PREFIX = "Qubit Power Rabi ge (Reset)"
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return PowerRabiResetProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
+    PROGRAM = PowerRabiResetProgram

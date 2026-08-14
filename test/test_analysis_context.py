@@ -4,18 +4,21 @@ import numpy as np
 
 from QickworkspaceV2.analysis.qubit import RamseyEfAnalysis
 from QickworkspaceV2.analysis.resonator import LorentzianAnalysis
-from QickworkspaceV2.core.experiment_components import (
-    AcquisitionResult,
-    ResultBuilder,
-    RunContext,
-    SweepAxes,
-)
+from QickworkspaceV2.core.base_experiment import BaseExperiment
+from QickworkspaceV2.core.experiment_components import AcquisitionResult
 from QickworkspaceV2.core.experiment_data import ExperimentData, QualityFlag
 from QickworkspaceV2.experiments.coherence.ramsey_ef import RamseyEf
 
 
-class _EfExperiment:
-    Analysis = RamseyEfAnalysis
+class _ContextAnalysis:
+    REQUIRED_CONFIG_KEYS = ("virtual_detune", "qb_freq_ef")
+
+    def run(self, data):
+        return data
+
+
+class _EfExperiment(BaseExperiment):
+    Analysis = _ContextAnalysis
     EXPT_NAME = "ramsey_ef_test"
     X_SAVE_NAME = "Delay"
     X_SAVE_UNIT = "s"
@@ -23,43 +26,44 @@ class _EfExperiment:
     Y_SAVE_NAME = ""
     Y_SAVE_UNIT = ""
     Y_SAVE_SCALE = 1.0
-    cfg = {
-        "virtual_detune": 2.0,
-        "qb_freq_ef": 4200.0,
-        "fit_channel": "real",
-        "unrelated": "not persisted",
-    }
-    fit_params = None
-    fit_errors = None
+    LivePlot = False
 
-    @staticmethod
-    def _post_fit(_):
-        return None
+    def _create_program(self):
+        return object()
 
-    @staticmethod
-    def _apply_old_result(result, old_result):
-        return None
+    def _extract_sweep_axis(self, prog):
+        return np.array([0.0, 1.0])
 
-    @staticmethod
-    def _build_fit_result():
-        return {}
+    def _acquire(self, prog, x_vals, y_vals, options):
+        return AcquisitionResult(raw_iq=np.array([1 + 2j, 2 + 3j]))
 
 
 class AnalysisContextTests(unittest.TestCase):
-    def test_result_builder_persists_only_required_analysis_context(self):
-        result = ResultBuilder().build(
-            _EfExperiment(),
-            AcquisitionResult(raw_iq=np.array([1 + 2j, 2 + 3j])),
-            SweepAxes(x=np.array([0.0, 1.0]), y=None),
-            RunContext(
-                py_avg=1,
-                iq_process="all",
-                show_final_plot=False,
-                liveplot=False,
-                plot_analysis=False,
-                kwargs={},
-            ),
+    @classmethod
+    def setUpClass(cls):
+        cls.previous_session = (
+            BaseExperiment._soc,
+            BaseExperiment._soccfg,
+            BaseExperiment._data_path,
         )
+        BaseExperiment.setup(object(), object(), "/tmp")
+
+    @classmethod
+    def tearDownClass(cls):
+        (
+            BaseExperiment._soc,
+            BaseExperiment._soccfg,
+            BaseExperiment._data_path,
+        ) = cls.previous_session
+
+    def test_result_builder_persists_only_required_analysis_context(self):
+        experiment = _EfExperiment({
+            "virtual_detune": 2.0,
+            "qb_freq_ef": 4200.0,
+            "fit_channel": "real",
+            "unrelated": "not persisted",
+        })
+        result = experiment.run(py_avg=1, liveplot=False)
 
         self.assertEqual(
             result.metadata["analysis_context"],

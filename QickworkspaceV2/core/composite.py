@@ -1,208 +1,90 @@
-﻿"""
-Composite experiments — BatchExperiment and ParallelExperiment.
-
-Inspired by IBM Qiskit Experiments ``BatchExperiment`` / ``ParallelExperiment``.
-
-Usage
------
-::
-
-    from QickworkspaceV2.core.composite import BatchExperiment
-
-    # Declarative calibration pipeline — each step runs sequentially,
-    # passing updated config forward.
-    cal = BatchExperiment([
-        ResonatorSpec(cfg),
-        QubitSpec(cfg),
-        PowerRabi(cfg),
-    ])
-    results = cal.run(py_avg=10)
-    print(results["ResonatorSpec"].quality)
-"""
+"""Sequential and concurrent helpers for groups of experiments."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from time import sleep
 
 from .experiment_data import ExperimentData, QualityFlag
 
 
-class BatchExperiment:
-    """
-    Run a list of experiments sequentially, collecting all results.
+def run_batch(experiments, py_avg: int, *, stop_on_bad=False, **kwargs):
+    """Run experiments sequentially and return results keyed by name."""
+    from ..tools.hdf5_store import generate_experiment_id
 
-    Each experiment is run in declaration order.  Results are stored in
-    ``self.results`` (dict keyed by experiment type) and also returned
-    from :meth:`run`.
-
-    Parameters
-    ----------
-    experiments : list of BaseExperiment
-        Experiment instances to run in order.
-    stop_on_bad : bool, optional
-        When ``True``, abort the batch if any experiment returns
-        ``QualityFlag.BAD``.  Default is ``False``.
-    """
-
-    def __init__(
-        self,
-        experiments: List,
-        stop_on_bad: bool = False,
-    ):
-        # Accept both bare experiments and (name, expt) tuples
-        """Initialize the BatchExperiment instance.
-
-        Parameters
-        ----------
-        experiments : List
-            Value for ``experiments``.
-        stop_on_bad : bool, default: False
-            Value for ``stop_on_bad``.
-        """
-        self._named: List = []
-        for item in experiments:
-            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
-                self._named.append(item)
-            else:
-                self._named.append((None, item))
-        self.experiments = [expt for _, expt in self._named]
-        self.stop_on_bad = stop_on_bad
-        self.results: Dict[str, ExperimentData] = {}
-        self._parent_id: Optional[str] = None
-
-    def run(self, py_avg: int, **kwargs) -> Dict[str, ExperimentData]:
-        """Run all experiments in order.
-
-        Parameters
-        ----------
-        py_avg : int
-            Software averages forwarded to every experiment.
-        **kwargs : Any
-            Additional keyword arguments forwarded to each ``run()`` call.
-
-        Returns
-        -------
-        results : dict
-            Mapping ``experiment_type → ExperimentData``.
-        """
-        import time
-        from ..tools.hdf5_store import generate_experiment_id
-
-        batch_id = generate_experiment_id()
-        self.results = {}
-
-        for i, (label, expt) in enumerate(self._named):
-            expt_name = label or expt.EXPT_NAME or expt.__class__.__name__
-            print(f"\n{'=' * 60}")
-            print(f"  BatchExperiment [{i + 1}/{len(self.experiments)}] — {expt_name}")
-            print(f"{'=' * 60}")
-
-            result = expt.run(py_avg=py_avg, **kwargs)
-            result.parent_id = batch_id
-            result.session_id = batch_id
-            self.results[expt_name] = result
-
-            if self.stop_on_bad and result.quality == QualityFlag.BAD:
-                print(
-                    f"  [BatchExperiment] Stopping: {expt_name} returned BAD quality "
-                    f"({result.quality_message})"
-                )
-                break
-            time.sleep(0.5)
-        return self.results
-
-    def summary(self):
-        """Print a quality summary table for all completed experiments."""
+    batch_id = generate_experiment_id()
+    results = {}
+    items = [
+        item
+        if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
+        else (None, item)
+        for item in experiments
+    ]
+    for index, (label, experiment) in enumerate(items):
+        name = label or experiment.EXPT_NAME or experiment.__class__.__name__
         print(f"\n{'=' * 60}")
-        print("  BatchExperiment Summary")
+        print(f"  Batch [{index + 1}/{len(items)}] — {name}")
         print(f"{'=' * 60}")
-        for name, result in self.results.items():
-            flag = result.quality.value.upper()
-            msg = f" — {result.quality_message}" if result.quality_message else ""
-            print(f"  {name:<40s} [{flag}]{msg}")
-        print(f"{'=' * 60}")
+        result = experiment.run(py_avg=py_avg, **kwargs)
+        result.parent_id = batch_id
+        result.session_id = batch_id
+        results[name] = result
+        if stop_on_bad and result.quality == QualityFlag.BAD:
+            print(f"  Stopping: {name} returned BAD ({result.quality_message})")
+            break
+        sleep(0.5)
+    return results
 
 
-class ParallelExperiment:
+def summarize_results(results) -> str:
+    """Return and print a compact quality summary."""
+    lines = []
+    for name, result in results.items():
+        message = f" — {result.quality_message}" if result.quality_message else ""
+        lines.append(f"{name:<40s} [{result.quality.value.upper()}]{message}")
+    summary = "\n".join(lines)
+    print(summary)
+    return summary
+
+
+def run_parallel(experiments, py_avg: int, *, max_workers=None, **kwargs):
+    """Run independent experiments concurrently.
+
+    Only use this with genuinely independent hardware sessions. A shared QICK
+    proxy is not serialized by this helper.
     """
-    Run experiments in parallel threads and collect results.
+    from ..tools.hdf5_store import generate_experiment_id
 
-    Useful when multiple independent experiments (different qubits, different
-    parameter sweeps) can run simultaneously without hardware conflicts.
+    session_id = generate_experiment_id()
+    items = [
+        item
+        if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
+        else (None, item)
+        for item in experiments
+    ]
+    results = {}
+    futures = {}
+    with ThreadPoolExecutor(max_workers=max_workers or len(items)) as pool:
+        for label, experiment in items:
+            name = label or experiment.EXPT_NAME or experiment.__class__.__name__
+            futures[pool.submit(experiment.run, py_avg, **kwargs)] = name
 
-    Parameters
-    ----------
-    experiments : list of BaseExperiment
-        Experiments to run in parallel.
-    max_workers : int, optional
-        Thread pool size.  Defaults to the number of experiments.
-    """
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                result = future.result()
+                result.parent_id = session_id
+                result.session_id = session_id
+            except Exception as exc:
+                result = ExperimentData(
+                    experiment_type=name,
+                    quality=QualityFlag.BAD,
+                    quality_message=str(exc),
+                    parent_id=session_id,
+                    session_id=session_id,
+                )
+            results[name] = result
+    return results
 
-    def __init__(
-        self,
-        experiments: List,
-        max_workers: Optional[int] = None,
-    ):
-        # Accept both bare experiments and (name, expt) tuples
-        """Initialize the ParallelExperiment instance.
 
-        Parameters
-        ----------
-        experiments : List
-            Value for ``experiments``.
-        max_workers : Optional[int]
-            Value for ``max_workers``.
-        """
-        self._named: List = []
-        for item in experiments:
-            if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
-                self._named.append(item)
-            else:
-                self._named.append((None, item))
-        self.experiments = [expt for _, expt in self._named]
-        self.max_workers = max_workers or len(self.experiments)
-        self.results: Dict[str, ExperimentData] = {}
-
-    def run(self, py_avg: int, **kwargs) -> Dict[str, ExperimentData]:
-        """Run all experiments concurrently, return collected results.
-
-        Parameters
-        ----------
-        py_avg : int
-            Number of Python-level acquisition averages.
-        **kwargs : Any
-            Additional keyword arguments.
-
-        Returns
-        -------
-        Dict[str, ExperimentData]
-            Result of the operation.
-        """
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        from ..tools.hdf5_store import generate_experiment_id
-
-        session_id = generate_experiment_id()
-        futures = {}
-        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-            for label, expt in self._named:
-                name = label or expt.EXPT_NAME or expt.__class__.__name__
-                future = pool.submit(expt.run, py_avg, **kwargs)
-                futures[future] = name
-
-            for future in as_completed(futures):
-                name = futures[future]
-                try:
-                    self.results[name] = future.result()
-                    self.results[name].parent_id = session_id
-                    self.results[name].session_id = session_id
-                except Exception as exc:
-                    print(f"  [ParallelExperiment] {name} raised: {exc}")
-                    self.results[name] = ExperimentData(
-                        experiment_type=name,
-                        quality=QualityFlag.BAD,
-                        quality_message=str(exc),
-                        parent_id=session_id,
-                        session_id=session_id,
-                    )
-
-        return self.results
+__all__ = ["run_batch", "run_parallel", "summarize_results"]

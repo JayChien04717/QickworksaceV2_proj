@@ -413,17 +413,3 @@ class BaseAnalysis(ABC):
             return QualityFlag.NO_INFORMATION
 
         return QualityFlag.GOOD
-
-
-class IdentityAnalysis(BaseAnalysis):
-    """No-op analysis — passes data through unchanged."""
-
-    def _run(self, data: "ExperimentData") -> None:
-        """Run the operation.
-
-        Parameters
-        ----------
-        data : 'ExperimentData'
-            Input data to process.
-        """
-        pass

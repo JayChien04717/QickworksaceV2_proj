@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import LorentzianAnalysis
 
 
@@ -62,34 +62,8 @@ class QubitSpec(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = LorentzianAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return QubitSpecProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_pulse", "freq", as_array=True)
+    PROGRAM = QubitSpecProgram
+    X_AXIS = SweepAxis.pulse("qb_pulse", "freq")
 
     def _save_comment(self, dict_val):
         """Return the comment stored with the result.
@@ -169,34 +143,8 @@ class QubitSpecFlux(BaseExperiment):
     Y_SAVE_NAME = "Flux"
     Y_SAVE_UNIT = "DAC or A"
     Y_SAVE_SCALE = 1.0
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return QubitSpecFluxProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_pulse", "freq", as_array=True)
+    PROGRAM = QubitSpecFluxProgram
+    X_AXIS = SweepAxis.pulse("qb_pulse", "freq")
 
     def _extract_sweep_axis_y(self, prog):
         """Extract the secondary sweep axis from the program.

@@ -5,7 +5,7 @@ EF qubit spectroscopy experiments.
 from __future__ import annotations
 
 from ...analysis.resonator import LorentzianAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -62,34 +62,8 @@ class QubitSpecEf(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = LorentzianAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return QubitSpecEfProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("qb_ef_pulse", "freq", as_array=True)
+    PROGRAM = QubitSpecEfProgram
+    X_AXIS = SweepAxis.pulse("qb_ef_pulse", "freq")
 
 
 __all__ = ["QubitSpecEfProgram", "QubitSpecEf"]

@@ -118,21 +118,7 @@ class _ExcitedResonatorSpec(ResonatorSpec):
 
     EXPT_NAME = "resonator_spec_e"
     TITLE_PREFIX = "Resonator Spectroscopy |e>"
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return ExcitedResonatorSpecProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
+    PROGRAM = ExcitedResonatorSpecProgram
 
 
 class DispersiveShift(BaseExperiment):
@@ -150,31 +136,6 @@ class DispersiveShift(BaseExperiment):
     Y_SAVE_NAME = "Qubit State"
     Y_SAVE_UNIT = "0:g, 1:e"
     Analysis = DispersiveShiftAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Raises
-        ------
-        NotImplementedError
-            If the operation cannot be completed.
-        """
-        raise NotImplementedError("DispersiveShift runs separate |g> and |e> programs")
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Raises
-        ------
-        NotImplementedError
-            If the operation cannot be completed.
-        """
-        raise NotImplementedError("Sweep axes are supplied by the two spectra")
 
     def run(self, py_avg: int, solve_type: str = "hm", **kwargs) -> ExperimentData:
         """Acquire g/e frequency shots, fit chi, and select maximum-SNR frequency.

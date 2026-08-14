@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import ResonatorSpecAnalysis
 from ...tools.fit_n_res import fit_n_resonators as _fit_n_resonators
 
@@ -59,34 +59,8 @@ class ResonatorSpec(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = ResonatorSpecAnalysis
-
-    def _create_program(self):
-        """Create the QICK program for this experiment.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return ResonatorSpecProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        """Extract the primary sweep axis from the program.
-
-        Parameters
-        ----------
-        prog : Any
-            Value for ``prog``.
-
-        Returns
-        -------
-        Any
-            Result of the operation.
-        """
-        return prog.get_pulse_param("res_pulse", "freq", as_array=True)
+    PROGRAM = ResonatorSpecProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
 
     def run(self, py_avg, solve_type="hm", **kwargs):
         """Run resonator spectroscopy.  ``solve_type`` passed to circle fit.

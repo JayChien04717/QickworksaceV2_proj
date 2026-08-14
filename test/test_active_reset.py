@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -30,7 +29,7 @@ class ActiveResetTests(unittest.TestCase):
         expt.soc = "soc"
 
         result = expt._acquire(
-            prog, axes=None, ctx=SimpleNamespace(py_avg=3)
+            prog, x_vals=None, y_vals=None, options={"py_avg": 3}
         )
 
         np.testing.assert_allclose(expt.pre_reset_population, pre)
