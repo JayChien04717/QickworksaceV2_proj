@@ -11,6 +11,7 @@ from QickworkspaceV2.core.base_experiment import BaseExperiment
 from QickworkspaceV2.core.experiment_components import AcquisitionResult
 from QickworkspaceV2.experiments.resonator import (
     BroadbandResonatorSpec,
+    ResonatorSpec,
     ResonatorSpecProgram,
 )
 
@@ -49,10 +50,11 @@ class BroadbandResonatorSpecTests(unittest.TestCase):
             )
         )
 
-        with patch.object(
-            experiment,
-            "plot_n_resonators",
-            return_value=(figure, axes, fitted),
+        experiment.fit_n_resonators = Mock(return_value=(fitted, {}))
+        with patch(
+            "QickworkspaceV2.experiments.resonator.broadband_res_spec."
+            "_plot_n_resonators",
+            return_value=(figure, axes, fitted * 1e6),
         ) as plot_n:
             result = experiment.run(
                 py_avg=2,
@@ -63,12 +65,16 @@ class BroadbandResonatorSpecTests(unittest.TestCase):
             )
 
         self.assertIs(experiment.PROGRAM, ResonatorSpecProgram)
-        plot_n.assert_called_once_with(
+        experiment.fit_n_resonators.assert_called_once_with(
             count=4,
-            y_mode="abs",
-            show=False,
             use_phase_reference=False,
         )
+        plot_n.assert_called_once()
+        plot_args, plot_kwargs = plot_n.call_args
+        np.testing.assert_array_equal(plot_args[0], frequencies * 1e6)
+        np.testing.assert_array_equal(plot_args[1], result.raw_iq)
+        np.testing.assert_array_equal(plot_args[2], fitted * 1e6)
+        self.assertEqual(plot_kwargs, {"y_mode": "abs", "show": False})
         np.testing.assert_array_equal(experiment.resonator_freqs, fitted)
         self.assertIs(experiment.resonator_figure, figure)
         self.assertIs(experiment.resonator_axes, axes)
@@ -78,14 +84,20 @@ class BroadbandResonatorSpecTests(unittest.TestCase):
             experiment._acquire.call_args.args[3]["kwargs"],
         )
 
-    def test_labber_filename_omits_qubit_but_keeps_qubit_config(self):
+    def test_multi_resonator_helpers_belong_only_to_broadband_experiment(self):
+        self.assertNotIn("fit_n_resonators", ResonatorSpec.__dict__)
+        self.assertNotIn("plot_n_resonators", ResonatorSpec.__dict__)
+        self.assertIn("fit_n_resonators", BroadbandResonatorSpec.__dict__)
+        self.assertIn("plot_n_resonators", BroadbandResonatorSpec.__dict__)
+
+    def test_labber_filename_and_comment_do_not_select_a_qubit(self):
         experiment = BroadbandResonatorSpec({"steps": 2})
         experiment._sweep_vals_x = np.array([6700.0, 7000.0])
         experiment._sweep_vals_y = None
         experiment.iqdata = np.ones(2, dtype=complex)
 
         config_all = Mock()
-        config_all.to_yaml.return_value = "Q7 config"
+        config_all.to_yaml.return_value = "full system config"
         system_tool = types.ModuleType("QickworkspaceV2.tools.system_tool")
         system_tool.config_to_yaml = Mock()
         system_tool.get_next_filename_labber = Mock(
@@ -106,7 +118,11 @@ class BroadbandResonatorSpecTests(unittest.TestCase):
             "broadband_resonator_spectrum",
             None,
         )
-        config_all.to_yaml.assert_called_once_with(q_id="Q7")
+        config_all.to_yaml.assert_called_once_with(q_id=None)
+        self.assertEqual(
+            system_tool.hdf5_generator.call_args.kwargs["comment"],
+            "full system config",
+        )
 
 
 if __name__ == "__main__":

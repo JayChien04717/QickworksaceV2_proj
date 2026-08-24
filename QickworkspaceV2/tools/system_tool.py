@@ -120,8 +120,10 @@ def hdf5_generator(
         Value for ``save_plots``.
     data_root : Any, default: None
         Value for ``data_root``.
-    filename_mode : Any, default: 'random'
-        Value for ``filename_mode``.
+    filename_mode : {'random', 'sequential'}, default: 'random'
+        File-naming strategy. ``'random'`` replaces the temporary
+        three-digit suffix with the sortable experiment ID. ``'sequential'``
+        keeps the traditional ``_001``, ``_002``, ... suffix.
     figures : Any, default: None
         Value for ``figures``.
 

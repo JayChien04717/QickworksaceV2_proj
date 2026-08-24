@@ -217,6 +217,8 @@ class BaseExperiment:
     EXPT_NAME: str = ""
     # Set False when qb_idx selects config but should not be part of the file name.
     INCLUDE_QUBIT_IN_FILENAME: bool = True
+    # Set False when the saved comment should contain the full system config.
+    INCLUDE_QUBIT_IN_COMMENT: bool = True
     TAG: str = ""
     X_LABEL: str = ""
     Y_LABEL: str = "ADC Units"
@@ -740,8 +742,12 @@ class BaseExperiment:
             Value for ``config_all``.
         title : Any, default: None
             Value for ``title``.
-        filename_mode : Any, default: 'random'
-            Value for ``filename_mode``.
+        filename_mode : {'random', 'sequential'}, default: 'random'
+            File-naming strategy. ``'random'`` replaces the temporary
+            three-digit suffix with the sortable experiment ID, for example
+            ``s002_res_ge_Q1_<experiment_id>.hdf5``. ``'sequential'`` keeps
+            the traditional numbered filename, for example
+            ``s002_res_ge_Q1_001.hdf5``.
 
         Returns
         -------
@@ -764,11 +770,12 @@ class BaseExperiment:
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
 
-        dict_val = (
-            config_all.to_yaml(q_id=qb_idx)
-            if config_all is not None
-            else config_to_yaml(self.cfg)
-        )
+        if config_all is not None:
+            dict_val = config_all.to_yaml(
+                q_id=qb_idx if self.INCLUDE_QUBIT_IN_COMMENT else None
+            )
+        else:
+            dict_val = config_to_yaml(self.cfg)
 
         comment = self._save_comment(dict_val)
 

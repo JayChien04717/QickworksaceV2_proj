@@ -8,6 +8,7 @@ from QickworkspaceV2.tools.fit_n_res import (
     detect_resonators,
     fit_n_resonators,
     phase_reference_candidates,
+    plot_n_resonators,
 )
 
 
@@ -70,6 +71,21 @@ class FitNResonatorsTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "strictly increasing"):
             fit_n_resonators(frequency[::-1], s21[::-1], count=3)
+
+    def test_plots_fitted_resonators(self):
+        frequency, s21, fitted = self._synthetic_trace()
+
+        figure, axes, plotted = plot_n_resonators(
+            frequency,
+            s21,
+            fitted,
+            show=False,
+        )
+
+        np.testing.assert_array_equal(plotted, fitted)
+        self.assertEqual(axes.get_xlabel(), "Frequency (MHz)")
+        self.assertEqual(len(axes.lines), 4)
+        figure.clear()
 
 
 if __name__ == "__main__":
