@@ -1,0 +1,16 @@
+# Daily entry point. Choose the profile matching your actual wiring.
+schema_version: 1
+hardware: profiles/direct/hardware.yaml
+device: profiles/direct/device.yaml
+data_dir: ../data
+calibration_db: ../data/calibration.sqlite3
+defaults:
+  reps: 100
+  soft_avgs: 1
+  relax_delay_us: 200.0
+  iq_process: abs
+connection:
+  ns_host: 192.168.10.82
+  ns_port: 8888
+  proxy_name: myqick
+experiment_modules: []

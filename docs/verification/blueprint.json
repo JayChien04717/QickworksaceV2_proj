@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "timestamp": "2026-09-10T08:28:48.787908+00:00",
+  "wrappers_discovered": 28,
+  "tests": [
+    "official AST discovery",
+    "official script validation",
+    "official runner JSON parsing and array extraction",
+    "official HDF5/SQLite storage roundtrip including PNG",
+    "per-shot I/Q, named dimensions, singleton readout axis and categorical labels preserved"
+  ],
+  "source_sha256": {
+    "models": "537829804bd8e1b2e033e3ab54eeacd33658cdc392d6bae8fbd1e3d03572c0ad",
+    "discovery": "6ea9bb842c017a645a6e00e2d0fbc3b1c18a4ca859d48b407aef3d13c1ae969a",
+    "runner": "87ed859cee58b08137f135f88707e7c2d9a72556400e4e7ce3ae7162ce43dff3",
+    "storage": "ee2ae7a8cf3fa6217e90619908b779f198944d3751eecdcc841f4d6cd62b0989"
+  },
+  "scope": "Local protocol compatibility, no LLM provider or physical QICK acquisition"
+}

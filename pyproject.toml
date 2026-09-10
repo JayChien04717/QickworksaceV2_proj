@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qickworkspace"
+version = "2.0.0"
+description = "QICK-native multi-qubit measurement and calibration workspace"
+readme = "Readme.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26", "scipy>=1.12", "matplotlib>=3.8", "h5py>=3.10", "PyYAML>=6", "pydantic>=2.7,<3"]
+
+[project.optional-dependencies]
+hardware = ["qick==0.2.422", "Pyro4>=4.82"]
+service = ["fastapi>=0.115", "uvicorn>=0.30", "httpx>=0.27"]
+notebook = ["ipykernel>=6", "nbformat>=5.10", "nbclient>=0.10"]
+test = ["pytest>=8", "httpx>=0.27", "fastapi>=0.115", "nbformat>=5.10", "nbclient>=0.10", "ipykernel>=6", "ruff>=0.16"]
+instruments = ["pyvisa>=1.14"]
+
+[project.scripts]
+qickworkspace = "QickworkspaceV2.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["QickworkspaceV2*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 110
+extend-exclude = ["archive", ".reference", "QickworkspaceV2/instruments", "build", "dist", ".test-data"]
+
+[tool.ruff.lint]
+select = ["F401", "F811", "F821"]

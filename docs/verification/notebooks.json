@@ -1,0 +1,35 @@
+{
+  "hardware_acquired": false,
+  "notebooks": {
+    "QickworkspaceV2.ipynb": {
+      "cells": 70,
+      "compiled_programs": [
+        "TimeOfFlightProgram",
+        "ResonatorSpecProgram",
+        "QubitSpecGEProgram",
+        "QubitSpecEFProgram",
+        "PowerRabiGEProgram",
+        "TimeRabiGEProgram",
+        "T1GEProgram",
+        "RamseyGEProgram",
+        "SpinEchoGEProgram",
+        "PowerRabiEFProgram",
+        "TimeRabiEFProgram",
+        "T1EFProgram",
+        "RamseyEFProgram",
+        "SpinEchoEFProgram",
+        "SingleShotProgram",
+        "GateT1Program",
+        "QubitSpecProgram"
+      ],
+      "language": "English"
+    },
+    "advanced_measurements.ipynb": {
+      "cells": 32,
+      "compiled_programs": [],
+      "language": "English"
+    }
+  },
+  "script_compiled": true,
+  "timestamp": "2026-09-10T02:36:42.474566+00:00"
+}

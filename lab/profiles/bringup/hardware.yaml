@@ -1,0 +1,36 @@
+# NO CHIP diagnostic profile, not calibrated chip wiring.
+# Board read 2026-09-10: gen4 is MUX; unused gen5 exercises auxiliary pulses.
+# All active amplitudes must remain strictly below 0.1.
+schema_version: 1
+name: zcu216_no_chip_bringup
+tproc: v2
+generators:
+  drive_q1:
+    channel: 0
+    nqz: 1
+    mixer_mhz: 2872.649825
+    max_gain: 0.09
+  drive_q2:
+    channel: 1
+    nqz: 1
+    mixer_mhz: 3620.80596
+    max_gain: 0.09
+  readout_q1:
+    channel: 2
+    nqz: 2
+    mixer_mhz: 0.0
+    max_gain: 0.09
+  readout_q2:
+    channel: 3
+    nqz: 2
+    mixer_mhz: 0.0
+    max_gain: 0.09
+  coupler_c12:
+    channel: 5
+    nqz: 1
+    mixer_mhz: 0.0
+    max_gain: 0.09
+readouts:
+  adc_q1: 0
+  adc_q2: 1
+trigger_pins: []

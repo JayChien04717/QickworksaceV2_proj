@@ -1,0 +1,2 @@
+# Daily notebook/hardware environment; numerical-only use: pip install -e .
+-e .[hardware,service,notebook]

@@ -1,0 +1,16 @@
+# Explicit no-chip hardware execution verification. Do not use fitted values for calibration.
+schema_version: 1
+hardware: profiles/bringup/hardware.yaml
+device: profiles/bringup/device.yaml
+data_dir: ../../data/verification/2026-09-10-v2/worker
+calibration_db: ../../data/verification/2026-09-10-v2/bringup-calibration.sqlite3
+defaults:
+  reps: 8
+  soft_avgs: 2
+  relax_delay_us: 200.0
+  iq_process: abs
+connection:
+  ns_host: 192.168.10.82
+  ns_port: 8888
+  proxy_name: myqick
+experiment_modules: []

@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-10T02:37:57.066429+00:00",
+  "status": "passed",
+  "pytest": {
+    "passed": 90,
+    "warnings": 2
+  },
+  "ruff": "passed",
+  "notebooks": {
+    "syntax_validated": 2,
+    "native_program_configurations_compiled": 17,
+    "language_validated": "English"
+  },
+  "measurement_script": "native compilation passed",
+  "blueprint_wrappers": 28,
+  "hardware_acquired": false,
+  "notes": [
+    "Real QICK 0.2.422 compiler using logical testbench channels.",
+    "Acquisition transport is patched with explicit numerical arrays only in tests.",
+    "Notebook acquisition and connection cells were not executed.",
+    "Two dependency deprecation warnings originate in FastAPI/Starlette test transport.",
+    "Revalidated after removing redundant demo and unused wrapper modules, consolidating documentation and moving maintenance checks to tests/.",
+    "Official Blueprint core verification was performed previously; this cleanup reran the local suite and native notebook compilation only."
+  ]
+}

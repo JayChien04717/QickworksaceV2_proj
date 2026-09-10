@@ -1,0 +1,15 @@
+# EXAMPLE WIRING, not a discovery of your connected board.
+# A generator channel is a QICK logical generator, not an RFSoC DAC tile index.
+schema_version: 1
+name: direct_readout_example
+tproc: v2
+generators:
+  drive_q1: {channel: 0, nqz: 1, mixer_mhz: 2872.649825, max_gain: 1}
+  drive_q2: {channel: 1, nqz: 1, mixer_mhz: 3620.80596, max_gain: 1}
+  readout_q1: {channel: 2, nqz: 2, mixer_mhz: 0.0, max_gain: 1}
+  readout_q2: {channel: 3, nqz: 2, mixer_mhz: 0.0, max_gain: 1}
+  coupler_c12: {channel: 4, nqz: 1, mixer_mhz: 0.0, max_gain: 1}
+readouts:
+  adc_q1: 0
+  adc_q2: 1
+trigger_pins: []

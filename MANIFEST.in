@@ -1,0 +1,12 @@
+include Readme.md requirements.txt requirements-tested.txt AGENTS.md
+include QickworkspaceV2.ipynb measure.py
+recursive-include docs *.md *.json
+recursive-include lab *.py *.yaml
+recursive-include notebooks *.ipynb *.md
+recursive-include tests *.py *.json *.md LICENSE.qick
+prune archive
+prune .test-data
+prune .reference
+prune .venv
+prune .uv-cache
+global-exclude __pycache__ *.pyc *.sqlite3 *.h5

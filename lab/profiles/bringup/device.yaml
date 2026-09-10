@@ -1,0 +1,94 @@
+# NO CHIP: threshold=0 is an uncalibrated diagnostic input for tomography execution only.
+# No calibration proposal or commit is performed. Fitted physics is invalid.
+schema_version: 1
+device_id: zcu216_no_chip_bringup
+wiring_revision: diagnostic-2026-09-10
+qubits:
+  Q1:
+    drive: drive_q1
+    kind: transmon
+    tags:
+    - pair
+    transitions:
+      ge:
+        frequency_mhz: 2872.649825
+        pulse:
+          style: arb
+          shape: gauss
+          sigma_us: 0.05
+          gain: 0.05
+          pi_gain: 0.05
+          pi2_gain: 0.025
+      ef:
+        frequency_mhz: 2600.0
+        pulse:
+          style: arb
+          shape: gauss
+          sigma_us: 0.05
+          gain: 0.05
+          pi_gain: 0.05
+          pi2_gain: 0.025
+  Q2:
+    drive: drive_q2
+    kind: transmon
+    tags:
+    - pair
+    transitions:
+      ge:
+        frequency_mhz: 3620.80596
+        pulse:
+          style: arb
+          shape: gauss
+          sigma_us: 0.05
+          gain: 0.05
+          pi_gain: 0.05
+          pi2_gain: 0.025
+      ef:
+        frequency_mhz: 3350.0
+        pulse:
+          style: arb
+          shape: gauss
+          sigma_us: 0.05
+          gain: 0.05
+          pi_gain: 0.05
+          pi2_gain: 0.025
+readout_groups:
+  R1:
+    generator: readout_q1
+    mode: direct
+    length_us: 5.0
+    integration_us: 4.0
+    trigger_us: 0.5
+    members:
+      Q1:
+        adc: adc_q1
+        frequency_mhz: 6717.0
+        gain: 0.05
+        threshold: 0.0
+  R2:
+    generator: readout_q2
+    mode: direct
+    length_us: 5.0
+    integration_us: 4.0
+    trigger_us: 0.5
+    members:
+      Q2:
+        adc: adc_q2
+        frequency_mhz: 6740.0
+        gain: 0.05
+        threshold: 0.0
+couplers:
+  C12:
+    qubits:
+    - Q1
+    - Q2
+    drive: coupler_c12
+    frequency_mhz: 0.0
+    pulse:
+      style: const
+      length_us: 0.2
+      gain: 0.05
+    calibrated: false
+    phase_corrections_deg:
+      Q1: 0.0
+      Q2: 0.0

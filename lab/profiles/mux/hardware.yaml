@@ -1,0 +1,11 @@
+# EXAMPLE: replace channel mapping and mixer frequencies with your actual firmware/wiring.
+schema_version: 1
+name: mux_readout_example
+tproc: v2
+generators:
+  drive_q1: {channel: 0, nqz: 1, mixer_mhz: 2872.649825, max_gain: 0.8}
+  drive_q2: {channel: 1, nqz: 1, mixer_mhz: 3620.80596, max_gain: 0.8}
+  readout_bus: {channel: 2, nqz: 2, mixer_mhz: 6500.0, max_gain: 0.5}
+  coupler_c12: {channel: 3, nqz: 1, mixer_mhz: 0.0, max_gain: 0.3}
+readouts: {adc_q1: 0, adc_q2: 1}
+trigger_pins: []
