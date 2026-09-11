@@ -71,10 +71,13 @@ class NotebookLab:
                 raise ValueError("No measurement result is available to export")
         if result is None:
             return {}  # A disabled external scan did not acquire anything.
-        from QickworkspaceV2.data.labber import save_labber_results
+        from labtools.labber import save_labber_results
         saved = (result.save_labber(path, **options) if path is not None
                  else save_labber_results(result, load=self.load, **options))
-        print("Labber data:", saved)
+        if saved:
+            print("Labber data:", saved)
+        else:
+            print("Labber export skipped: no measurement results in this procedure")
         return saved
 
     def connect(self, **connection):

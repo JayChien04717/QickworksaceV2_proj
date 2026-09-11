@@ -6,7 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 import numpy as np
-from QickworkspaceV2.data.serialization import jsonable
+from labtools.serialization import jsonable
 
 
 def to_worker_result(result, *, artifact_dir=None, max_array_values=20000):

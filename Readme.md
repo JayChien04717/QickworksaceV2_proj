@@ -47,14 +47,18 @@ QickworkspaceV2/experiments/t1_ge/
     parameters.py           此實驗的 node schema、預設值與驗證
     analysis.py             analyze、plot 與 updates 校正規則
     __init__.py             公開 import 與 ExperimentSpec 註冊
-QickworkspaceV2/analysis/fitting.py      公式／fit 函式配對與共用求解器
+labtools/fitting/functions.py      公式與各模型 fit 函式
+labtools/fitting/solver.py         通用數值求解器
+labtools/hdf5/                     通用 HDF5 讀寫
+labtools/labber/                   Labber 匯出
+labtools/catalog.py                SQL 檔案索引、查詢與重建
 QickworkspaceV2/notebook.py              NotebookLab 執行與顯示
 archive/v1/                 重建前原始程式與 Notebook
 ```
 
 **35 個 catalog 實驗各有自己的資料夾**，GE／EF 獨立維護。Notebook 與 worker 使用相同 Program、分析和繪圖。一般一維圖使用共用 renderer；RB、tomography、readout、reset 等專屬圖放在實驗的 analysis.py。沒有舊檔案 wrapper 或相容層。
 
-`broadband_resonator_spectrum` 是獨立的寬頻實驗，擁有自己的 `program.py`、`parameters.py`、`analysis.py` 與 catalog 項目；`resonator_spec` 維持單共振器窄頻分析。寬頻沿用原本 `analysis/fit_n_res.py` 的平滑、凹峰評分、phase reference 與三點二次插值，Notebook 使用 `BroadbandResonatorSpecProgram` 和通用 `lab.run()`，可編輯 `count`、`detection_options`、`y_mode`。
+`broadband_resonator_spectrum` 是獨立的寬頻實驗，擁有自己的 `program.py`、`parameters.py`、`analysis.py` 與 catalog 項目；`resonator_spec` 維持單共振器窄頻分析。寬頻沿用原本 `labtools/fitting/fit_n_res.py` 的平滑、凹峰評分、phase reference 與三點二次插值，Notebook 使用 `BroadbandResonatorSpecProgram` 和通用 `lab.run()`，可編輯 `count`、`detection_options`、`y_mode`。
 
 ## 晶片校正與 fitting
 
@@ -62,7 +66,7 @@ Notebook 包含 TOF、寬頻/窄頻 resonator、punchout、GE/EF spectroscopy、
 
 各 tuning cell 可修改 sigma、pulse type、length、gain、threshold、rotation、reps 與掃描範圍。TOF 的 `check_e`／`check_f` 擇一開啟；`tof_threshold` 是波形包絡門檻，`ro_threshold` 是 single-shot 分類門檻。
 
-公式集中在 [analysis/fitting.py](QickworkspaceV2/analysis/fitting.py)，每個公式都有自己的 fitting 函式，例如 `exponential()`／`fit_exponential()`。初始值、bounds、衍生參數與品質判定在對應 `fit_*()` 裡修改；`fit_curve()` 只接收公式 callable 做共用數值求解。`FIT_OPTIONS` 可覆寫各模型設定。單次量測用 `run_cfg["fit"]` 覆寫 model、具名 p0/bounds、maxfev、min_r_squared。修改共用公式／設定後，使用 `lab.analyze(result)` 重新分析已存資料。
+公式集中在 [labtools/fitting/functions.py](labtools/fitting/functions.py)，每個公式都有自己的 fitting 函式，例如 `exponential()`／`fit_exponential()`。初始值、bounds、衍生參數與品質判定在對應 `fit_*()` 裡修改；`fit_curve()` 只接收公式 callable 做共用數值求解。`FIT_OPTIONS` 可覆寫各模型設定。單次量測用 `run_cfg["fit"]` 覆寫 model、具名 p0/bounds、maxfev、min_r_squared。修改共用公式／設定後，使用 `lab.analyze(result)` 重新分析已存資料。
 
 校正寫回須先明確設定 `lab.calibration_enabled = True`，再執行 `lab.apply_fit(result)`。更新哪些參數由各實驗 `analysis.py` 的 `updates(result, target)` 宣告；Notebook 不再提供 fit 到設定的對應表。掃描圖、最佳 readout／DRAG 選點及 Ramsey 雙頻修正也由各實驗管理。未完成或未通過分析的結果不會更新校正；目前無晶片驗證維持停用。
 
@@ -76,4 +80,4 @@ UI／CLI／Agent 統一讀取 worker `GET /catalog`，不產生 wrappers。`Sess
 - [V2 worker 與 Agent](docs/WORKER.md)
 - [驗證範圍](docs/VERIFICATION.md)
 
-軟體檢查：`.venv/Scripts/python -m pytest -q`、`.venv/Scripts/python tests/verify_notebooks.py`、`.venv/Scripts/ruff check QickworkspaceV2 tests lab measure.py`。Notebook compiler 檢查不連線，實體驗證另用 qick_gui。日期紀錄放 repository 的 docs/ 與 data/verification/。
+軟體檢查：`.venv/Scripts/python -m pytest -q`、`.venv/Scripts/python tests/verify_notebooks.py`、`.venv/Scripts/ruff check QickworkspaceV2 labtools tests lab measure.py`。Notebook compiler 檢查不連線，實體驗證另用 qick_gui。日期紀錄放 repository 的 docs/ 與 data/verification/。

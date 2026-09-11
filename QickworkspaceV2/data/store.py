@@ -9,8 +9,8 @@ import sqlite3
 import tempfile
 
 from QickworkspaceV2.data.models import ExperimentData, FitResult
-from QickworkspaceV2.data.serialization import dumps
-from QickworkspaceV2.data.atomic import replace_file
+from labtools.serialization import dumps
+from labtools.hdf5.atomic import replace_file
 
 
 def atomic_json(path, data):

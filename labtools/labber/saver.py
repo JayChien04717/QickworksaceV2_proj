@@ -1,15 +1,17 @@
 """Export V2 results to Labber logs while retaining the complete native record."""
-from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from uuid import uuid4
+from datetime import datetime
 import os
 
 import h5py
 import numpy as np
 
-from ._labber_format import create_file
-from .serialization import dumps
+from .format import create_file
+from labtools.hdf5 import write_record, result_record
+from labtools.catalog import register_file_safely
+from labtools.serialization import dumps
 
 
 def save_labber_results(results, *, load=None, **options):
@@ -19,13 +21,15 @@ def save_labber_results(results, *, load=None, **options):
     load is the SDK store loader for child runs and table rows. Scalar procedure
     settings and None (a disabled external scan) are not measurement results.
     """
-    from .models import ExperimentData
 
     saved, visited = {}, set()
     selected_target = options.pop("target", None)
 
     def visit(value):
-        if isinstance(value, ExperimentData):
+        # A structural result interface permits standalone callers and notebook reloads.
+        if all(hasattr(value, name) for name in ("traces", "targets", "run_id", "metadata", "fits")):
+            if not value.targets:
+                raise ValueError("The result has no measured targets to export")
             if value.run_id in visited:
                 return
             visited.add(value.run_id)
@@ -47,12 +51,16 @@ def save_labber_results(results, *, load=None, **options):
         elif isinstance(value, (list, tuple)):
             for item in value:
                 visit(item)
+        elif value is not None and not isinstance(value, (str, int, float, complex, np.generic)):
+            raise TypeError(f"Unsupported Labber result type: {type(value).__module__}.{type(value).__qualname__}")
 
     visit(results)
+    if not saved and results is not None and not isinstance(results, (list, tuple, dict)):
+        raise TypeError("Expected a V2 measurement result or a collection of results")
     return saved
 
 
-def save_labber(result, path=None, *, target=None, data="iq", comment="", tags=(), save_plot=True):
+def save_labber(result, path=None, *, directory=None, target=None, data="iq", comment="", tags=(), save_plot=True, catalog=True, catalog_root=None):
     """Save one target as a Labber log, plus all targets/shots/fits in /metagroup.
 
     Labber's fastest step is the innermost sweep (or shot index for shots). All dimensions, including
@@ -94,6 +102,14 @@ def save_labber(result, path=None, *, target=None, data="iq", comment="", tags=(
         elif axis.dtype.kind not in "biuf" or not np.isfinite(axis).all():
             raise ValueError(f"Labber step {dim} requires finite real coordinates")
         steps.append(step)
+    if path is not None and directory is not None:
+        raise ValueError("Specify either path or directory, not both")
+    if directory is not None:
+        date = datetime.fromisoformat(result.created_at.replace("Z", "+00:00")).astimezone()
+        folder = Path(directory).expanduser().resolve() / date.strftime("%Y/%m/Data_%m%d")
+        path = folder / f"{result.experiment}_{target}_{data}_{result.run_id}.hdf5"
+        if Path(path.name).name != path.name or any(c in result.experiment + result.run_id for c in '/\\'):
+            raise ValueError("Experiment and run ID must not contain path separators")
     if path is None:
         if result.path is None:
             raise ValueError("Provide an export path for an unsaved result")
@@ -105,8 +121,11 @@ def save_labber(result, path=None, *, target=None, data="iq", comment="", tags=(
         raise FileExistsError(f"Refusing to overwrite {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     # Build privately, then publish atomically without replacing any existing file.
-    with TemporaryDirectory(prefix=".labber-", dir=path.parent) as temporary:
-        output = Path(temporary) / "export.hdf5"
+    # Create the published file directly in its destination directory so it
+    # inherits that directory's ACL. Windows temporary directories restrict
+    # access to their creator; moving/linking their children retains that ACL.
+    output = path.parent / f".labber-{uuid4().hex}.hdf5"
+    try:
         create_file(str(output), [{"name": channel, "unit": "ADC", "complex": True, "vector": False}], steps)
         with h5py.File(output, "r+") as h5:
             h5.attrs["log_name"] = path.stem
@@ -118,14 +137,11 @@ def save_labber(result, path=None, *, target=None, data="iq", comment="", tags=(
             supplied_tags = [tags] if isinstance(tags, str) else list(tags)
             h5["Tags"].attrs["Tags"] = np.asarray([target, result.experiment, *supplied_tags], dtype=h5py.string_dtype())
             _write_data(h5, steps, values, channel)
-        # The embedded group is exactly the current V2 standalone schema.
-        native_path = Path(temporary) / "native.h5"
-        replace(result).save(native_path)
-        with h5py.File(native_path, "r") as source, h5py.File(output, "r+") as h5:
+        with h5py.File(output, "r+") as h5:
             group = h5.create_group("metagroup")
-            group.attrs.update(dict(source.attrs))
-            for name in source:
-                source.copy(name, group)
+            write_record(group, result_record(result), result.traces)
+            h5.attrs["export_target"] = target
+            h5.attrs["export_kind"] = data
             if save_plot:
                 image = BytesIO()
                 try:
@@ -135,7 +151,14 @@ def save_labber(result, path=None, *, target=None, data="iq", comment="", tags=(
                     group.attrs["plot_error"] = str(error)
                 else:
                     group.create_dataset("plots/analysis.png", data=np.frombuffer(image.getvalue(), dtype=np.uint8), compression="gzip")
-        os.link(output, path)
+        if os.name == "nt":
+            os.rename(output, path)  # Windows rename refuses to replace a file.
+        else:
+            os.link(output, path)
+    finally:
+        output.unlink(missing_ok=True)
+    if catalog:
+        register_file_safely(path, catalog_root or directory or path.parent)
     return path
 
 

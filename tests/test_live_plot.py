@@ -8,6 +8,35 @@ from QickworkspaceV2.plotting import LivePlot
 from QickworkspaceV2.plotting import plots
 
 
+@pytest.fixture(autouse=True)
+def progress_bars(monkeypatch):
+    bars = []
+    class Bar:
+        def __init__(self, **options):
+            self.total, self.n, self.closed = options['total'], 0, False
+            bars.append(self)
+        def update(self, amount):
+            self.n += amount
+        def reset(self, total):
+            self.total, self.n = total, 0
+        def close(self):
+            self.closed = True
+    monkeypatch.setattr('tqdm.auto.tqdm', Bar)
+    return bars
+
+
+def test_bar_updates_even_when_plot_is_throttled_and_closes(accepted_record, displayed, progress_bars):
+    live = LivePlot(min_interval=1000)
+    live({'state':'acquiring', 'completed':0, 'total':10})
+    for completed in (1, 5):
+        live({'state':'acquiring', 'completed':completed, 'total':10, 'result':accepted_record})
+    assert len(displayed) == 1
+    assert progress_bars[0].n == 5
+    live.close()
+    assert progress_bars[0].closed
+    assert progress_bars[0].n == 5  # Interruption must not claim 100%.
+
+
 @pytest.fixture
 def displayed(monkeypatch):
     outputs = []

@@ -29,8 +29,14 @@ QickworkspaceV2/
       __init__.py     public exports, ExperimentSpec, Program.EXPERIMENT
     t1_ef/            independently maintained EF protocol
   analysis/
-    fitting.py        equation/fit-function pairs and a generic numerical solver
+    traces.py         SDK trace selection and fitter invocation
   notebook.py         NotebookLab execution and presentation
+labtools/             sibling package, independent of QICK and the SDK
+  fitting/functions.py  equations, individual fit functions and defaults
+  fitting/solver.py     callable-based numerical solver
+  hdf5/                 named-array storage
+  labber/               Labber exports
+  catalog.py            SQLite file index and search
 ```
 
 `ExperimentSpec` registers one program builder, schema, analysis, plot and update hook. Notebook native dictionaries and catalog jobs use the same program and analysis. `program.py` binds native loops, pulses and readout events. A direct dictionary edit does not require changing a node schema. UI/CLI/Agent node validation uses the experiment's `parameters.py` through the worker catalog. Shared target selection and run options remain common rather than being copied into every experiment.
@@ -41,7 +47,7 @@ Keep `analyze`, `plot` and `updates` as separate functions in that file: `analyz
 
 ## Fitting equations and tuning
 
-Edit `QickworkspaceV2/analysis/fitting.py`. Each formula is followed by its own fitting function, following the earlier equation/fit-function organization:
+Edit `labtools/fitting/functions.py`. Each formula is followed by its own fitting function, following the earlier equation/fit-function organization:
 
 | Equation | Fitting function |
 | --- | --- |
@@ -130,7 +136,7 @@ run_cfg.update(count=4, y_mode="abs", detection_options={
 broadband_result = lab.run(BroadbandResonatorSpecProgram, run_cfg, py_avg=PY_AVG)
 ```
 
-The original multi-resonator algorithm is maintained separately in `analysis/fit_n_res.py`: Savitzky-Golay smoothing, magnitude-dip prominence/width ranking, optional phase-reference refinement and local three-point quadratic interpolation. The complex IQ and all original detection options are preserved. The helper receives Hz; the SDK converts measured MHz axes to Hz and reports candidates in MHz. `count` is the requested number. Insufficient candidates or a numerically flat trace produce a rejected analysis while retaining acquisition data and its plot. Detection details, sample indices, phase diagnostics and frequencies are saved in each trace's `multi_resonator_fit` metadata. Its local plot supports abs/db/phase and the original frequency markers.
+The original multi-resonator algorithm is maintained separately in `labtools/fitting/fit_n_res.py`: Savitzky-Golay smoothing, magnitude-dip prominence/width ranking, optional phase-reference refinement and local three-point quadratic interpolation. The complex IQ and all original detection options are preserved. The helper receives Hz; the SDK converts measured MHz axes to Hz and reports candidates in MHz. `count` is the requested number. Insufficient candidates or a numerically flat trace produce a rejected analysis while retaining acquisition data and its plot. Detection details, sample indices, phase diagnostics and frequencies are saved in each trace's `multi_resonator_fit` metadata. Its local plot supports abs/db/phase and the original frequency markers.
 
 Broadband does not automatically select a readout frequency. Review candidates, then run the separate narrow `ResonatorSpecProgram` experiment before applying calibration. Catalog jobs use the independent `broadband_resonator_spectrum` entry and its host-frequency runner, which supports static MUX readouts. Catalog start/stop are MHz offsets from the configured readout frequency; native Notebook sweeps above use absolute MHz. Native register sweeps require a sweepable readout. The redundant `lab.broadband` method and temporary narrow-experiment broadband option are removed.
 
@@ -159,3 +165,7 @@ def _initialize(self, cfg):
 Notebook frequencies are absolute MHz. Catalog `freq_start/freq_stop` are offsets from each target's configured resonance; `gain_start/gain_stop` are absolute normalized amplitudes. The result dimensions are `(gain, frequency, readout)` with coordinates read from the compiled pulse parameters. Every software average acquires the entire map. Cancellation retains completed acquisition rounds; it does not interrupt an individual FPGA sweep point. LivePlot is cleared before the final heatmap. Analysis summarizes the map without inferring a physical calibration.
 
 This program requires direct readout with tProc-controlled frequency. Static MUX tones and readouts without tProc frequency control are explicitly rejected; no host-sweep fallback is used.
+
+## File export and search
+
+Use `lab.save_labber(result, directory=LABBER_PATH)` to export and register files in the independent Labber directory. The SDK delegates file work to `labtools`. See [Labber export](LABBER.md) for SQL queries, index rebuild and native HDF5 indexing.

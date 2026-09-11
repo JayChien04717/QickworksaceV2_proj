@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "QICK-native multi-qubit measurement and calibration workspace"
 readme = "Readme.md"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26", "scipy>=1.12", "matplotlib>=3.8", "h5py>=3.10", "PyYAML>=6", "pydantic>=2.7,<3"]
+dependencies = ["numpy>=1.26", "scipy>=1.12", "matplotlib>=3.8", "h5py>=3.10", "PyYAML>=6", "pydantic>=2.7,<3", "tqdm>=4.66"]
 
 [project.optional-dependencies]
 hardware = ["qick==0.2.422", "Pyro4>=4.82"]
@@ -21,7 +21,7 @@ instruments = ["pyvisa>=1.14"]
 qickworkspace = "QickworkspaceV2.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["QickworkspaceV2*"]
+include = ["QickworkspaceV2*", "labtools*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

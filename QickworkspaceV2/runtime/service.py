@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from QickworkspaceV2.backends import AcquisitionCancelled
-from QickworkspaceV2.data.serialization import digest, jsonable
+from labtools.serialization import digest, jsonable
 from QickworkspaceV2.data.store import sqlite
 
 

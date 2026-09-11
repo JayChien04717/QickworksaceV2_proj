@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from QickworkspaceV2.analysis.fitting import (
+from labtools.fitting import (
     FIT_OPTIONS,
     fit_exponential,
     fit_curve,
@@ -11,7 +11,8 @@ from QickworkspaceV2.analysis.fitting import (
     notch_response,
 )
 from QickworkspaceV2.experiments.t1_ge import analyze
-from QickworkspaceV2.analysis import fitting
+from labtools.fitting import functions as fitting
+
 
 
 def test_native_run_fit_settings_are_used_without_mutating_iq(accepted_record):

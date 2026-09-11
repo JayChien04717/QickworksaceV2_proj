@@ -5,6 +5,7 @@ from __future__ import annotations
 from QickworkspaceV2.calibration.updates import CalibrationUpdates, accepted_fit
 from dataclasses import replace
 from QickworkspaceV2.analysis import analyze_single_shot
+
 import numpy as np
 from matplotlib.figure import Figure
 from QickworkspaceV2.plotting.plots import plot_result

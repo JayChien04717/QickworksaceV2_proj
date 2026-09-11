@@ -2,7 +2,7 @@
 
 from QickworkspaceV2.calibration.updates import CalibrationUpdates
 
-from QickworkspaceV2.analysis import fit_rabi
+from labtools.fitting import fit_rabi
 from QickworkspaceV2.data.models import FitResult
 from matplotlib.figure import Figure
 from QickworkspaceV2.plotting.plots import plot_result

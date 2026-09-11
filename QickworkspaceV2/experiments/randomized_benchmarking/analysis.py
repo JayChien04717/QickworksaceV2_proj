@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from QickworkspaceV2.calibration.updates import CalibrationUpdates
 import numpy as np
-from QickworkspaceV2.analysis.fitting import fit_rb
+from labtools.fitting import fit_rb
 from matplotlib.figure import Figure
 from QickworkspaceV2.plotting.plots import plot_result
 

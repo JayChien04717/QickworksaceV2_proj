@@ -1,7 +1,7 @@
 """Canonical automation catalog shared by the worker and workspace CLI."""
 
 from QickworkspaceV2.device.models import RunDefaults
-from QickworkspaceV2.data.serialization import digest
+from labtools.serialization import digest
 
 
 def catalog_payload(registry):

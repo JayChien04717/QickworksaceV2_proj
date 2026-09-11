@@ -4,7 +4,7 @@ from dataclasses import asdict
 from copy import deepcopy
 
 from QickworkspaceV2 import ExperimentData, TraceData
-from QickworkspaceV2.analysis.fitting import lorentzian, fit_lorentzian
+from labtools.fitting import lorentzian, fit_lorentzian
 from QickworkspaceV2.experiments.broadband_resonator_spectrum import analyze, plot, updates
 from QickworkspaceV2.experiments.broadband_resonator_spectrum.parameters import BroadbandParameters
 

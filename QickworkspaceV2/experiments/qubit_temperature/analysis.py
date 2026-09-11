@@ -4,7 +4,8 @@ from QickworkspaceV2.calibration.updates import CalibrationUpdates
 
 import numpy as np
 from scipy.constants import h, k
-from QickworkspaceV2.analysis import analyze_traces, fit_rabi
+from QickworkspaceV2.analysis import analyze_traces
+from labtools.fitting import fit_rabi
 from QickworkspaceV2.data.models import FitResult
 from matplotlib.figure import Figure
 

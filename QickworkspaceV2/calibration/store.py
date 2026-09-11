@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import re
 
-from QickworkspaceV2.data.serialization import dumps
+from labtools.serialization import dumps
 from QickworkspaceV2.data.store import sqlite
 
 

@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib.figure import Figure
 from QickworkspaceV2.calibration.updates import CalibrationUpdates
 from QickworkspaceV2.plotting.plots import plot_result
-from QickworkspaceV2.analysis.fit_n_res import fit_n_resonators, _validated_trace
+from labtools.fitting.fit_n_res import fit_n_resonators, _validated_trace
 from QickworkspaceV2.data.models import FitResult
 from .parameters import BroadbandParameters
 

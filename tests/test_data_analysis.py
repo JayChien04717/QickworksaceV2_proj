@@ -2,7 +2,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from QickworkspaceV2 import TraceData, ExperimentData
-from QickworkspaceV2.analysis import fit_exponential, fit_ramsey, train_classifier, joint_probabilities
+from QickworkspaceV2.analysis import train_classifier, joint_probabilities
+from labtools.fitting import fit_exponential, fit_ramsey
 
 
 def test_accepted_data_roundtrip(accepted_record, tmp_path):

@@ -68,7 +68,7 @@ from QickworkspaceV2.runtime.measurement import Measurement
 __all__ += ["Measurement"]
 
 from QickworkspaceV2.notebook import NotebookLab
-from QickworkspaceV2.data.labber import save_labber_results
+from labtools.labber import save_labber_results
 from numpy import linspace
 
 __all__ += ["NotebookLab", "QickSweep1D", "linspace", "save_labber_results"]

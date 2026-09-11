@@ -18,7 +18,7 @@ from QickworkspaceV2.calibration import CalibrationStore, CalibrationProposal
 from QickworkspaceV2.device.models import Device, ProjectConfig, RunDefaults, read_yaml
 from QickworkspaceV2.experiments.base import BuildContext
 from QickworkspaceV2.data.models import ExperimentData, TraceData
-from QickworkspaceV2.data.serialization import digest, jsonable
+from labtools.serialization import digest, jsonable
 from QickworkspaceV2.data.store import RunStore, atomic_json
 
 

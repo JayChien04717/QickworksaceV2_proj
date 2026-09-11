@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from QickworkspaceV2.data import atomic
+from labtools.hdf5 import atomic
 
 
 def windows_locked():

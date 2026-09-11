@@ -96,13 +96,26 @@ class LivePlot:
     It does not skip acquisition rounds or partial-data checkpoints.
     """
 
-    def __init__(self, *, min_interval=0.1, **plot_options):
+    def __init__(self, *, min_interval=0.1, progress=True, **plot_options):
         self.min_interval = float(min_interval)
         if not isfinite(self.min_interval) or self.min_interval < 0:
             raise ValueError("min_interval must be finite and nonnegative")
         self.plot_options, self.handle = plot_options, None
         self._last_update, self._run_id = None, None
         self._figure, self._canvas, self._signature = None, None, None
+        self.progress = progress
+        self._bar = None
+
+    def _update_progress(self, event):
+        completed, total = event.get("completed"), event.get("total")
+        if not self.progress or completed is None or total is None:
+            return
+        if self._bar is None:
+            from tqdm.auto import tqdm
+            self._bar = tqdm(total=total, desc="Acquiring", unit="round", leave=True)
+        elif completed < self._bar.n or total != self._bar.total:
+            self._bar.reset(total=total)
+        self._bar.update(completed - self._bar.n)
 
     def _update_figure(self, result):
         """Reuse artists for repeated rounds; rebuild when plot structure changes."""
@@ -187,6 +200,7 @@ class LivePlot:
         if event.get("state") in {"completed", "cancelled", "failed"}:
             self.close()
             return
+        self._update_progress(event)
         result = event.get("result")
         if result is None:
             return
@@ -218,6 +232,10 @@ class LivePlot:
     def close(self):
         """Remove only this live display, leaving logs and final figures intact."""
         from IPython.display import HTML
+
+        if self._bar is not None:
+            self._bar.close()
+            self._bar = None
 
         if self.handle is not None:
             self.handle.update(HTML(""))

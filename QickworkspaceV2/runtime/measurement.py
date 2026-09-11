@@ -12,7 +12,7 @@ from QickworkspaceV2.experiments.base import ProgramPlan
 from QickworkspaceV2.programs.sweeps import Sweep
 from QickworkspaceV2.data.models import ExperimentData, TraceData
 from QickworkspaceV2.data.store import RunStore, atomic_json
-from QickworkspaceV2.data.serialization import jsonable
+from labtools.serialization import jsonable
 from .session import _hardware_lease, _code_record, _versions, _range
 
 
@@ -271,6 +271,9 @@ class Measurement:
                             {"state": "acquiring", "completed": done, "total": total, "result": partial}
                         )
 
+                from QickworkspaceV2.plotting import LivePlot
+                if isinstance(on_progress, LivePlot):
+                    on_progress({"state": "acquiring", "completed": 0, "total": averages})
                 traces = self.backend.acquire(
                     compiled, plan, soft_avgs=averages, on_progress=progress, cancel=cancel
                 )

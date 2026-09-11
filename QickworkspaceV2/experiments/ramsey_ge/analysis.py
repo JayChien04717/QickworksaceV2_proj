@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from QickworkspaceV2.calibration.updates import CalibrationUpdates, accepted_fit
 from QickworkspaceV2.plotting.plots import plot_result
-from QickworkspaceV2.analysis import analyze_traces, fit_ramsey
+from QickworkspaceV2.analysis import analyze_traces
+from labtools.fitting import fit_ramsey
 
 
 def analyze(result):

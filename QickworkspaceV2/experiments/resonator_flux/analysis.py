@@ -3,7 +3,8 @@
 from QickworkspaceV2.calibration.updates import CalibrationUpdates
 
 from QickworkspaceV2.plotting.plots import plot_result
-from QickworkspaceV2.analysis import analyze_traces, fit_lorentzian
+from QickworkspaceV2.analysis import analyze_traces
+from labtools.fitting import fit_lorentzian
 
 
 def analyze(result):

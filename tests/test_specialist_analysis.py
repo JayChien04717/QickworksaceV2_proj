@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from QickworkspaceV2.analysis import fit_resonator, notch_response
+from labtools.fitting import fit_resonator, notch_response
 from QickworkspaceV2.analysis.transmission import normalize_transmission
 
 

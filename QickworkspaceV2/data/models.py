@@ -6,13 +6,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from uuid import uuid4
-import json
-import os
-import tempfile
 import numpy as np
 
-from QickworkspaceV2.data.serialization import dumps
-from QickworkspaceV2.data.atomic import replace_file
+from labtools.fitting.result import FitResult
+from labtools.hdf5 import save_hdf5, read_hdf5, result_record
 
 
 class QualityFlag(str, Enum):
@@ -85,20 +82,6 @@ class TraceData:
 
 
 @dataclass
-class FitResult:
-    model: str
-    success: bool
-    parameters: dict[str, float] = field(default_factory=dict)
-    errors: dict[str, float | None] = field(default_factory=dict)
-    units: dict[str, str] = field(default_factory=dict)
-    r_squared: float | None = None
-    message: str = ""
-    x_fit: list[float] = field(default_factory=list)
-    y_fit: list[float] = field(default_factory=list)
-    residuals: list[float] = field(default_factory=list)
-
-
-@dataclass
 class ExperimentData:
     experiment: str
     traces: dict[str, TraceData]
@@ -138,56 +121,17 @@ class ExperimentData:
 
     def save_labber(self, path=None, **options):
         """Export a Labber log with complete V2 data embedded in /metagroup."""
-        from QickworkspaceV2.data.labber import save_labber
+        from labtools.labber import save_labber
         return save_labber(self, path, **options)
 
-    def save(self, path):
-        """Atomic standalone HDF5, preserving complex data and every named axis."""
-        import h5py
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp = tempfile.mkstemp(prefix=".run-", suffix=".h5", dir=path.parent)
-        os.close(fd)
-        try:
-            with h5py.File(temp, "w") as f:
-                f.attrs["schema_version"] = 2
-                f.attrs["record"] = dumps({"experiment": self.experiment, "metadata": self.metadata,
-                                            "run_id": self.run_id, "created_at": self.created_at,
-                                            "fits": self.fits, "analysis_status": self.analysis_status,
-                                            "analysis_message": self.analysis_message})
-                trace_group = f.create_group("traces", track_order=True)
-                for name, trace in self.traces.items():
-                    group = trace_group.create_group(name)
-                    group.attrs["record"] = dumps({"dims": trace.dims, "units": trace.units,
-                                                   "shot_dims": trace.shot_dims, "metadata": trace.metadata})
-                    group.create_dataset("iq", data=trace.iq, compression="gzip")
-                    if trace.shots is not None:
-                        group.create_dataset("shots", data=trace.shots, compression="gzip")
-                    for dim, coord in trace.coords.items():
-                        if coord.dtype.kind in "UO":
-                            group.create_dataset(f"coords/{dim}", data=coord.astype(object), dtype=h5py.string_dtype())
-                        else:
-                            group.create_dataset(f"coords/{dim}", data=coord)
-                f.flush()
-            replace_file(temp, path)
-        finally:
-            if os.path.exists(temp):
-                os.unlink(temp)
-        self.path = path.resolve()
+    def save(self, path, *, catalog_root=None):
+        """Save the native record; file I/O belongs to labtools."""
+        self.path = save_hdf5(path, result_record(self), self.traces, catalog_root=catalog_root)
         return self.path
 
     @classmethod
     def load(cls, path):
-        import h5py
-        with h5py.File(path, "r") as f:
-            if f.attrs.get("schema_version") != 2:
-                raise ValueError("Unsupported HDF5 schema; use the legacy data reader for v1 files")
-            record = json.loads(f.attrs["record"])
-            record["fits"] = {q: FitResult(**v) for q, v in record["fits"].items()}
-            traces = {}
-            for name, group in f["traces"].items():
-                meta = json.loads(group.attrs["record"])
-                coords = {d: v.asstr()[...] if v.dtype.kind in "OS" else v[...] for d, v in group["coords"].items()}
-                traces[name] = TraceData(group["iq"][...], coords=coords,
-                                          shots=group["shots"][...] if "shots" in group else None, **meta)
-        return cls(traces=traces, path=Path(path).resolve(), **record)
+        record, traces = read_hdf5(path)
+        record["fits"] = {q: FitResult(**v) for q, v in record["fits"].items()}
+        return cls(traces={q: TraceData(**v) for q, v in traces.items()},
+                   path=Path(path).resolve(), **record)

@@ -1,11 +1,50 @@
 """Numerical Labber serialization fixtures; no acquisition or calibration."""
 import json
+import os
+import subprocess
 
 import h5py
 import numpy as np
 import pytest
 
 from QickworkspaceV2 import ExperimentData, TraceData
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows directory ACL inheritance')
+def test_export_inherits_destination_readers(tmp_path):
+    env = {**os.environ, 'LABBER_TEST_PARENT': str(tmp_path)}
+    setup = '''
+$acl = [System.IO.Directory]::GetAccessControl($env:LABBER_TEST_PARENT)
+$readers = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-545')
+$rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $readers, 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+$acl.AddAccessRule($rule)
+[System.IO.Directory]::SetAccessControl($env:LABBER_TEST_PARENT, $acl)
+'''
+    subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', setup],
+                   env=env, check=True, capture_output=True, text=True)
+    path = fixture_result().save_labber(tmp_path / 'permissions.hdf5', save_plot=False)
+    # Labber runs under the desktop user, which may differ from the writer.
+    # Every inheritable parent allow entry must survive publication and cleanup.
+    script = '''
+$parent = [System.IO.Directory]::GetAccessControl($env:LABBER_TEST_PARENT)
+$file = [System.IO.File]::GetAccessControl($env:LABBER_TEST_FILE)
+foreach ($entry in $parent.Access) {
+    if ($entry.AccessControlType -eq 'Allow' -and
+        ($entry.InheritanceFlags -band [System.Security.AccessControl.InheritanceFlags]::ObjectInherit)) {
+        $matches = @($file.Access | Where-Object {
+            $_.IdentityReference -eq $entry.IdentityReference -and
+            $_.AccessControlType -eq 'Allow' -and
+            ($_.FileSystemRights -band $entry.FileSystemRights) -eq $entry.FileSystemRights
+        })
+        if ($matches.Count -eq 0) { throw "Missing inherited access: $($entry.IdentityReference)" }
+    }
+}
+'''
+    checked = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+                   env={**os.environ, 'LABBER_TEST_PARENT': str(tmp_path), 'LABBER_TEST_FILE': str(path)},
+                   capture_output=True, text=True)
+    assert checked.returncode == 0, checked.stderr
 
 
 def fixture_result():
@@ -97,3 +136,33 @@ def test_notebook_disabled_scan_does_not_export_last_measurement():
     lab = NotebookLab.__new__(NotebookLab)
     # No connection or prior result is needed for a disabled procedure.
     assert lab.save_labber(None) == {}
+
+
+def test_reload_instance_and_separate_export_directory(tmp_path):
+    import subprocess
+    import sys
+    code = '''
+import importlib, sys
+from pathlib import Path
+import numpy as np
+import QickworkspaceV2.data.models as models
+from labtools.labber import save_labber_results
+root = Path(sys.argv[1])
+result = models.ExperimentData('t1_ge', {'Q1': models.TraceData(
+    np.ones((2,1)), ('delay','readout'), {'delay':[1,2], 'readout':['measurement']})})
+result.save(root/'native'/'acquisition.h5')
+original = result.path
+importlib.reload(models)
+assert not isinstance(result, models.ExperimentData)
+saved = save_labber_results(result, directory=root/'labber', save_plot=False)
+assert len(saved)==1 and result.path==original
+assert all(p.is_relative_to(root/'labber') and p.is_file() for p in saved.values())
+assert not list((root/'native').glob('*.hdf5'))
+'''
+    subprocess.run([sys.executable, '-c', code, str(tmp_path)], check=True, capture_output=True, text=True)
+
+
+def test_unsupported_export_is_not_silently_empty():
+    from QickworkspaceV2 import save_labber_results
+    with pytest.raises(TypeError, match='Unsupported Labber'):
+        save_labber_results(object())

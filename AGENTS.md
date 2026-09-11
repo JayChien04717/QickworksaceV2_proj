@@ -30,9 +30,9 @@ Keep native `_initialize(cfg)` / `_body(cfg)`, QICK pulse/delay/loop APIs and ca
 - `runtime`: direct Measurement, schema-based Session for automation, hardware lease, instrument lifecycle and worker.
 - `calibration`: explicit revision-checked proposals and graph.
 - Experiment `updates(result, target)` returns `CalibrationUpdates`: native working values plus optional strict device paths. Notebook `apply_fit(result)` and Session proposals consume that hook; do not restore experiment-specific update switches in Session or fit-to-key dictionaries in Notebook cells. Derive pulse/readout update context from the saved resolved configuration. Diagnostics declare why they have no automatic updates.
-- `notebook.py`: NotebookLab orchestration, shared result presentation, accepted-fit checks, explicit working-file updates and host-scan summaries. Keep these out of Notebook cells; pass dependencies explicitly. Experiment analysis and specialized final plots belong to its experiment package. In `analysis/fitting.py`, maintain each equation beside its independent `fit_<model>()`, which owns starting values, bounds, derived metrics and physical quality checks. `fit_curve()` is only a callable-based numerical solver; never add model-name dispatch or model-specific branches there. Experiment analyzers call the specific fitter; `FIT_FUNCTIONS` only selects configured overrides. Avoid duplicate formulas.
+- `notebook.py`: NotebookLab orchestration, shared result presentation, accepted-fit checks, explicit working-file updates and host-scan summaries. Keep these out of Notebook cells; pass dependencies explicitly. Experiment analysis and specialized final plots belong to its experiment package. In `labtools/fitting/functions.py`, maintain each equation beside its independent `fit_<model>()`, which owns starting values, bounds, derived metrics and physical quality checks. `fit_curve()` is only a callable-based numerical solver; never add model-name dispatch or model-specific branches there. Experiment analyzers call the specific fitter; `FIT_FUNCTIONS` only selects configured overrides. Avoid duplicate formulas.
 - `runtime/catalog.py`: the canonical worker/CLI automation catalog, including custom project modules.
-- Broadband is a separate `broadband_resonator_spectrum` experiment with local analysis, plotting and parameters. It shares only the native one-tone pulse sequence with the narrow resonator program. Preserve the original complex-IQ detector in `analysis/fit_n_res.py`; do not replace it with Lorentzian fitting or put a broadband mode switch into the narrow experiment. Convert MHz/Hz explicitly at the analysis boundary.
+- Broadband is a separate `broadband_resonator_spectrum` experiment with local analysis, plotting and parameters. It shares only the native one-tone pulse sequence with the narrow resonator program. Preserve the original complex-IQ detector in `labtools/fitting/fit_n_res.py`; do not replace it with Lorentzian fitting or put a broadband mode switch into the narrow experiment. Convert MHz/Hz explicitly at the analysis boundary.
 - `data/transport.py`: result arrays, labels and PNG serialization. The companion owns the sole HTTP client in `qick_agent/client.py`; do not add wrappers or a second SDK client.
 
 ## Verification
@@ -42,7 +42,7 @@ Use `.venv/Scripts/python.exe` (Python 3.12, QICK 0.2.422 in this workspace):
 ```powershell
 .venv/Scripts/python -m pytest -q
 .venv/Scripts/python tests/verify_notebooks.py
-.venv/Scripts/ruff check QickworkspaceV2 tests lab measure.py
+.venv/Scripts/ruff check QickworkspaceV2 labtools tests lab measure.py
 ```
 
 Notebook verification validates syntax and compiles explicitly tagged configuration/program cells against the real QICK compiler fixture. It skips all connection/acquisition/calibration cells. Do not execute the hardware notebook or measure.py merely to test software. Physical acquisition is separate from compiler validation.
@@ -58,3 +58,5 @@ Declare qubit drive generators explicitly in each program using `setup_qubit_gen
 Keep local parameter files readable: document each field's physical meaning and units, distinguish absolute frequencies from offsets, and explain defaults and inclusive/exclusive bounds beside the native Pydantic keywords. Do not introduce custom validation wrappers just to rename those keywords.
 
 Readout punch-out uses native nested FPGA gainloop/freqloop sweeps in its own experiment. Preserve gain-by-frequency dimensions and compiled coordinates; do not replace either axis with a host scan.
+
+General numerical fitting, HDF5/Labber I/O and file catalogs belong to the sibling `labtools` package. It must not import QICK or `QickworkspaceV2`. The SDK owns trace selection and experiment orchestration. Do not restore old utility import paths or duplicate implementations.
