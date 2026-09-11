@@ -11,13 +11,19 @@ from tqdm.auto import tqdm
 
 from ..core.base_experiment import BaseExperiment
 from ..core.experiment_data import ExperimentData, QualityFlag
-from ..tools.system_tool import clean_config
 
 
 class MuxSingleShotGEProgram(AveragerProgramV2):
     """Mux single-shot ge: read g, prepare e with pi pulses, read e."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -56,6 +62,19 @@ class MuxSingleShotGEProgram(AveragerProgramV2):
             self._add_pi_pulse(cfg, idx, cfg["qb_ch"][idx], f"{name}_pi")
 
     def _add_pi_pulse(self, cfg, idx, qb_ch, pulse_name):
+        """Add pi pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        idx : Any
+            Value for ``idx``.
+        qb_ch : Any
+            Value for ``qb_ch``.
+        pulse_name : Any
+            Name of the pulse.
+        """
         pulse_type = cfg["pulse_type"][idx]
         gain = cfg.get("qb_pi_gain", cfg.get("pi_gain_ge"))[idx]
         if pulse_type == "const":
@@ -107,6 +126,13 @@ class MuxSingleShotGEProgram(AveragerProgramV2):
             )
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.trigger(ros=cfg["active_ro_chs"], pins=[0], t=cfg["trig_time"])
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
 
@@ -129,10 +155,24 @@ class MuxSingleShotGE(BaseExperiment):
     TITLE_PREFIX = "Mux SingleShot ge"
 
     def __init__(self, config):
+        """Initialize the MuxSingleShotGE instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.data = None
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         return MuxSingleShotGEProgram(
             self.soccfg,
@@ -142,10 +182,36 @@ class MuxSingleShotGE(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return np.arange(int(self.cfg["shots"]))
 
     @staticmethod
     def _extract_iq(iq_list, n_trace):
+        """Extract iq.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         data = np.full((n_trace, 2, iq_list[0].shape[1]), np.nan + 1j * np.nan, dtype=complex)
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx])
@@ -155,11 +221,37 @@ class MuxSingleShotGE(BaseExperiment):
 
     @staticmethod
     def _analyze_ge(g_iq, e_iq):
+        """Return the analyze ge result.
+
+        Parameters
+        ----------
+        g_iq : Any
+            Value for ``g_iq``.
+        e_iq : Any
+            Value for ``e_iq``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         g_mean = np.mean(g_iq)
         e_mean = np.mean(e_iq)
         theta = -np.arctan2((e_mean - g_mean).imag, (e_mean - g_mean).real)
 
         def rotate(values):
+            """Return the rotate result.
+
+            Parameters
+            ----------
+            values : Any
+                Values to process.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return values.real * np.cos(theta) - values.imag * np.sin(theta)
 
         g_i = rotate(g_iq)
@@ -191,6 +283,20 @@ class MuxSingleShotGE(BaseExperiment):
         }
 
     def run(self, shots=None, plot=True):
+        """Run the operation.
+
+        Parameters
+        ----------
+        shots : Any, default: None
+            Value for ``shots``.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         if shots is not None:
             cfg["shots"] = int(shots)
@@ -271,7 +377,6 @@ class MuxSingleShotGE(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=np.arange(int(cfg["shots"])),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -280,6 +385,33 @@ class MuxSingleShotGE(BaseExperiment):
                 "states": ["g", "e"],
                 "shots": int(cfg["shots"]),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "state": {"values": ["g", "e"]},
+                "shot": {"values": np.arange(int(cfg["shots"])), "unit": "#"},
+            },
+            dataset_dims={"iq": ["qubit", "state", "shot"]},
+            analysis_data={
+                "fidelity": {
+                    "values": np.asarray([analysis.get(name, {}).get("fidelity", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "threshold": {
+                    "values": np.asarray([analysis.get(name, {}).get("threshold", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "rotation_deg": {
+                    "values": np.asarray([analysis.get(name, {}).get("theta_deg", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+                "snr": {
+                    "values": np.asarray([analysis.get(name, {}).get("snr", np.nan) for name in qubit_names]),
+                    "dims": ["qubit"],
+                },
+            },
+            data_kind="single_shot",
+            analysis_id="single_shot",
+            plot_id="single_shot_iq",
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
             quality_message="Mux single-shot ge acquired." if has_data else "No data acquired.",
@@ -298,6 +430,13 @@ class MuxSingleShotGEOpt(BaseExperiment):
     TITLE_PREFIX = "Mux SingleShot ge Optimize"
 
     def __init__(self, config):
+        """Initialize the MuxSingleShotGEOpt instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.length_axis = None
         self.gain_axis = None
@@ -307,6 +446,20 @@ class MuxSingleShotGEOpt(BaseExperiment):
 
     @staticmethod
     def _axis(value, default):
+        """Return the axis result.
+
+        Parameters
+        ----------
+        value : Any
+            Value to apply.
+        default : Any
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if value is None:
             value = default
         if isinstance(value, (list, tuple, np.ndarray)):
@@ -315,6 +468,28 @@ class MuxSingleShotGEOpt(BaseExperiment):
 
     @staticmethod
     def _point_cfg(cfg, active_slots, length, gain, freq_offset, shots):
+        """Return the point cfg result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        active_slots : Any
+            Value for ``active_slots``.
+        length : Any
+            Value for ``length``.
+        gain : Any
+            Value for ``gain``.
+        freq_offset : Any
+            Value for ``freq_offset``.
+        shots : Any
+            Value for ``shots``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         point_cfg = dict(cfg)
         point_cfg["shots"] = int(shots)
 
@@ -339,6 +514,24 @@ class MuxSingleShotGEOpt(BaseExperiment):
 
     @staticmethod
     def _result_arrays(n_qubits, n_l, n_g, n_f):
+        """Return the result arrays result.
+
+        Parameters
+        ----------
+        n_qubits : Any
+            Value for ``n_qubits``.
+        n_l : Any
+            Value for ``n_l``.
+        n_g : Any
+            Value for ``n_g``.
+        n_f : Any
+            Value for ``n_f``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         shape = (n_qubits, n_l, n_g, n_f)
         return {
             "fidelity": np.full(shape, np.nan, dtype=float),
@@ -348,6 +541,13 @@ class MuxSingleShotGEOpt(BaseExperiment):
         }
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         return MuxSingleShotGEProgram(
             self.soccfg,
@@ -357,9 +557,37 @@ class MuxSingleShotGEOpt(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.freq_offsets
 
     def run(self, shots=None, sweep_para=None, plot=True):
+        """Run the operation.
+
+        Parameters
+        ----------
+        shots : Any, default: None
+            Value for ``shots``.
+        sweep_para : Any, default: None
+            Value for ``sweep_para``.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = dict(self.cfg)
         if shots is None:
             shots = cfg["shots"]
@@ -557,7 +785,6 @@ class MuxSingleShotGEOpt(BaseExperiment):
             x_axis=self.freq_offsets,
             y_axis=self.gain_axis,
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -569,6 +796,27 @@ class MuxSingleShotGEOpt(BaseExperiment):
                 "points_acquired": points_done,
                 "shots": int(shots),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "length": {"values": self.length_axis, "unit": "us"},
+                "gain": {"values": self.gain_axis, "unit": "DAC unit"},
+                "frequency_offset": {"values": self.freq_offsets, "unit": "MHz"},
+                "state": {"values": ["g", "e"]},
+                "shot": {"values": np.arange(int(shots)), "unit": "#"},
+            },
+            dataset_dims={
+                "iq": ["qubit", "length", "gain", "frequency_offset", "state", "shot"]
+            },
+            analysis_data={
+                name: {
+                    "values": values,
+                    "dims": ["qubit", "length", "gain", "frequency_offset"],
+                }
+                for name, values in self.metric_arrays.items()
+            },
+            data_kind="single_shot_optimization",
+            analysis_id="single_shot_optimization",
+            plot_id="single_shot_optimization",
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
             quality_message="Mux single-shot ge optimization acquired."

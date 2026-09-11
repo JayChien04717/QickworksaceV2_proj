@@ -31,44 +31,18 @@ New API::
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Optional, Type
+from typing import Optional, Type
 
 import numpy as np
 
 from .base_analysis import BaseAnalysis
+from .acquisition import acquire_values
 from .experiment_data import ExperimentData, QualityFlag
-
-
-@dataclass
-class _RunContext:
-    py_avg: int
-    iq_process: str
-    show_final_plot: bool
-    liveplot: bool
-    plot_analysis: bool
-    kwargs: dict[str, Any]
-    config_snapshot: dict
-
-
-@dataclass
-class _SweepAxes:
-    x: Optional[np.ndarray]
-    y: Optional[np.ndarray]
-
-
-@dataclass
-class _AcquisitionResult:
-    raw_iq: Any = None
-    interrupted: bool = False
-    avg_count: int = 0
-    quality: QualityFlag = QualityFlag.NO_INFORMATION
-    quality_message: str = ""
-    fit_params: Any = None
-    fit_errors: Any = None
-    fit_result: dict = field(default_factory=dict)
-    scalar_result: Optional[float] = None
-    metadata: dict = field(default_factory=dict)
+from .experiment_components import (
+    AcquisitionResult as _AcquisitionResult,
+    SweepAxis,
+    infer_iq_dims,
+)
 
 
 class BaseExperiment:
@@ -92,14 +66,16 @@ class BaseExperiment:
     -----------------
     1. Set class-level metadata (``EXPT_NAME``, ``TAG``, ``X_LABEL``, etc.).
     2. Optionally set ``Analysis`` to a :class:`BaseAnalysis` subclass.
-    3. Override :meth:`_create_program` — return the QICK program instance.
-    4. Override :meth:`_extract_sweep_axis` — return the x-axis array.
+    3. Set ``PROGRAM`` to the QICK program class.
+    4. Set ``X_AXIS`` and optional ``Y_AXIS`` with :class:`SweepAxis`.
+       Override the corresponding hook only for computed axes.
     5. Optionally override :meth:`_post_fit` — perform fitting; populate
        ``self.fit_params``, ``self.fit_errors``, and return the old-style
        value (tuple or scalar) for backward compat.
+    6. Only for specialised multi-readout acquisition, override
+       :meth:`_acquire` and return an ``AcquisitionResult``.
     """
 
-    # ── Legacy session state ─────────────────────────────────────────────────
     _soc = None
     _soccfg = None
     _data_path = None
@@ -107,7 +83,17 @@ class BaseExperiment:
 
     @classmethod
     def setup(cls, soc, soccfg, data_path: str):
-        """Initialise shared QICK session (call once at notebook startup)."""
+        """Initialise shared QICK session (call once at notebook startup).
+
+        Parameters
+        ----------
+        soc : Any
+            Value for ``soc``.
+        soccfg : Any
+            Value for ``soccfg``.
+        data_path : str
+            Directory used for experiment data.
+        """
         data_path = cls._validate_data_path(data_path)
         cls._soc = soc
         cls._soccfg = soccfg
@@ -121,7 +107,29 @@ class BaseExperiment:
         proxy_name: str = "myqick",
         data_path: Optional[str] = None,
     ):
-        """Connect to QICK through Pyro4 and activate it for all experiments."""
+        """Connect to QICK through Pyro4 and activate it for all experiments.
+
+        Parameters
+        ----------
+        ns_host : str
+            Value for ``ns_host``.
+        ns_port : int, default: 8888
+            Value for ``ns_port``.
+        proxy_name : str, default: 'myqick'
+            Name of the proxy.
+        data_path : Optional[str]
+            Directory used for experiment data.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ImportError
+            If the operation cannot be completed.
+        """
         data_path = cls._validate_data_path(data_path)
         try:
             import Pyro4
@@ -149,10 +157,34 @@ class BaseExperiment:
 
     @classmethod
     def set_data_path(cls, data_path: str):
+        """Set data path.
+
+        Parameters
+        ----------
+        data_path : str
+            Directory used for experiment data.
+        """
         cls._data_path = cls._validate_data_path(data_path)
 
     @staticmethod
     def _validate_data_path(data_path: Optional[str]) -> str:
+        """Validate data path.
+
+        Parameters
+        ----------
+        data_path : Optional[str]
+            Directory used for experiment data.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         if data_path is None or str(data_path).strip() == "":
             raise ValueError(
                 "data_path is required. Call BaseExperiment.setup(soc, soccfg, data_path=...) "
@@ -162,6 +194,18 @@ class BaseExperiment:
 
     @classmethod
     def _require_data_path(cls) -> str:
+        """Return the require data path result.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if cls._data_path is None or str(cls._data_path).strip() == "":
             raise RuntimeError(
                 "BaseExperiment data path is not configured. Call "
@@ -170,8 +214,11 @@ class BaseExperiment:
             )
         return str(cls._data_path)
 
-    # ── Subclass metadata ────────────────────────────────────────────────────
     EXPT_NAME: str = ""
+    # Set False when qb_idx selects config but should not be part of the file name.
+    INCLUDE_QUBIT_IN_FILENAME: bool = True
+    # Set False when the saved comment should contain the full system config.
+    INCLUDE_QUBIT_IN_COMMENT: bool = True
     TAG: str = ""
     X_LABEL: str = ""
     Y_LABEL: str = "ADC Units"
@@ -193,12 +240,14 @@ class BaseExperiment:
     Y_SAVE_UNIT: str = ""
     Y_SAVE_SCALE: float = 1.0
 
-    # ── NEW: link to analysis class ──────────────────────────────────────────
     Analysis: Optional[Type[BaseAnalysis]] = None
+    PROGRAM = None
+    X_AXIS: Optional[SweepAxis] = None
+    Y_AXIS: Optional[SweepAxis] = None
 
-    # ────────────────────────────────────────────────────────────────────────
     def __init__(self, config):
-        """
+        """Initialize the BaseExperiment instance.
+
         Parameters
         ----------
         config : dict or ExperimentConfig
@@ -206,12 +255,10 @@ class BaseExperiment:
         """
         if BaseExperiment._soc is None:
             raise RuntimeError(
-                "QICK session not initialised. "
-                "Call BaseExperiment.connect_pyro4(...) or "
-                "BaseExperiment.setup(soc, soccfg, data_path)."
+                "QICK session not initialised. Call BaseExperiment.connect_pyro4(...) "
+                "or BaseExperiment.setup(soc, soccfg, data_path)."
             )
-        self.soc = BaseExperiment._soc
-        self.soccfg = BaseExperiment._soccfg
+        self.soc, self.soccfg = BaseExperiment._soc, BaseExperiment._soccfg
 
         self.cfg = config
         self.iqdata = None
@@ -224,12 +271,11 @@ class BaseExperiment:
         self._last_prog = None
 
     def prog_asm(self, use_last: bool = False):
-        """
-        Build and print the QICK program for this experiment.
+        """Build and print the QICK program for this experiment.
 
-        Useful in notebooks before acquisition:
+                        Useful in notebooks before acquisition:
 
-            prog = expt.prog_asm()
+                            prog = expt.prog_asm()
 
         Parameters
         ----------
@@ -250,9 +296,6 @@ class BaseExperiment:
         print(prog)
         return prog
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Unified entry point
-    # ══════════════════════════════════════════════════════════════════════════
 
     def run(
         self,
@@ -263,11 +306,25 @@ class BaseExperiment:
         plot_analysis: bool = False,
         **kwargs,
     ) -> ExperimentData:
-        """
-        Execute the experiment, run analysis, and return an ExperimentData.
+        """Execute the experiment, run analysis, and return an ExperimentData.
 
-        Analysis plots are intentionally opt-in. Use ``expt.plot()`` after
-        running, or pass ``plot_analysis=True`` for the old one-call behavior.
+                        Analysis plots are intentionally opt-in. Use ``expt.plot()`` after
+                        running, or pass ``plot_analysis=True`` for the old one-call behavior.
+
+        Parameters
+        ----------
+        py_avg : int
+            Number of Python-level acquisition averages.
+        iq_process : Optional[str]
+            IQ processing mode.
+        show_final_plot : bool, default: False
+            Whether to show final plot.
+        liveplot : Optional[bool]
+            Value for ``liveplot``.
+        plot_analysis : bool, default: False
+            Value for ``plot_analysis``.
+        **kwargs : Any
+            Additional keyword arguments.
 
         Returns
         -------
@@ -277,339 +334,446 @@ class BaseExperiment:
                 fit_params, error = expt.run(py_avg)
                 freq = float(expt.run(py_avg))
         """
-        ctx = self._prepare_run_options(
-            py_avg=py_avg,
-            iq_process=iq_process,
-            show_final_plot=show_final_plot,
-            liveplot=liveplot,
-            plot_analysis=plot_analysis,
-            kwargs=kwargs,
+        if isinstance(py_avg, bool) or not isinstance(py_avg, (int, np.integer)):
+            raise TypeError("py_avg must be an integer")
+        if py_avg < 1:
+            raise ValueError("py_avg must be at least 1")
+        aliases = {
+            "amp": "abs",
+            "amplitude": "abs",
+            "i": "real",
+            "avgi": "real",
+            "q": "imag",
+            "avgq": "imag",
+        }
+        requested = iq_process if iq_process is not None else self.IQ_PROCESS
+        resolved_process = aliases.get(
+            str(requested).lower(), str(requested).lower()
         )
-        prog = self._build_program(ctx)
-        axes = self._resolve_axes(prog, ctx)
-        acq = self._acquire(prog, axes, ctx)
-        result = self._finalize_result(acq, axes, ctx)
-        return self._run_analysis(result, ctx)
+        if resolved_process not in {"all", "abs", "real", "imag", "phase"}:
+            raise ValueError(
+                "iq_process must be 'all', 'abs', 'real', 'imag', or 'phase'"
+            )
+        ctx = {
+            "py_avg": int(py_avg),
+            "iq_process": resolved_process,
+            "show_final_plot": bool(show_final_plot),
+            "liveplot": self.LivePlot if liveplot is None else bool(liveplot),
+            "plot_analysis": bool(plot_analysis),
+            "kwargs": dict(kwargs),
+        }
+        self._yoko_mode = kwargs.get("yoko_mode")
+        self.iqdata = self.fit_params = self.fit_errors = None
 
-    def plot(self, analyze: bool = True) -> ExperimentData:
-        """
-        Plot the latest result with this experiment's Analysis class.
+        prog = self._create_program()
+        self._last_prog = prog
+
+        steps = self.cfg.get("steps") if hasattr(self.cfg, "get") else None
+        x_vals = BaseExperiment._resolve_axis(
+            self._extract_sweep_axis(prog), steps
+        )
+        yoko_value = ctx["kwargs"].get("yoko_value")
+        y_vals = (
+            np.asarray(yoko_value, dtype=float)
+            if yoko_value is not None
+            else BaseExperiment._resolve_axis(
+                self._extract_sweep_axis_y(prog), steps
+            )
+        )
+        self._sweep_vals_x, self._sweep_vals_y = x_vals, y_vals
+
+        acq = self._acquire(prog, x_vals, y_vals, ctx)
+        iq_process = (
+            "real"
+            if acq.metadata.get("threshold_discrimination")
+            else ctx["iq_process"]
+        )
+        metadata = {"iq_process": iq_process, **acq.metadata}
+        required_keys = dict.fromkeys((
+            "fit_channel",
+            *getattr(self.Analysis, "REQUIRED_CONFIG_KEYS", ()),
+        ))
+        analysis_context = {}
+        for key in required_keys:
+            try:
+                value = self.cfg.get(key)
+            except (AttributeError, TypeError):
+                continue
+            if value is not None:
+                analysis_context[key] = value
+        if analysis_context:
+            metadata["analysis_context"] = analysis_context
+
+        common = dict(
+            experiment_type=self.EXPT_NAME,
+            quality=acq.quality,
+            quality_message=acq.quality_message,
+            metadata=metadata,
+            interrupted=acq.interrupted,
+            avg_count=acq.avg_count,
+        )
+        if acq.raw_iq is None:
+            result = ExperimentData(**common)
+        else:
+            old_result = self._post_fit(x_vals)
+            result = ExperimentData(
+                **common,
+                raw_iq=acq.raw_iq,
+                x_axis=x_vals,
+                y_axis=y_vals,
+                axes=dict(acq.axes),
+                raw_data=dict(acq.raw_data),
+                analysis_data=dict(acq.analysis_data),
+                fit_params=(
+                    self.fit_params
+                    if self.fit_params is not None
+                    else acq.fit_params
+                ),
+                fit_errors=(
+                    self.fit_errors
+                    if self.fit_errors is not None
+                    else acq.fit_errors
+                ),
+                fit_result=dict(acq.fit_result),
+                scalar_result=acq.scalar_result,
+                x_name=self.X_SAVE_NAME,
+                x_unit=self.X_SAVE_UNIT,
+                x_scale=self.X_SAVE_SCALE,
+                y_name=self.Y_SAVE_NAME,
+                y_unit=self.Y_SAVE_UNIT,
+                y_scale=self.Y_SAVE_SCALE,
+            )
+            if isinstance(old_result, (int, float, np.integer, np.floating)):
+                result.scalar_result = float(old_result)
+            elif isinstance(old_result, dict):
+                result.fit_result = {
+                    key: (value, None) for key, value in old_result.items()
+                }
+            result.dataset_dims.update(acq.dataset_dims)
+            result.dataset_dims.setdefault(
+                "iq",
+                infer_iq_dims(
+                    np.asarray(acq.raw_iq).shape,
+                    x_axis=x_vals,
+                    y_axis=y_vals,
+                ),
+            )
+        self.result = result
+
+        if self.Analysis is not None:
+            analysis_inst = self.Analysis()
+            result = analysis_inst.run(result)
+            if ctx["plot_analysis"]:
+                renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+                self._render_and_capture_analysis(renderer, result)
+            self.result = result
+
+        return result
+
+    @staticmethod
+    def _render_and_capture_analysis(renderer, result):
+        """Render analysis and retain every Matplotlib figure it creates."""
+        import matplotlib.pyplot as plt
+
+        before = set(plt.get_fignums())
+        rendered = renderer(result)
+        candidates = []
+        if hasattr(rendered, "savefig"):
+            candidates.append(rendered)
+        elif isinstance(rendered, (list, tuple)):
+            candidates.extend(item for item in rendered if hasattr(item, "savefig"))
+        candidates.extend(plt.figure(number) for number in plt.get_fignums() if number not in before)
+        known = {id(figure) for figure in result.figures}
+        for figure in candidates:
+            if id(figure) not in known:
+                result.figures.append(figure)
+                known.add(id(figure))
+        return rendered
+
+    def plot(
+        self,
+        analyze: Optional[bool] = None,
+        *,
+        plot_analysis: Optional[bool] = None,
+    ) -> ExperimentData:
+        """Plot the latest result with this experiment's Analysis class.
+
+                        This never reacquires hardware data. It only uses ``self.result`` from
+                        the most recent :meth:`run`, so it is safe to call from a later cell::
+
+                            expt.plot(plot_analysis=True)
 
         Parameters
         ----------
-        analyze : bool, default True
+        analyze : bool or None, optional
             When True, rerun analysis on ``self.result`` before plotting.
             When False, only render the current fit/analysis state.
+            Retained for backward compatibility.
+        plot_analysis : bool or None, optional
+            True reruns analysis and draws its fit plot. False draws only the
+            stored measurement data. Defaults to True.
+
+        Returns
+        -------
+        ExperimentData
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
         """
+        if analyze is not None and plot_analysis is not None and analyze != plot_analysis:
+            raise ValueError("analyze and plot_analysis specify conflicting values")
+        should_analyze = (
+            plot_analysis
+            if plot_analysis is not None
+            else (analyze if analyze is not None else True)
+        )
         if self.result is None:
             raise RuntimeError("No result to plot. Call run() first.")
         if self.Analysis is None:
             raise RuntimeError(f"{self.__class__.__name__} has no Analysis class.")
 
-        analysis_inst = self.Analysis()
         result = self.result
-        if analyze:
-            result = analysis_inst.run(result)
-            self.result = result
-        analysis_inst.plot(result)
+        if not should_analyze:
+            self._plot_raw_result(result)
+            return result
+
+        analysis_inst = self.Analysis()
+        result = analysis_inst.run(result)
+        self.result = result
+        renderer = getattr(analysis_inst, "render", analysis_inst.plot)
+        self._render_and_capture_analysis(renderer, result)
         return result
 
-    def _prepare_run_options(
-        self,
-        *,
-        py_avg: int,
-        iq_process: Optional[str],
-        show_final_plot: bool,
-        liveplot: Optional[bool],
-        plot_analysis: bool,
-        kwargs: dict,
-    ) -> _RunContext:
-        resolved_liveplot = self.LivePlot if liveplot is None else liveplot
-        resolved_iq_process = iq_process if iq_process is not None else self.IQ_PROCESS
-        self._yoko_mode = kwargs.get("yoko_mode", None)
-        self.iqdata = None
-        self.fit_params = None
-        self.fit_errors = None
-        config_snapshot = self._snapshot_config()
-        return _RunContext(
-            py_avg=py_avg,
-            iq_process=resolved_iq_process,
-            show_final_plot=show_final_plot,
-            liveplot=resolved_liveplot,
-            plot_analysis=plot_analysis,
-            kwargs=dict(kwargs),
-            config_snapshot=config_snapshot,
-        )
+    def _plot_raw_result(self, result: ExperimentData) -> None:
+        """Plot stored data without fitting or rendering a fit curve.
 
-    def _build_program(self, ctx: _RunContext):
-        prog = self._create_program()
-        self._last_prog = prog
-        return prog
+        Parameters
+        ----------
+        result : ExperimentData
+            Experiment result to process.
 
-    def _resolve_axes(self, prog, ctx: _RunContext) -> _SweepAxes:
-        steps = self.cfg.get("steps") if hasattr(self.cfg, "get") else None
-        x_vals = BaseExperiment._resolve_axis(self._extract_sweep_axis(prog), steps)
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
+        import matplotlib.pyplot as plt
+        from ..plotter.theme import COLORS, style_axes, style_figure
 
-        yoko_value = ctx.kwargs.get("yoko_value")
-        if yoko_value is not None:
-            y_vals = np.asarray(yoko_value, dtype=float)
+        if result.raw_iq is None:
+            raise RuntimeError("No raw data to plot. Call run() first.")
+
+        raw = np.asarray(result.raw_iq).squeeze()
+        process = str(result.metadata.get("iq_process", "abs")).lower()
+        if process in {"real", "i", "avgi"}:
+            values, ylabel = np.real(raw), "I (ADC unit)"
+        elif process in {"imag", "q", "avgq"}:
+            values, ylabel = np.imag(raw), "Q (ADC unit)"
+        elif process == "phase":
+            values, ylabel = np.unwrap(np.angle(raw)), "Phase (rad)"
         else:
-            y_vals = BaseExperiment._resolve_axis(
-                self._extract_sweep_axis_y(prog), steps
+            values, ylabel = np.abs(raw), "|IQ| (ADC unit)"
+
+        fig, ax = plt.subplots(figsize=(8.2, 5.1), layout="constrained")
+        style_figure(fig)
+        x = result.x_axis
+        if values.ndim == 1:
+            x = np.arange(values.size) if x is None else x
+            ax.plot(
+                x, values, "o-", markersize=4, markeredgewidth=0,
+                linewidth=1.35, color=COLORS["blue"], alpha=0.82,
             )
+        elif values.ndim == 2 and x is not None and values.shape[-1] == len(x):
+            for index, trace in enumerate(values):
+                ax.plot(x, trace, linewidth=1.3, label=f"Trace {index}")
+            ax.legend(frameon=False, ncols=min(values.shape[0], 4))
+        else:
+            image = ax.imshow(
+                values, aspect="auto", origin="lower",
+                cmap="viridis", interpolation="nearest",
+            )
+            colorbar = fig.colorbar(image, ax=ax, label=ylabel, pad=0.025)
+            colorbar.outline.set_visible(False)
 
-        self._sweep_vals_x = x_vals
-        self._sweep_vals_y = y_vals
-        return _SweepAxes(x=x_vals, y=y_vals)
+        ax.set_xlabel(result.x_name or self.X_LABEL or "Sweep")
+        ax.set_ylabel(ylabel)
+        ax.set_title(
+            self.TITLE_PREFIX or result.experiment_type,
+            loc="left",
+            fontsize=13,
+            pad=12,
+        )
+        style_axes(ax, grid=values.ndim < 2)
+        plt.show()
 
-    def _acquire(self, prog, axes: _SweepAxes, ctx: _RunContext) -> _AcquisitionResult:
+    def _acquire(self, prog, x_vals, y_vals, options: dict) -> _AcquisitionResult:
+        """Acquire through the live plotter or directly through QICK."""
         threshold = self._get_readout_threshold()
-        if threshold is not None:
-            return self._acquire_threshold(prog, axes, ctx, threshold)
-        return self._acquire_liveplot(prog, axes, ctx)
-
-    def _acquire_liveplot(
-        self, prog, axes: _SweepAxes, ctx: _RunContext
-    ) -> _AcquisitionResult:
-        from ..plotter.liveplot import liveplotfun
-
-        yoko_addr = ctx.kwargs.get("yoko_inst_addr")
-        yoko_alias = ctx.kwargs.get("yoko_inst")
-        instrument_manager = (
-            ctx.kwargs.get("instrument_manager")
-            or ctx.kwargs.get("baseinst")
-            or ctx.kwargs.get("inst_manager")
-        )
-        yoko_name = (
-            ctx.kwargs.get("yoko_name")
-            or ctx.kwargs.get("yoko_inst_name")
-            or yoko_alias
-        )
-        if yoko_addr is not None:
+        kwargs = options["kwargs"]
+        if kwargs.get("yoko_inst_addr") is not None:
             raise ValueError(
                 "Direct yoko_inst_addr support has been removed. Register the Yoko "
                 "with BaseInstrumentManager and pass instrument_manager=inst plus "
                 "yoko_name='q1_flux' (or yoko_inst='q1_flux')."
             )
-
-        iqdata, interrupted, avg_count = liveplotfun(
-            prog=prog,
-            soc=self.soc,
-            py_avg=ctx.py_avg,
-            x_axis_vals=axes.x,
-            y_axis_vals=axes.y,
-            x_label=self.X_LABEL,
-            y_label=self.Y_LABEL,
-            title_prefix=self.TITLE_PREFIX,
-            instrument_manager=instrument_manager,
-            yoko_name=yoko_name,
-            yoko_mode=ctx.kwargs.get("yoko_mode", "current"),
-            yoko_voltage_ramp_step=self.YOKO_VOLTAGE_RAMP_STEP,
-            yoko_current_ramp_step=self.YOKO_CURRENT_RAMP_STEP,
-            yoko_ramp_interval=self.YOKO_RAMP_INTERVAL,
-            show_final_plot=ctx.show_final_plot,
-            iq_process=ctx.iq_process,
-            liveplot=ctx.liveplot,
+        instrument_manager = (
+            kwargs.get("instrument_manager")
+            or kwargs.get("baseinst")
+            or kwargs.get("inst_manager")
         )
-        self.iqdata = iqdata
+        yoko_name = (
+            kwargs.get("yoko_name")
+            or kwargs.get("yoko_inst_name")
+            or kwargs.get("yoko_inst")
+        )
+
+        if options["liveplot"]:
+            from ..plotter.liveplot import liveplotfun
+
+            iqdata, interrupted, avg_count = liveplotfun(
+                prog=prog,
+                soc=self.soc,
+                py_avg=options["py_avg"],
+                x_axis_vals=x_vals,
+                y_axis_vals=y_vals,
+                x_label=self.X_LABEL,
+                y_label=self.Y_LABEL,
+                title_prefix=self.TITLE_PREFIX,
+                instrument_manager=instrument_manager,
+                yoko_name=yoko_name,
+                yoko_mode=kwargs.get("yoko_mode", "current"),
+                yoko_voltage_ramp_step=self.YOKO_VOLTAGE_RAMP_STEP,
+                yoko_current_ramp_step=self.YOKO_CURRENT_RAMP_STEP,
+                yoko_ramp_interval=self.YOKO_RAMP_INTERVAL,
+                show_final_plot=options["show_final_plot"],
+                iq_process=options["iq_process"],
+                threshold=threshold,
+            )
+        elif instrument_manager is not None and yoko_name is not None:
+            if y_vals is None:
+                raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
+            rows = []
+            for value in y_vals:
+                instrument_manager.set_value(
+                    yoko_name,
+                    value,
+                    mode=kwargs.get("yoko_mode", "current"),
+                )
+                rows.append(
+                    acquire_values(
+                        prog,
+                        self.soc,
+                        rounds=options["py_avg"],
+                        progress=False,
+                        threshold=threshold,
+                    )
+                )
+            iqdata = np.asarray(rows)
+            interrupted, avg_count = False, len(y_vals)
+        else:
+            iqdata = acquire_values(
+                prog,
+                self.soc,
+                rounds=options["py_avg"],
+                progress=True,
+                threshold=threshold,
+            )
+            interrupted, avg_count = False, options["py_avg"]
 
         if iqdata is None:
-            print("No data was acquired.")
-            return _AcquisitionResult(
-                raw_iq=None,
+            result = _AcquisitionResult(
                 interrupted=True,
-                avg_count=0,
                 quality=QualityFlag.BAD,
                 quality_message="No data acquired",
             )
+        else:
+            result = _AcquisitionResult(
+                raw_iq=iqdata,
+                interrupted=interrupted,
+                avg_count=avg_count,
+            )
+            if threshold is not None:
+                population = np.asarray(iqdata)
+                population_value = (
+                    population.item()
+                    if population.ndim == 0
+                    else population.tolist()
+                )
+                scalar = (
+                    float(population.reshape(-1)[0])
+                    if population.size == 1
+                    else None
+                )
+                result.fit_params = (
+                    np.array([scalar]) if scalar is not None else None
+                )
+                result.fit_result["population"] = (population_value, None)
+                result.scalar_result = scalar
+                result.metadata = {
+                    "threshold": threshold,
+                    "threshold_discrimination": True,
+                }
 
-        if interrupted:
+        self.iqdata = result.raw_iq
+        if result.raw_iq is None:
+            print("No data was acquired.")
+        elif result.interrupted:
             print(
-                f"Experiment interrupted at {avg_count} averages. "
+                f"Experiment interrupted at {result.avg_count} averages. "
                 "Fit is based on partial data."
             )
-
-        return _AcquisitionResult(
-            raw_iq=iqdata,
-            interrupted=interrupted,
-            avg_count=avg_count,
-        )
-
-    def _acquire_threshold(
-        self, prog, axes: _SweepAxes, ctx: _RunContext, threshold
-    ) -> _AcquisitionResult:
-        try:
-            acquired = prog.acquire(
-                self.soc,
-                rounds=ctx.py_avg,
-                threshold=threshold,
-                progress=True,
-            )
-        except TypeError:
-            acquired = prog.acquire(
-                self.soc,
-                threshold=threshold,
-                progress=True,
-            )
-
-        i_values = self._threshold_to_real_values(acquired)
-        self.iqdata = i_values
-
-        scalar = None
-        if np.size(i_values) == 1:
-            scalar = float(np.asarray(i_values).reshape(-1)[0])
-
-        return _AcquisitionResult(
-            raw_iq=i_values,
-            interrupted=False,
-            avg_count=ctx.py_avg,
-            fit_params=np.array([scalar]) if scalar is not None else None,
-            fit_result={"population": (self._to_serializable(i_values), None)},
-            scalar_result=scalar,
-            metadata={
-                "threshold": threshold,
-                "threshold_discrimination": True,
-            },
-        )
-
-    def _finalize_result(
-        self, acq: _AcquisitionResult, axes: _SweepAxes, ctx: _RunContext
-    ) -> ExperimentData:
-        metadata = {"iq_process": ctx.iq_process}
-        metadata.update(acq.metadata)
-
-        if acq.raw_iq is None:
-            result = ExperimentData(
-                experiment_type=self.EXPT_NAME,
-                quality=acq.quality,
-                quality_message=acq.quality_message,
-                config=ctx.config_snapshot,
-                metadata=metadata,
-                interrupted=acq.interrupted,
-                avg_count=acq.avg_count,
-            )
-            self.result = result
-            return result
-
-        old_result = self._post_fit(axes.x)
-        fit_params = self.fit_params if self.fit_params is not None else acq.fit_params
-        fit_errors = self.fit_errors if self.fit_errors is not None else acq.fit_errors
-
-        result = ExperimentData(
-            experiment_type=self.EXPT_NAME,
-            raw_iq=acq.raw_iq,
-            x_axis=axes.x,
-            y_axis=axes.y,
-            fit_params=fit_params,
-            fit_errors=fit_errors,
-            fit_result=dict(acq.fit_result),
-            scalar_result=acq.scalar_result,
-            quality=acq.quality,
-            quality_message=acq.quality_message,
-            config=ctx.config_snapshot,
-            metadata=metadata,
-            interrupted=acq.interrupted,
-            avg_count=acq.avg_count,
-            x_name=self.X_SAVE_NAME,
-            x_unit=self.X_SAVE_UNIT,
-            x_scale=self.X_SAVE_SCALE,
-            y_name=self.Y_SAVE_NAME,
-            y_unit=self.Y_SAVE_UNIT,
-            y_scale=self.Y_SAVE_SCALE,
-        )
-
-        self._apply_old_result(result, old_result)
-        if result.fit_result == {} and result.fit_params is not None:
-            result.fit_result = self._build_fit_result()
-
-        self.result = result
         return result
 
-    def _run_analysis(self, result: ExperimentData, ctx: _RunContext) -> ExperimentData:
-        if self.Analysis is not None:
-            analysis_inst = self.Analysis()
-            result = analysis_inst.run(result)
-            if ctx.plot_analysis:
-                analysis_inst.plot(result)
-        self.result = result
-        return result
+    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None, filename_mode="random"):
+        """Save legacy Labber-format HDF5 with class-controlled file naming.
 
-    def _apply_old_result(self, result: ExperimentData, old_result) -> None:
-        if old_result is None:
-            return
-        if isinstance(old_result, (int, float, np.integer, np.floating)):
-            result.scalar_result = float(old_result)
-        elif isinstance(old_result, (tuple, list)) and len(old_result) == 2:
-            pass
-        elif isinstance(old_result, dict):
-            result.fit_result = {k: (v, None) for k, v in old_result.items()}
+        Parameters
+        ----------
+        qb_idx : Any
+            Value for ``qb_idx``.
+        yoko_value : Any, default: None
+            Value for ``yoko_value``.
+        config_all : Any, default: None
+            Value for ``config_all``.
+        title : Any, default: None
+            Value for ``title``.
+        filename_mode : {'random', 'sequential'}, default: 'random'
+            File-naming strategy. ``'random'`` replaces the temporary
+            three-digit suffix with the sortable experiment ID, for example
+            ``s002_res_ge_Q1_<experiment_id>.hdf5``. ``'sequential'`` keeps
+            the traditional numbered filename, for example
+            ``s002_res_ge_Q1_001.hdf5``.
 
-    def _snapshot_config(self) -> dict:
-        try:
-            snapshot = dict(self.cfg)
-        except Exception:
-            return {}
-        try:
-            from ..tools.system_tool import clean_config
-
-            snapshot = clean_config(snapshot)
-        except Exception:
-            pass
-        return self._to_serializable(snapshot)
-
-    @staticmethod
-    def _to_serializable(obj):
-        if isinstance(obj, dict):
-            return {str(k): BaseExperiment._to_serializable(v) for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
-            return [BaseExperiment._to_serializable(v) for v in obj]
-        if isinstance(obj, set):
-            return [BaseExperiment._to_serializable(v) for v in obj]
-        if isinstance(obj, np.ndarray):
-            return BaseExperiment._to_serializable(obj.tolist())
-        if isinstance(obj, np.generic):
-            return obj.item()
-        if isinstance(obj, complex):
-            return {"real": obj.real, "imag": obj.imag}
-        if obj is None or isinstance(obj, (str, int, float, bool)):
-            return obj
-
-        sweep_info = {}
-        for attr in ("loop", "name", "start", "stop", "step", "expts", "steps"):
-            if hasattr(obj, attr):
-                try:
-                    sweep_info[attr] = BaseExperiment._to_serializable(
-                        getattr(obj, attr)
-                    )
-                except Exception:
-                    pass
-        if sweep_info:
-            sweep_info["type"] = type(obj).__name__
-            return sweep_info
-
-        return repr(obj)
-
-    # =========================================================================
-    # Save
-    # =========================================================================
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None):
-        """Legacy Labber-format HDF5 save (unchanged from original)."""
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         from ..tools.system_tool import (
             config_to_yaml,
             get_next_filename_labber,
             hdf5_generator,
         )
 
+        name_parts = [self.EXPT_NAME]
+        if self.INCLUDE_QUBIT_IN_FILENAME and qb_idx not in (None, ""):
+            name_parts.append(str(qb_idx))
         if title is not None:
-            expt_name = f"{self.EXPT_NAME}_{qb_idx}_{title}"
-        else:
-            expt_name = f"{self.EXPT_NAME}_{qb_idx}"
+            name_parts.append(str(title))
+        expt_name = "_".join(name_parts)
 
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
 
         if config_all is not None:
-            dict_val = config_all.to_yaml(q_id=qb_idx)
+            dict_val = config_all.to_yaml(
+                q_id=qb_idx if self.INCLUDE_QUBIT_IN_COMMENT else None
+            )
         else:
             dict_val = config_to_yaml(self.cfg)
 
@@ -628,32 +792,49 @@ class BaseExperiment:
                 "values": self._sweep_vals_y * self.Y_SAVE_SCALE,
             }
 
-        hdf5_generator(
+        saved_path = hdf5_generator(
             filepath=file_path,
             x_info=x_info,
             y_info=y_info,
             z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
             comment=comment,
             tag=self.TAG,
+            result=self.result,
+            figures=(list(self.result.figures) if self.result is not None else []),
+            filename_mode=filename_mode,
         )
-        print(f"Data saved to {file_path}")
+        print(f"Data saved to {saved_path}")
+        return str(saved_path)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Internal helpers
-    # ══════════════════════════════════════════════════════════════════════════
 
     @staticmethod
     def _resolve_axis(vals, steps=None):
-        """
-        Convert whatever _extract_sweep_axis returns into a plain float array.
+        """Convert whatever _extract_sweep_axis returns into a plain float array.
 
-        get_pulse_param / get_time_param may return a QickParam sweep object
-        instead of a numpy array, depending on the QICK version.  This method
-        tries every known extraction path and catches RuntimeError from
-        QickParam.__float__.
+                        get_pulse_param / get_time_param may return a QickParam sweep object
+                        instead of a numpy array, depending on the QICK version.  This method
+                        tries every known extraction path and catches RuntimeError from
+                        QickParam.__float__.
 
-        Always call as  BaseExperiment._resolve_axis(vals, steps)  (not via
-        self._resolve_axis) to avoid Python descriptor ambiguity.
+                        Always call as  BaseExperiment._resolve_axis(vals, steps)  (not via
+                        self._resolve_axis) to avoid Python descriptor ambiguity.
+
+        Parameters
+        ----------
+        vals : Any
+            Value for ``vals``.
+        steps : Any, default: None
+            Value for ``steps``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
         """
         if vals is None:
             return None
@@ -748,127 +929,99 @@ class BaseExperiment:
         raise ValueError(f"Cannot resolve sweep axis from {type(vals).__name__}")
 
     def _get_readout_threshold(self):
-        """Return configured readout threshold, or None when disabled."""
+        """Return configured readout threshold, or None when disabled.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if not hasattr(self.cfg, "get"):
             return None
+        if self.cfg.get("threshold") is None and self.cfg.get("theshold") is not None:
+            raise KeyError("Config key 'theshold' is misspelled; use 'threshold'.")
         return self.cfg.get("threshold")
 
-    @staticmethod
-    def _threshold_to_real_values(acquired):
-        """
-        Convert QICK threshold-acquire output to real-valued population data.
-
-        Non-threshold acquisition returns I/Q pairs, which older code combines
-        into complex values with ``dot([1, 1j])``. Threshold acquisition is
-        already discriminated, so downstream code should see real values only.
-        """
-        try:
-            data = acquired[0][0]
-        except (IndexError, TypeError):
-            data = acquired
-
-        arr = np.asarray(data)
-        if np.iscomplexobj(arr):
-            return np.real(arr).squeeze()
-
-        if arr.ndim > 0 and arr.shape[-1] == 2:
-            try:
-                return np.real(arr.dot([1, 1j])).squeeze()
-            except (TypeError, ValueError):
-                pass
-
-        return arr.astype(float, copy=False).squeeze()
-
-    def _run_threshold_acquire(
-        self, prog, threshold=None, py_avg: int = 1
-    ) -> ExperimentData:
-        """
-        Acquire with QICK's threshold discriminator and skip live plotting.
-
-        QICK returns already-discriminated I/population values when threshold
-        is supplied, so the result stores the returned I channel directly.
-        """
-        self._sweep_vals_x = BaseExperiment._resolve_axis(
-            self._extract_sweep_axis(prog), self.cfg.get("steps")
-        )
-        self._sweep_vals_y = BaseExperiment._resolve_axis(
-            self._extract_sweep_axis_y(prog), self.cfg.get("steps")
-        )
-
-        try:
-            acquired = prog.acquire(
-                self.soc,
-                rounds=py_avg,
-                threshold=threshold,
-                progress=True,
-            )
-        except TypeError:
-            acquired = prog.acquire(
-                self.soc,
-                threshold=threshold,
-                progress=True,
-            )
-
-        i_values = self._threshold_to_real_values(acquired)
-        self.iqdata = i_values
-
-        scalar = None
-        if np.size(i_values) == 1:
-            scalar = float(np.asarray(i_values).reshape(-1)[0])
-
-        fit_result = {"population": (self._to_serializable(i_values), None)}
-        result = ExperimentData(
-            experiment_type=self.EXPT_NAME,
-            raw_iq=i_values,
-            x_axis=self._sweep_vals_x,
-            y_axis=self._sweep_vals_y,
-            fit_params=np.array([scalar]) if scalar is not None else None,
-            fit_errors=None,
-            fit_result=fit_result,
-            scalar_result=scalar,
-            quality=QualityFlag.NO_INFORMATION,
-            quality_message="Threshold discrimination used; live plot skipped.",
-            config=self._snapshot_config(),
-            metadata={
-                "threshold": threshold,
-                "threshold_discrimination": True,
-            },
-            interrupted=False,
-            avg_count=py_avg,
-            x_name=self.X_SAVE_NAME,
-            x_unit=self.X_SAVE_UNIT,
-            x_scale=self.X_SAVE_SCALE,
-            y_name=self.Y_SAVE_NAME,
-            y_unit=self.Y_SAVE_UNIT,
-            y_scale=self.Y_SAVE_SCALE,
-        )
-        self.result = result
-        return result
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # Subclass MUST override
-    # ══════════════════════════════════════════════════════════════════════════
 
     def _create_program(self):
-        raise NotImplementedError("Subclass must implement _create_program()")
+        """Construct the declared ``PROGRAM`` with standard QICK arguments."""
+        if self.PROGRAM is None:
+            raise NotImplementedError(
+                "Set PROGRAM or override _create_program()"
+            )
+        return self.PROGRAM(
+            self.soccfg,
+            reps=self.cfg["reps"],
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
+        )
 
     def _extract_sweep_axis(self, prog) -> np.ndarray:
-        raise NotImplementedError("Subclass must implement _extract_sweep_axis()")
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        np.ndarray
+            Result of the operation.
+
+        Raises
+        ------
+        NotImplementedError
+            If the operation cannot be completed.
+        """
+        if self.X_AXIS is None:
+            raise NotImplementedError(
+                "Set X_AXIS or override _extract_sweep_axis()"
+            )
+        return self.X_AXIS.extract(prog)
 
     def _extract_sweep_axis_y(self, prog) -> Optional[np.ndarray]:
-        return None
+        """Extract the secondary sweep axis from the program.
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Subclass MAY override
-    # ══════════════════════════════════════════════════════════════════════════
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Optional[np.ndarray]
+            Result of the operation.
+        """
+        return self.Y_AXIS.extract(prog) if self.Y_AXIS is not None else None
+
 
     def _post_fit(self, x_vals):
-        """Optional: fit and return old-style value. Should set self.fit_params."""
+        """Optional: fit and return old-style value. Should set self.fit_params.
+
+        Parameters
+        ----------
+        x_vals : Any
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return None
 
     def _save_comment(self, dict_val: str) -> str:
-        return str(dict_val)
+        """Return the comment stored with the result.
 
-    def _build_fit_result(self) -> dict:
-        """Build named fit_result dict from self.fit_params. Override for clarity."""
-        return {}
+        Parameters
+        ----------
+        dict_val : str
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
+        return str(dict_val)

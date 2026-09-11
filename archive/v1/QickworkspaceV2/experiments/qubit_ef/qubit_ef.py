@@ -5,7 +5,7 @@ EF qubit spectroscopy experiments.
 from __future__ import annotations
 
 from ...analysis.resonator import LorentzianAnalysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -13,6 +13,13 @@ class QubitSpecEfProgram(BaseProgram):
     """EF spectroscopy: ge pi pulse then sweep ef drive frequency."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_qubit_gen(cfg, "ef")
@@ -21,6 +28,13 @@ class QubitSpecEfProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse", pulse_type="flat_top")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -48,15 +62,8 @@ class QubitSpecEf(BaseExperiment):
     X_SAVE_SCALE = 1e6
 
     Analysis = LorentzianAnalysis
-
-    def _create_program(self):
-        return QubitSpecEfProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("qb_ef_pulse", "freq", as_array=True)
+    PROGRAM = QubitSpecEfProgram
+    X_AXIS = SweepAxis.pulse("qb_ef_pulse", "freq")
 
 
 __all__ = ["QubitSpecEfProgram", "QubitSpecEf"]

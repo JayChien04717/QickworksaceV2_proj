@@ -1,10 +1,28 @@
 from .experiment_data import ExperimentData, QualityFlag
-from .base_analysis import BaseAnalysis, IdentityAnalysis
+from .base_analysis import BaseAnalysis
 from .base_experiment import BaseExperiment
-from .composite import BatchExperiment, ParallelExperiment
+from .experiment_components import AcquisitionResult, SweepAxis
+from .composite import run_batch, run_parallel, summarize_results
 
 
 def __getattr__(name):
+    """Return the getattr result.
+
+    Parameters
+    ----------
+    name : Any
+        Name of the target object.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+
+    Raises
+    ------
+    AttributeError
+        If the operation cannot be completed.
+    """
     if name in {"BaseProgram", "GATE_ALIAS", "resolve_gate"}:
         from .base_program import BaseProgram, GATE_ALIAS, resolve_gate
 
@@ -21,11 +39,13 @@ __all__ = [
     "ExperimentData",
     "QualityFlag",
     "BaseAnalysis",
-    "IdentityAnalysis",
     "BaseProgram",
     "GATE_ALIAS",
     "resolve_gate",
     "BaseExperiment",
-    "BatchExperiment",
-    "ParallelExperiment",
+    "AcquisitionResult",
+    "SweepAxis",
+    "run_batch",
+    "run_parallel",
+    "summarize_results",
 ]

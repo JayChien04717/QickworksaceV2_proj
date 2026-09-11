@@ -5,7 +5,7 @@ T1 EF (s013) — energy relaxation from |f⟩ to |e⟩.
 from __future__ import annotations
 
 from ...analysis.qubit import T1Analysis
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...core.base_program import BaseProgram
 
 
@@ -13,6 +13,13 @@ class T1EfProgram(BaseProgram):
     """EF T1: ge π → ef π → wait → readout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.setup_qubit_gen(cfg, "ef")
@@ -21,6 +28,13 @@ class T1EfProgram(BaseProgram):
         self.setup_qb_pulse(cfg, "ef", name="qb_ef_pi", gain_key="pi_gain_ef")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -49,15 +63,5 @@ class T1Ef(BaseExperiment):
     X_SAVE_SCALE = 1e-6
 
     Analysis = T1Analysis
-
-    def _create_program(self):
-        return T1EfProgram(
-            self.soccfg,
-            reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"],
-            cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        self.delay_times = prog.get_time_param("wait", "t", as_array=True)
-        return self.delay_times
+    PROGRAM = T1EfProgram
+    X_AXIS = SweepAxis.time("wait")

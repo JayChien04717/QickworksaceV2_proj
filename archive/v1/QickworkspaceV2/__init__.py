@@ -1,19 +1,22 @@
 ﻿"""
-QickworkspaceV2 — IBM/IQM-style automated quantum calibration framework.
+QickworkspaceV2 automated quantum calibration framework.
 
 Quick start
 -----------
-    from .core.base_experiment import BaseExperiment
-    from .config.system_cfg import ExperimentConfig
-    from .calibration import CalibrationStore, AutoCalibrate
-    from .experiments import ResonatorSpec, QubitSpec, T1
+    from QickworkspaceV2 import BaseExperiment, ExperimentConfig
+    from QickworkspaceV2.calibration import CalibrationStore, AutoCalibrate
+    from QickworkspaceV2.experiments import ResonatorSpec, QubitSpec, T1
+    from my_lab_config import config_list
 
     # --- Hardware setup ---
-    BaseExperiment.connect_pyro4("192.168.1.100", ns_port=8888)
+    BaseExperiment.connect_pyro4(
+        "192.168.1.100",
+        ns_port=8888,
+        data_path=r"D:\\Labber_Data\\my_experiment",
+    )
 
-    # --- Config ---
-    from .config.system_cfg import ExperimentConfig
-    cfg_all = ExperimentConfig()
+    # --- Config (the source module may live outside this project) ---
+    cfg_all = ExperimentConfig(config_list)
 
     # --- Single experiment ---
     cfg = cfg_all.get_qubit("Q1")
@@ -26,36 +29,35 @@ Quick start
     auto.run()
     auto.summary()
 
-    # --- REST service ---
-    from .service import create_app
-    app = create_app(cal_store=store, config_all=cfg_all)
-    # uvicorn .service.api:app --host 0.0.0.0 --port 8000
 """
 
 from .core.experiment_data import ExperimentData, QualityFlag
 from .core.base_analysis import BaseAnalysis
 from .core.base_experiment import BaseExperiment
-from .core.composite import BatchExperiment, ParallelExperiment
+from .core.experiment_components import SweepAxis
+from .core.composite import run_batch, run_parallel, summarize_results
 from .calibration import CalibrationStore, CalibrationGraph, CalibrationNode, CalibrationMonitor, AutoCalibrate
 
 _LAZY_EXPORTS = {
-    "ExperimentConfig": ".config.system_cfg",
+    "ExperimentConfig": ".tools.system_tool",
     "SingleShot_gef": ".experiments.setup",
     "SingleShot_ge_opt": ".experiments.setup",
     "hist": ".experiments.setup",
     "TOF": ".experiments.setup",
     "ResonatorSpec": ".experiments.resonator",
+    "BroadbandResonatorSpec": ".experiments.resonator",
     "Punchout": ".experiments.resonator",
     "ResonatorSpecFlux": ".experiments.resonator",
-    "TWPAFlux": ".experiments.twpa",
-    "TWPAGain": ".experiments.twpa",
-    "TWPAGainPower": ".experiments.twpa",
-    "TWPAPowerScan": ".experiments.twpa",
+    "DispersiveShift": ".experiments.resonator",
+    "Chi": ".experiments.resonator",
+    "CKP": ".experiments.resonator",
+    "ChiKappaPower": ".experiments.resonator",
     "QubitSpec": ".experiments.qubit_ge",
     "QubitSpecFlux": ".experiments.qubit_ge",
     "TimeRabi": ".experiments.qubit_ge",
     "PowerRabi": ".experiments.qubit_ge",
     "PowerRabiReset": ".experiments.qubit_ge",
+    "ActiveResetRabi": ".experiments.qubit_ge",
     "Ramsey": ".experiments.coherence",
     "ACStark": ".experiments.coherence",
     "SpinEcho": ".experiments.coherence",
@@ -70,12 +72,16 @@ _LAZY_EXPORTS = {
     "RandomizedBenchmarking": ".experiments.characterization",
     "AutoRB": ".experiments.characterization",
     "Tomography": ".experiments.characterization",
+    "CryoscopeConst": ".experiments.cryoscope",
+    "CryoscopeZeroPadding": ".experiments.cryoscope",
+    "PredistortedCryoscope": ".experiments.cryoscope",
     "BaseInstrumentManager": ".instruments",
     "InstrumentManager": ".instruments",
 }
 
 
 def __getattr__(name):
+    """Load optional public objects only when they are first requested."""
     module_name = _LAZY_EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -89,29 +95,20 @@ def __getattr__(name):
 __version__ = "1.0.0"
 
 __all__ = [
-    # core
     "ExperimentData", "QualityFlag",
-    "BaseAnalysis", "BaseExperiment",
-    "BatchExperiment", "ParallelExperiment",
-    # calibration
+    "BaseAnalysis", "BaseExperiment", "SweepAxis",
+    "run_batch", "run_parallel", "summarize_results",
     "CalibrationStore", "CalibrationGraph", "CalibrationNode",
     "CalibrationMonitor", "AutoCalibrate",
-    # config
     "ExperimentConfig",
-    # experiments — setup
     "SingleShot_gef", "SingleShot_ge_opt", "hist", "TOF",
-    # experiments — resonator
-    "ResonatorSpec", "Punchout", "ResonatorSpecFlux",
-    # experiments — twpa
-    "TWPAFlux", "TWPAGain", "TWPAGainPower", "TWPAPowerScan",
-    # experiments — qubit ge
+    "Chi", "CKP", "ChiKappaPower", "ResonatorSpec", "BroadbandResonatorSpec",
+    "Punchout", "ResonatorSpecFlux", "DispersiveShift",
     "QubitSpec", "QubitSpecFlux", "TimeRabi", "PowerRabi", "PowerRabiReset",
-    # experiments — coherence
+    "ActiveResetRabi",
     "Ramsey", "ACStark", "SpinEcho", "T1", "RamseyEf", "T1Ef",
-    # experiments — qubit ef
     "ResonatorSpec_ef", "QubitSpecEf", "PowerRabiEf", "QubitTemp",
-    # experiments — characterization
     "AllXY", "RandomizedBenchmarking", "AutoRB", "Tomography",
-    # instruments
+    "CryoscopeConst", "CryoscopeZeroPadding", "PredistortedCryoscope",
     "BaseInstrumentManager", "InstrumentManager",
 ]

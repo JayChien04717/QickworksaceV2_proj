@@ -1,5 +1,5 @@
 """
-TWPA experiments — s002d-g: TWPA characterization experiments.
+TWPA experiments s002d-g: TWPA characterization experiments.
 """
 
 from __future__ import annotations
@@ -13,25 +13,24 @@ from tqdm.auto import tqdm
 
 try:
     from IPython.display import display as ipy_display, update_display as ipy_update
+
     _HAS_IPY = True
 except ImportError:
     _HAS_IPY = False
 
 from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
+from ...core.base_experiment import BaseExperiment, SweepAxis
+from ...core.acquisition import acquire_values
 from ...tools.scoring import (
     score_ai_twpa_c_gain_data,
     find_best_operation_point,
     plot_gain_at_operation_point,
     plot_operation_point_parameters,
 )
-from ...tools.electrical_length import (
-    plot_electrical_length,
-    set_units_on_plot_axis,
-    estimate_electrical_length,
-)
+from ...tools.electrical_length import set_units_on_plot_axis, estimate_electrical_length
 
-# ── s002d: TWPAFlux ───────────────────────────────────────────────────────────
+# ?�?� s002d: TWPAFlux ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+
 
 def _safe_labber_token(value):
     text = str(value)
@@ -66,7 +65,9 @@ def _trace_coordinate_comment(da, outer_dims):
     ]
     for dim in outer_dims:
         vals = np.asarray(da[dim].values, dtype=float)
-        lines.append(f"{dim}_values: {np.array2string(vals, separator=', ', threshold=100000)}")
+        lines.append(
+            f"{dim}_values: {np.array2string(vals, separator=', ', threshold=100000)}"
+        )
     return "\n".join(lines)
 
 
@@ -86,7 +87,11 @@ def _save_twpa_xarray_labber(
         raise ValueError("TWPA Labber save requires a 'frequency' dimension.")
 
     outer_dims = [dim for dim in da.dims if dim != "frequency"]
-    da_save = da.transpose(*outer_dims, "frequency") if outer_dims else da.transpose("frequency")
+    da_save = (
+        da.transpose(*outer_dims, "frequency")
+        if outer_dims
+        else da.transpose("frequency")
+    )
     freq_hz = np.asarray(da_save["frequency"].values, dtype=float)
     values = np.asarray(da_save.values)
 
@@ -108,7 +113,9 @@ def _save_twpa_xarray_labber(
     metadata = _trace_coordinate_comment(da_save, outer_dims)
     if extra_comment:
         metadata = f"{extra_comment}\n{metadata}" if metadata else str(extra_comment)
-    comment = _twpa_config_comment(run_cfg, qb_idx=qb_idx, config_all=config_all, extra=metadata)
+    comment = _twpa_config_comment(
+        run_cfg, qb_idx=qb_idx, config_all=config_all, extra=metadata
+    )
 
     hdf5_generator(
         filepath=file_path,
@@ -127,21 +134,10 @@ class TWPAFluxProgram(BaseProgram):
 
     def _initialize(self, cfg):
         self.setup_resonator(cfg, prefix="ge")
-        if "flux_ch" in cfg:
-            self.declare_gen(ch=cfg["flux_ch"], nqz=1)
-            self.add_pulse(ch=cfg["flux_ch"], name="flux_pulse", style="const",
-                           length=cfg["flux_length"], freq=0, phase=0, gain=cfg["flux_gain"])
-            self.add_loop("fluxloop", cfg["steps_flux"])
         self.add_loop("freqloop", cfg["steps"])
 
     def _body(self, cfg):
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
-        if "flux_ch" in cfg:
-            self.pulse(ch=cfg["flux_ch"], name="flux_pulse", t=0)
-            self.delay(cfg.get("saturate_times", 0.1))
-        if cfg.get("cooling", False):
-            self.apply_cool(cfg)
-            self.cooling_body(cfg)
         self.measure(cfg)
 
 
@@ -162,15 +158,8 @@ class TWPAFlux(BaseExperiment):
     Y_SAVE_NAME = "Flux"
     Y_SAVE_UNIT = "A"
     Y_SAVE_SCALE = 1.0
-
-    def _create_program(self):
-        return TWPAFluxProgram(
-            self.soccfg, reps=self.cfg["reps"],
-            final_delay=self.cfg["relax_delay"], cfg=self.cfg,
-        )
-
-    def _extract_sweep_axis(self, prog):
-        return prog.get_pulse_param("res_pulse", "freq", as_array=True)
+    PROGRAM = TWPAFluxProgram
+    X_AXIS = SweepAxis.pulse("res_pulse", "freq")
 
     def _extract_sweep_axis_y(self, prog):
         yoko_val = self.cfg.get("yoko_value")
@@ -220,15 +209,18 @@ class TWPAFlux(BaseExperiment):
         f_hi = el_fit_kw.get("f_max", np.inf)
         flux_vals, el_vals = [], []
         for flux, row in s21_for_el.groupby("ifbl"):
-            el = estimate_electrical_length(f=f_arr, s21=row.values.reshape(-1),
-                                            f_min=f_lo, f_max=f_hi)
+            el = estimate_electrical_length(
+                f=f_arr, s21=row.values.reshape(-1), f_min=f_lo, f_max=f_hi
+            )
             flux_vals.append(flux)
             el_vals.append(el / 1e-9)
         flux_vals = np.array(flux_vals)
         el_vals = np.array(el_vals)
         sort_idx = np.argsort(flux_vals)
         flux_vals, el_vals = flux_vals[sort_idx], el_vals[sort_idx]
-        print(f"Peak-to-peak electrical length = {el_vals.max() - el_vals.min():.3f} ns")
+        print(
+            f"Peak-to-peak electrical length = {el_vals.max() - el_vals.min():.3f} ns"
+        )
         fig, ax_map = plt.subplots(figsize=(8, 5))
         p = (20 * np.log10(np.abs(s21))).plot(x="ifbl", y="frequency", ax=ax_map)
         p.colorbar.ax.set_title("S21 (dB)")
@@ -236,7 +228,13 @@ class TWPAFlux(BaseExperiment):
         set_units_on_plot_axis(ax_map.yaxis, 1e9, "GHz", decimals=1)
         ax_map.set_title("TWPA Flux Spectroscopy")
         ax_el = ax_map.twinx()
-        ax_el.plot(flux_vals, el_vals, color="dodgerblue", linewidth=2, label="Electrical length")
+        ax_el.plot(
+            flux_vals,
+            el_vals,
+            color="dodgerblue",
+            linewidth=2,
+            label="Electrical length",
+        )
         ax_el.axhline(el_vals.min(), color="gray", ls=":", linewidth=0.8)
         ax_el.axhline(el_vals.max(), color="gray", ls=":", linewidth=0.8)
         ax_el.set_ylabel("Electrical length (ns)", color="dodgerblue")
@@ -257,12 +255,20 @@ class TWPAFlux(BaseExperiment):
         flux_unit = "V" if self._yoko_mode == "voltage" else "A"
         ds = xr.Dataset(
             {
-                "magnitude": xr.apply_ufunc(np.abs, s21_norm).assign_attrs(long_name="|S21/S21_ref| linear"),
-                "phase": xr.apply_ufunc(np.angle, s21_norm).assign_attrs(long_name="arg(S21/S21_ref)", units="rad"),
+                "magnitude": xr.apply_ufunc(np.abs, s21_norm).assign_attrs(
+                    long_name="|S21/S21_ref| linear"
+                ),
+                "phase": xr.apply_ufunc(np.angle, s21_norm).assign_attrs(
+                    long_name="arg(S21/S21_ref)", units="rad"
+                ),
             },
-            attrs={"flux_unit": flux_unit, "frequency_unit": "Hz",
-                   "yoko_mode": self._yoko_mode or "none", "normalized": 1,
-                   "reference_ifbl": smallest_flux},
+            attrs={
+                "flux_unit": flux_unit,
+                "frequency_unit": "Hz",
+                "yoko_mode": self._yoko_mode or "none",
+                "normalized": 1,
+                "reference_ifbl": smallest_flux,
+            },
         )
         root = save_dir or BaseExperiment._require_data_path()
         yy, mm, dd = datetime.datetime.today().strftime("%Y-%m-%d").split("-")
@@ -277,10 +283,11 @@ class TWPAFlux(BaseExperiment):
         return path
 
 
-# ── s002e: TWPAGain ───────────────────────────────────────────────────────────
+# ?�?� s002e: TWPAGain ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+
 
 class TWPAGain:
-    """TWPA gain scan: sweeps pump frequency × Yoko flux × QICK frequency."""
+    """TWPA gain scan: sweeps pump frequency ? Yoko flux ? QICK frequency."""
 
     YOKO_VOLTAGE_RAMP_STEP: float = 1e-5
     YOKO_CURRENT_RAMP_STEP: float = 1e-8
@@ -297,11 +304,24 @@ class TWPAGain:
 
     def stop(self):
         self._stop = True
-        print("Stop requested — will halt after the current pump_freq step.")
+        print("Stop requested; the scan will halt after the current pump-frequency step.")
 
-    def run(self, py_avg, yoko_inst=None, yoko_value=None, yoko_mode="current",
-            instrument_manager=None, yoko_name=None,
-            save_raw=False, qb_idx="TWPA", temp_folder=None, reference=None, **kwargs):
+    def run(
+        self,
+        py_avg,
+        yoko_inst=None,
+        yoko_value=None,
+        yoko_mode="current",
+        instrument_manager=None,
+        yoko_name=None,
+        save_raw=False,
+        qb_idx="TWPA",
+        temp_folder=None,
+        reference=None,
+        **kwargs,
+    ):
+        config_all = kwargs.get("config_all")
+        raw_title_prefix = kwargs.get("raw_title_prefix", "")
         if instrument_manager is None:
             instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
         if yoko_name is None:
@@ -337,21 +357,27 @@ class TWPAGain:
                         yoko_mode=yoko_mode,
                     )
                 except KeyboardInterrupt:
-                    tqdm.write("\nKeyboardInterrupt — saving collected data and stopping.")
+                    tqdm.write(
+                        "\nKeyboardInterrupt: saving collected data and stopping."
+                    )
                     self._stop = True
                 if not self._stop:
                     s21 = exp._build_s21_xarray()
                     s21 = s21.assign_coords(pump_freq=pf)
                     self._slices.append(s21)
                     if save_raw:
-                        title = f"pumpfreq_{pf / 1e9:.2f}GHz_power_{self.pump_power:+.1f}dBm"
-                        exp.saveLabber(qb_idx, title=title)
+                        title = f"{raw_title_prefix}pumpfreq_{pf / 1e9:.4f}GHz_at_{self.pump_power:+.1f}dBm"
+                        exp.saveLabber(qb_idx, config_all=config_all, title=title)
                 if self._stop:
                     break
         finally:
             if temp_folder is not None and self._slices:
-                self.saveNetCDF(reference=reference, save_dir=temp_folder, filename="temp_gain")
-                print(f"[saved] {len(self._slices)}/{len(self.pump_freqs)} pump_freq steps → {temp_folder}")
+                self.saveNetCDF(
+                    reference=reference, save_dir=temp_folder, filename="temp_gain"
+                )
+                print(
+                    f"[saved] {len(self._slices)}/{len(self.pump_freqs)} pump-frequency steps: {temp_folder}"
+                )
 
     def _build_gain_xarray(self):
         if not self._slices:
@@ -363,13 +389,20 @@ class TWPAGain:
         gain = gain.transpose("frequency", "pump_freq", "ifbl")
         ds_gain = xr.Dataset(
             {
-                "magnitude": xr.apply_ufunc(np.abs, gain).assign_attrs(long_name="|S21| linear"),
-                "phase": xr.apply_ufunc(np.angle, gain).assign_attrs(long_name="arg(S21)", units="rad"),
+                "magnitude": xr.apply_ufunc(np.abs, gain).assign_attrs(
+                    long_name="|S21| linear"
+                ),
+                "phase": xr.apply_ufunc(np.angle, gain).assign_attrs(
+                    long_name="arg(S21)", units="rad"
+                ),
             },
-            attrs={"pump_power": self.pump_power, "pump_state": 1,
-                   "yoko_mode": self._yoko_mode or "current",
-                   "frequency_unit": "Hz",
-                   "flux_unit": "V" if self._yoko_mode == "voltage" else "A"},
+            attrs={
+                "pump_power": self.pump_power,
+                "pump_state": 1,
+                "yoko_mode": self._yoko_mode or "current",
+                "frequency_unit": "Hz",
+                "flux_unit": "V" if self._yoko_mode == "voltage" else "A",
+            },
         )
         ds_gain = ds_gain.assign_coords(pump_power=self.pump_power, pump_state=1)
         root = save_dir or BaseExperiment._data_path or "."
@@ -388,12 +421,22 @@ class TWPAGain:
             smallest_flux = float(np.abs(ref_s21["ifbl"]).min())
             ref_row = ref_s21.sel(ifbl=smallest_flux).drop_vars("ifbl")
             ds_ref = xr.Dataset(
-                {"magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(long_name="|S21| linear"),
-                 "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(long_name="arg(S21)", units="rad")},
+                {
+                    "magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(
+                        long_name="|S21| linear"
+                    ),
+                    "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(
+                        long_name="arg(S21)", units="rad"
+                    ),
+                },
                 attrs={"pump_state": 0, "ifbl": smallest_flux},
             )
-            ds_ref = ds_ref.assign_coords(pump_state=0, ifbl=smallest_flux,
-                                           pump_power=self.pump_power, pump_freq=float("nan"))
+            ds_ref = ds_ref.assign_coords(
+                pump_state=0,
+                ifbl=smallest_flux,
+                pump_power=self.pump_power,
+                pump_freq=float("nan"),
+            )
             ref_path = os.path.join(out_dir, filename + "_reference.nc")
             ds_ref.to_netcdf(ref_path)
             print(f"Reference saved to {ref_path}")
@@ -416,8 +459,18 @@ class TWPAGain:
             extra_comment=extra,
         )
 
-    def analyze(self, reference, gain_min=12, gain_median=15, ripple_max=5,
-                f_min=4e9, f_max=8e9, n_best=5, exclusion_radius=20, freq_exclude=None):
+    def analyze(
+        self,
+        reference,
+        gain_min=12,
+        gain_median=15,
+        ripple_max=5,
+        f_min=4e9,
+        f_max=8e9,
+        n_best=5,
+        exclusion_radius=20,
+        freq_exclude=None,
+    ):
         gain = self._build_gain_xarray()
         ref_s21 = reference._build_s21_xarray()
         smallest_flux = float(np.abs(ref_s21["ifbl"]).min())
@@ -430,19 +483,29 @@ class TWPAGain:
             for f_lo, f_hi in freq_exclude:
                 mask = mask & ~((f >= f_lo) & (f <= f_hi))
             gain_scored = gain_normalized.where(mask)
-            print(f"Excluded: {[f'{a / 1e9:.3f}–{b / 1e9:.3f} GHz' for a, b in freq_exclude]}")
+            print(
+                "Excluded: "
+                + str([f"{a / 1e9:.3f}-{b / 1e9:.3f} GHz" for a, b in freq_exclude])
+            )
         else:
             gain_scored = gain_normalized
         total_score = score_ai_twpa_c_gain_data(
-            gain_data=gain_scored, gain_min=gain_min, gain_median=gain_median,
-            ripple_max=ripple_max, f_min=f_min, f_max=f_max,
+            gain_data=gain_scored,
+            gain_min=gain_min,
+            gain_median=gain_median,
+            ripple_max=ripple_max,
+            f_min=f_min,
+            f_max=f_max,
         )
         flux_scale = 1e-6
         flux_unit = "µA"
         best_points = []
         for _ in range(n_best):
-            pt = find_best_operation_point(total_score, excluded_points=best_points,
-                                           exclusion_radius=exclusion_radius)
+            pt = find_best_operation_point(
+                total_score,
+                excluded_points=best_points,
+                exclusion_radius=exclusion_radius,
+            )
             if pt is None:
                 break
             best_points.append(pt)
@@ -450,7 +513,7 @@ class TWPAGain:
         plot_operation_point_parameters(total_score, best_points, ax=ax1)
         set_units_on_plot_axis(ax1.xaxis, flux_scale, flux_unit)
         set_units_on_plot_axis(ax1.yaxis, 1e9, "GHz", decimals=1)
-        ax1.set_title("Score heatmap (pump_freq × ifbl)")
+        ax1.set_title("Score heatmap (pump_freq ? ifbl)")
         fig1.tight_layout()
         if best_points:
             ncols = 2
@@ -461,25 +524,30 @@ class TWPAGain:
                 plot_gain_at_operation_point(gain_normalized, op=op, ax=axes[i])
                 pf_ghz = float(op["pump_freq"]) / 1e9
                 ib_ua = float(op["ifbl"]) / 1e-6
-                axes[i].set_title(f"#{i + 1}  pump={pf_ghz:.3f} GHz  ifbl={ib_ua:.1f} µA")
+                axes[i].set_title(
+                    f"#{i + 1}  pump={pf_ghz:.3f} GHz  ifbl={ib_ua:.1f} µA"
+                )
                 set_units_on_plot_axis(axes[i].xaxis, 1e9, "GHz", decimals=1)
-            for ax in axes[len(best_points):]:
+            for ax in axes[len(best_points) :]:
                 ax.set_visible(False)
             fig2.suptitle("Best operation points", fontsize=13)
             fig2.tight_layout()
         plt.show()
         print("\n=== Best operation points ===")
         for i, op in enumerate(best_points):
-            print(f"  #{i + 1}  pump_freq = {float(op['pump_freq']) / 1e9:.4f} GHz"
-                  f"  |  ifbl = {float(op['ifbl']) / 1e-6:.2f} µA"
-                  f"  |  score = {float(op):.3f}")
+            print(
+                f"  #{i + 1}  pump_freq = {float(op['pump_freq']) / 1e9:.4f} GHz"
+                f"  |  ifbl = {float(op['ifbl']) / 1e-6:.2f} µA"
+                f"  |  score = {float(op):.3f}"
+            )
         return best_points, total_score
 
 
-# ── s002f: TWPAGainPower ──────────────────────────────────────────────────────
+# ?�?� s002f: TWPAGainPower ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+
 
 class TWPAGainPower:
-    """TWPA gain scan: sweeps pump power × pump frequency × Yoko flux × QICK frequency."""
+    """TWPA gain scan: sweeps pump power ? pump frequency ? Yoko flux ? QICK frequency."""
 
     YOKO_VOLTAGE_RAMP_STEP: float = 1e-5
     YOKO_CURRENT_RAMP_STEP: float = 1e-8
@@ -498,9 +566,20 @@ class TWPAGainPower:
         self._stop = True
         print("Stop requested.")
 
-    def run(self, py_avg, yoko_inst=None, yoko_value=None, yoko_mode="current",
-            instrument_manager=None, yoko_name=None,
-            save_raw=False, qb_idx="TWPA", temp_folder=None, reference=None, **kwargs):
+    def run(
+        self,
+        py_avg,
+        yoko_inst=None,
+        yoko_value=None,
+        yoko_mode="current",
+        instrument_manager=None,
+        yoko_name=None,
+        save_raw=False,
+        qb_idx="TWPA",
+        temp_folder=None,
+        reference=None,
+        **kwargs,
+    ):
         if instrument_manager is None:
             instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
         if yoko_name is None:
@@ -521,7 +600,7 @@ class TWPAGainPower:
                 if self._stop:
                     tqdm.write("Stopped by user.")
                     break
-                tqdm.write(f"\n── pump_power = {pp:+.1f} dBm ──")
+                tqdm.write(f"\npump_power = {pp:+.1f} dBm")
                 self.pump.power = pp
                 freq_slices = []
                 try:
@@ -555,7 +634,11 @@ class TWPAGainPower:
                     self._power_slices.append(freq_slices)
                     self._collected_powers.append(pp)
                     if temp_folder is not None:
-                        self.saveNetCDF(reference=reference, save_dir=temp_folder, filename="temp_gain_power")
+                        self.saveNetCDF(
+                            reference=reference,
+                            save_dir=temp_folder,
+                            filename="temp_gain_power",
+                        )
                 if self._stop:
                     break
         finally:
@@ -565,7 +648,9 @@ class TWPAGainPower:
     def _build_xarray(self):
         if not self._power_slices:
             raise RuntimeError("No data.")
-        collected = self._collected_powers if self._collected_powers else self.pump_powers
+        collected = (
+            self._collected_powers if self._collected_powers else self.pump_powers
+        )
         power_das = []
         for pp, freq_slices in zip(collected, self._power_slices):
             da_pf = xr.concat(freq_slices, dim="pump_freq")
@@ -577,10 +662,20 @@ class TWPAGainPower:
         da = self._build_xarray()
         da = da.transpose("pump_power", "frequency", "pump_freq", "ifbl")
         ds = xr.Dataset(
-            {"magnitude": xr.apply_ufunc(np.abs, da).assign_attrs(long_name="|S21| linear"),
-             "phase": xr.apply_ufunc(np.angle, da).assign_attrs(long_name="arg(S21)", units="rad")},
-            attrs={"pump_state": 1, "yoko_mode": self._yoko_mode or "current",
-                   "frequency_unit": "Hz", "flux_unit": "V" if self._yoko_mode == "voltage" else "A"},
+            {
+                "magnitude": xr.apply_ufunc(np.abs, da).assign_attrs(
+                    long_name="|S21| linear"
+                ),
+                "phase": xr.apply_ufunc(np.angle, da).assign_attrs(
+                    long_name="arg(S21)", units="rad"
+                ),
+            },
+            attrs={
+                "pump_state": 1,
+                "yoko_mode": self._yoko_mode or "current",
+                "frequency_unit": "Hz",
+                "flux_unit": "V" if self._yoko_mode == "voltage" else "A",
+            },
         )
         root = save_dir or BaseExperiment._data_path or "."
         yy, mm, dd = datetime.datetime.today().strftime("%Y-%m-%d").split("-")
@@ -598,8 +693,14 @@ class TWPAGainPower:
             smallest_flux = float(np.abs(ref_s21["ifbl"]).min())
             ref_row = ref_s21.sel(ifbl=smallest_flux).drop_vars("ifbl")
             ds_ref = xr.Dataset(
-                {"magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(long_name="|S21| linear"),
-                 "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(long_name="arg(S21)", units="rad")},
+                {
+                    "magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(
+                        long_name="|S21| linear"
+                    ),
+                    "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(
+                        long_name="arg(S21)", units="rad"
+                    ),
+                },
                 attrs={"pump_state": 0, "ifbl": smallest_flux},
             )
             ds_ref = ds_ref.assign_coords(pump_state=0, ifbl=smallest_flux)
@@ -621,8 +722,17 @@ class TWPAGainPower:
             extra_comment=extra,
         )
 
-    def analyze(self, reference, gain_min=12, gain_median=15, ripple_max=5,
-                f_min=4e9, f_max=8e9, exclusion_radius=20, freq_exclude=None):
+    def analyze(
+        self,
+        reference,
+        gain_min=12,
+        gain_median=15,
+        ripple_max=5,
+        f_min=4e9,
+        f_max=8e9,
+        exclusion_radius=20,
+        freq_exclude=None,
+    ):
         da = self._build_xarray()
         ref_s21 = reference._build_s21_xarray()
         smallest_flux = float(np.abs(ref_s21["ifbl"]).min())
@@ -640,17 +750,31 @@ class TWPAGainPower:
             else:
                 gain_scored = gain_norm
             total_score = score_ai_twpa_c_gain_data(
-                gain_data=gain_scored, gain_min=gain_min, gain_median=gain_median,
-                ripple_max=ripple_max, f_min=f_min, f_max=f_max,
+                gain_data=gain_scored,
+                gain_min=gain_min,
+                gain_median=gain_median,
+                ripple_max=ripple_max,
+                f_min=f_min,
+                f_max=f_max,
             )
-            best = find_best_operation_point(total_score, exclusion_radius=exclusion_radius)
+            best = find_best_operation_point(
+                total_score, exclusion_radius=exclusion_radius
+            )
             best_score = float(best) if best is not None else float("nan")
-            results.append({"pump_power": pp, "best_point": best, "score": best_score,
-                             "gain_normalized": gain_norm, "total_score": total_score})
+            results.append(
+                {
+                    "pump_power": pp,
+                    "best_point": best,
+                    "score": best_score,
+                    "gain_normalized": gain_norm,
+                    "total_score": total_score,
+                }
+            )
         return results
 
 
-# ── s002g: TWPAPowerScan ──────────────────────────────────────────────────────
+# ?�?� s002g: TWPAPowerScan ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+
 
 class TWPAPowerScan:
     """TWPA gain vs pump power at a fixed flux and pump frequency."""
@@ -674,9 +798,17 @@ class TWPAPowerScan:
         self._stop = True
         print("Stop requested.")
 
-    def run(self, py_avg, yoko_inst=None, yoko_mode="current",
-            instrument_manager=None, yoko_name=None,
-            temp_folder=None, reference=None, **kwargs):
+    def run(
+        self,
+        py_avg,
+        yoko_inst=None,
+        yoko_mode="current",
+        instrument_manager=None,
+        yoko_name=None,
+        temp_folder=None,
+        reference=None,
+        **kwargs,
+    ):
         if instrument_manager is None:
             instrument_manager = kwargs.get("inst_manager") or kwargs.get("baseinst")
         if yoko_name is None:
@@ -699,8 +831,10 @@ class TWPAPowerScan:
         instrument_manager.set_value(yoko_name, self.flux_value, mode=yoko_mode)
         self.pump.frequency = self.pump_freq
         self.pump.on()
-        print(f"Pump ON  | freq = {self.pump_freq / 1e9:.4f} GHz"
-              f" | flux = {self.flux_value * 1e3:.4f} mA")
+        print(
+            f"Pump ON  | freq = {self.pump_freq / 1e9:.4f} GHz"
+            f" | flux = {self.flux_value * 1e3:.4f} mA"
+        )
         _ref_row = None
         if reference is not None:
             try:
@@ -714,7 +848,9 @@ class TWPAPowerScan:
         _fig_live, _ax_live = plt.subplots(figsize=(9, 5))
         _ax_live.set_xlabel("Frequency (GHz)")
         _ax_live.set_ylabel("Gain (dB)" if _ref_row is not None else "Amplitude")
-        _ax_live.set_title(f"TWPA Power Scan\npump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA")
+        _ax_live.set_title(
+            f"TWPA Power Scan\npump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA"
+        )
         _ax_live.grid(True, alpha=0.3)
         _sm = plt.cm.ScalarMappable(cmap=_cmap, norm=_cnorm)
         _sm.set_array([])
@@ -739,37 +875,65 @@ class TWPAPowerScan:
                 tqdm.write(f"  pump_power = {pp:+.1f} dBm")
                 self.pump.power = pp
                 try:
-                    iq_list = _prog.acquire(_soc, rounds=py_avg, progress=False)
+                    iq_data = acquire_values(
+                        _prog,
+                        _soc,
+                        rounds=py_avg,
+                        progress=False,
+                    )
                 except KeyboardInterrupt:
                     tqdm.write("\nKeyboardInterrupt.")
                     self._stop = True
                     break
-                iq_data = iq_list[0][0].dot([1, 1j])
-                s21_1d = xr.DataArray(iq_data, dims=["frequency"],
-                                      coords={"frequency": _freq_hz, "pump_power": pp})
+                s21_1d = xr.DataArray(
+                    iq_data,
+                    dims=["frequency"],
+                    coords={"frequency": _freq_hz, "pump_power": pp},
+                )
                 self._slices.append(s21_1d)
                 self._collected_powers.append(pp)
                 _ax_live.cla()
                 _ax_live.set_xlabel("Frequency (GHz)")
-                _ax_live.set_ylabel("Gain (dB)" if _ref_row is not None else "Amplitude")
-                _ax_live.set_title(f"TWPA Power Scan  [{len(self._collected_powers)}/{len(self.pump_powers)}]  —  latest: {pp:+.1f} dBm\n"
-                                   f"pump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA")
+                _ax_live.set_ylabel(
+                    "Gain (dB)" if _ref_row is not None else "Amplitude"
+                )
+                _ax_live.set_title(
+                    f"TWPA Power Scan  [{len(self._collected_powers)}/{len(self.pump_powers)}]  latest: {pp:+.1f} dBm\n"
+                    f"pump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA"
+                )
                 _ax_live.grid(True, alpha=0.3)
                 for _pp, _sl in zip(self._collected_powers, self._slices):
                     _freq = _sl["frequency"].values / 1e9
-                    _y = 20 * np.log10(np.abs(_sl.values / _ref_row.values)) if _ref_row is not None else np.abs(_sl.values)
+                    _y = (
+                        20 * np.log10(np.abs(_sl.values / _ref_row.values))
+                        if _ref_row is not None
+                        else np.abs(_sl.values)
+                    )
                     _is_latest = _pp == pp
-                    _ax_live.plot(_freq, _y, color=_cmap(_cnorm(_pp)),
-                                  lw=1.2 if _is_latest else 0.8, alpha=1.0 if _is_latest else 0.6)
+                    _ax_live.plot(
+                        _freq,
+                        _y,
+                        color=_cmap(_cnorm(_pp)),
+                        lw=1.2 if _is_latest else 0.8,
+                        alpha=1.0 if _is_latest else 0.6,
+                    )
                 if _HAS_IPY:
                     ipy_update(_fig_live, display_id=_live_id)
                 else:
                     plt.pause(0.01)
                 if temp_folder is not None:
-                    self.saveNetCDF(reference=reference, save_dir=temp_folder, filename="temp_power_scan")
+                    self.saveNetCDF(
+                        reference=reference,
+                        save_dir=temp_folder,
+                        filename="temp_power_scan",
+                    )
         finally:
             if temp_folder is not None and self._slices:
-                self.saveNetCDF(reference=reference, save_dir=temp_folder, filename="temp_power_scan")
+                self.saveNetCDF(
+                    reference=reference,
+                    save_dir=temp_folder,
+                    filename="temp_power_scan",
+                )
 
     def _build_xarray(self):
         if not self._slices:
@@ -779,11 +943,22 @@ class TWPAPowerScan:
     def saveNetCDF(self, reference=None, save_dir=None, filename=None):
         da = self._build_xarray()
         ds = xr.Dataset(
-            {"magnitude": xr.apply_ufunc(np.abs, da).assign_attrs(long_name="|S21| linear"),
-             "phase": xr.apply_ufunc(np.angle, da).assign_attrs(long_name="arg(S21)", units="rad")},
-            attrs={"pump_freq": self.pump_freq, "flux_value": self.flux_value, "pump_state": 1,
-                   "yoko_mode": self._yoko_mode or "current",
-                   "frequency_unit": "Hz", "flux_unit": "V" if self._yoko_mode == "voltage" else "A"},
+            {
+                "magnitude": xr.apply_ufunc(np.abs, da).assign_attrs(
+                    long_name="|S21| linear"
+                ),
+                "phase": xr.apply_ufunc(np.angle, da).assign_attrs(
+                    long_name="arg(S21)", units="rad"
+                ),
+            },
+            attrs={
+                "pump_freq": self.pump_freq,
+                "flux_value": self.flux_value,
+                "pump_state": 1,
+                "yoko_mode": self._yoko_mode or "current",
+                "frequency_unit": "Hz",
+                "flux_unit": "V" if self._yoko_mode == "voltage" else "A",
+            },
         )
         ds = ds.assign_coords(pump_freq=self.pump_freq, flux_value=self.flux_value)
         root = save_dir or BaseExperiment._data_path or "."
@@ -802,8 +977,14 @@ class TWPAPowerScan:
             smallest_flux = float(np.abs(ref_s21["ifbl"]).min())
             ref_row = ref_s21.sel(ifbl=smallest_flux).drop_vars("ifbl")
             ds_ref = xr.Dataset(
-                {"magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(long_name="|S21| linear"),
-                 "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(long_name="arg(S21)", units="rad")},
+                {
+                    "magnitude": xr.apply_ufunc(np.abs, ref_row).assign_attrs(
+                        long_name="|S21| linear"
+                    ),
+                    "phase": xr.apply_ufunc(np.angle, ref_row).assign_attrs(
+                        long_name="arg(S21)", units="rad"
+                    ),
+                },
                 attrs={"pump_state": 0, "ifbl": smallest_flux},
             )
             ds_ref = ds_ref.assign_coords(pump_state=0, ifbl=smallest_flux)
@@ -850,8 +1031,13 @@ class TWPAPowerScan:
         fig, ax = plt.subplots(figsize=(9, 5))
         for pp in powers:
             curve = gain_db.sel(pump_power=pp).values
-            ax.plot(freq_ghz, curve, color=cmap(cnorm(pp)), lw=0.9,
-                    label=f"{pp:.0f} dBm  median {medians[pp]:.1f} dB")
+            ax.plot(
+                freq_ghz,
+                curve,
+                color=cmap(cnorm(pp)),
+                lw=0.9,
+                label=f"{pp:.0f} dBm  median {medians[pp]:.1f} dB",
+            )
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=cnorm)
         fig.colorbar(sm, ax=ax, label="Pump power (dBm)")
         ax.axhline(gain_min, color="red", ls="--", lw=0.8, label=f"{gain_min} dB line")
@@ -862,7 +1048,9 @@ class TWPAPowerScan:
                 ax.axvspan(f_lo / 1e9, f_hi / 1e9, alpha=0.15, color="gray")
         ax.set_xlabel("Frequency (GHz)")
         ax.set_ylabel("Gain (dB)")
-        ax.set_title(f"TWPA Gain vs Pump Power\npump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA")
+        ax.set_title(
+            f"TWPA Gain vs Pump Power\npump_freq = {self.pump_freq / 1e9:.4f} GHz  |  flux = {self.flux_value * 1e3:.4f} mA"
+        )
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
         fig.tight_layout()

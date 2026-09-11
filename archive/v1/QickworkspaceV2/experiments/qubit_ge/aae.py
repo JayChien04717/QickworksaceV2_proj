@@ -10,6 +10,8 @@ from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
 from ...core.base_experiment import BaseExperiment
+from ...core.acquisition import acquire_values
+from ...core.experiment_data import ExperimentData, QualityFlag
 from ...core.base_program import BaseProgram
 
 
@@ -17,12 +19,26 @@ class PowerRabiChevronProgram(BaseProgram):
     """QICK program for power Rabi chevron: repeats the pulse ``iteration`` times."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("gainloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_pulse")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -47,7 +63,7 @@ class PowerRabiChevron(BaseExperiment):
     """
 
     EXPT_NAME = "s005_power_rabi_chevron"
-    TAG = "Rabi"
+    TAG = "PowerRabi"
     X_LABEL = "Dac Gain (a.u)"
     TITLE_PREFIX = "Qubit Power Rabi ge"
     SWEEP_KEYS_TO_REMOVE = ["qb_gain_ge"]
@@ -59,6 +75,13 @@ class PowerRabiChevron(BaseExperiment):
     Y_SAVE_SCALE = 1.0
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.cfg.setdefault("iteration", self.cfg.get("iter_start", 1))
         return PowerRabiChevronProgram(
             self.soccfg,
@@ -68,15 +91,48 @@ class PowerRabiChevron(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return prog.get_pulse_param("qb_pulse", "gain", as_array=True)
 
     def _extract_sweep_axis_y(self, prog):
+        """Extract the secondary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._sweep_vals_y
 
     def _build_scan_axes(self):
+        """Build scan axes.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         cfg = self.cfg
         prog = self._create_program()
-        gains = self._extract_sweep_axis(prog)
+        gains = self._resolve_axis(
+            self._extract_sweep_axis(prog), cfg.get("steps")
+        )
         if "iter_start" in cfg and "iter_stop" in cfg:
             iters = np.arange(
                 cfg["iter_start"],
@@ -89,6 +145,22 @@ class PowerRabiChevron(BaseExperiment):
         return gains, iters
 
     def run(self, py_avg, show_final_plot=False, **kwargs):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any
+            Number of Python-level acquisition averages.
+        show_final_plot : Any, default: False
+            Whether to show final plot.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         gains, iters = self._build_scan_axes()
         self._sweep_vals_x = gains
         self._sweep_vals_y = iters
@@ -107,6 +179,7 @@ class PowerRabiChevron(BaseExperiment):
         display(fig, display_id=plot_display_id)
 
         interrupted = False
+        completed_rows = 0
         try:
             for y_idx, iter_val in enumerate(
                 tqdm(iters, desc="Outer Sweep: Iterations")
@@ -114,10 +187,15 @@ class PowerRabiChevron(BaseExperiment):
                 self.cfg["iteration"] = int(iter_val)
                 prog = self._create_program()
 
-                iq_list = prog.acquire(self.soc, rounds=py_avg, progress=False)
-                iq_data_row = iq_list[0][0].dot([1, 1j])
+                iq_data_row = acquire_values(
+                    prog,
+                    self.soc,
+                    rounds=py_avg,
+                    progress=False,
+                )
 
                 iqdata_full[y_idx, :] = iq_data_row
+                completed_rows = y_idx + 1
                 data_to_plot = np.abs(iqdata_full)
 
                 mesh.set_array(data_to_plot.ravel())
@@ -138,16 +216,76 @@ class PowerRabiChevron(BaseExperiment):
         clear_output(wait=True)
         plt.close(fig)
 
-        if interrupted:
-            print(f"Interrupted at iteration {iters[y_idx]}.")
+        if interrupted and completed_rows:
+            print(f"Interrupted after iteration {iters[completed_rows - 1]}.")
 
-        self.iqdata = iqdata_full
-        return self._post_fit()
+        self.iqdata = iqdata_full[:completed_rows]
+        self._sweep_vals_y = iters[:completed_rows]
+        if completed_rows == 0:
+            result = ExperimentData(
+                experiment_type=self.EXPT_NAME,
+                quality=QualityFlag.BAD,
+                quality_message="No data acquired",
+                interrupted=True,
+            )
+            self.result = result
+            return result
+
+        optimal_gain = self._post_fit()
+        result = ExperimentData(
+            experiment_type=self.EXPT_NAME,
+            raw_iq=self.iqdata,
+            x_axis=gains,
+            y_axis=self._sweep_vals_y,
+            fit_params=self.fit_params,
+            fit_errors=self.fit_errors,
+            fit_result={"optimal_gain": (optimal_gain, None)},
+            scalar_result=float(optimal_gain),
+            figures=[self._last_analysis_figure],
+            quality=QualityFlag.NO_INFORMATION,
+            interrupted=interrupted,
+            avg_count=py_avg,
+            x_name=self.X_SAVE_NAME,
+            x_unit=self.X_SAVE_UNIT,
+            x_scale=self.X_SAVE_SCALE,
+            y_name=self.Y_SAVE_NAME,
+            y_unit=self.Y_SAVE_UNIT,
+            y_scale=self.Y_SAVE_SCALE,
+            metadata={"iq_process": "abs"},
+            dataset_dims={"iq": ["y", "x"]},
+            analysis_data={
+                "summed_signal": {
+                    "values": np.sum(np.abs(self.iqdata), axis=0),
+                    "dims": ["x"],
+                }
+            },
+        )
+        self.result = result
+        return result
 
     def analyze_and_plot(self):
+        """Return the analyze and plot result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._post_fit()
 
     def _post_fit(self, x_vals=None):
+        """Fit the acquired data after acquisition.
+
+        Parameters
+        ----------
+        x_vals : Any, default: None
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.iqdata is None:
             print("No data. Call run() first.")
             return None
@@ -176,6 +314,26 @@ class PowerRabiChevron(BaseExperiment):
             sign_guess = -1.0
 
         def sinc2_model(x, A, x0, width, offset):
+            """Return the sinc2 model result.
+
+            Parameters
+            ----------
+            x : Any
+                Independent-variable values.
+            A : Any
+                Value for ``A``.
+            x0 : Any
+                Value for ``x0``.
+            width : Any
+                Value for ``width``.
+            offset : Any
+                Value for ``offset``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             return A * np.sinc((x - x0) / width) ** 2 + offset
 
         fit_success = False
@@ -243,12 +401,29 @@ class PowerRabiChevron(BaseExperiment):
         ax1.grid(True, alpha=0.2)
         plt.tight_layout()
         plt.show()
+        self._last_analysis_figure = fig
 
+        optimal_gain = float(optimal_gain)
+        self.fit_params = np.array([optimal_gain])
+        self.fit_errors = None
+        self._chevron_fit_result = {"optimal_gain": optimal_gain}
         return optimal_gain
 
     def _save_comment(self, dict_val):
-        if self.fit_params:
-            g = self.fit_params.get("optimal_gain", "N/A")
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        if getattr(self, "_chevron_fit_result", None):
+            g = self._chevron_fit_result["optimal_gain"]
             return f"Power Rabi Chevron\nOptimal gain = {g}\n{dict_val}"
         return f"{dict_val}"
 

@@ -1,8 +1,13 @@
-"""Shared experiment registry for GUI and service clients.
+"""Shared registry for stable, public experiments.
 
 This module is deliberately free of Qt/FastAPI imports. It is the stable
 contract layer that maps user-facing experiment ids to Python classes and
 known fit-result to config-update rules.
+
+Experimental classes do not need to be registered. They can be imported and
+run directly from notebooks while their API is being tested. Add them here
+only after their run method and ExperimentData result are stable enough for
+generic clients.
 """
 
 from __future__ import annotations
@@ -34,8 +39,9 @@ EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
     ExperimentSpec("qubit_flux_spec_ge", "Qubit Flux Spec", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.QubitSpecFlux", "s003a_qubit_flux_spec_ge.QubitSpecFlux"),
     ExperimentSpec("time_rabi_ge", "Time Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.TimeRabi", "s004_time_rabi_ge.TimeRabi"),
     ExperimentSpec("power_rabi_ge", "Power Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.PowerRabi", "s005_power_rabi_ge.PowerRabi"),
+    ExperimentSpec("power_rabi_active_reset_ge", "Power Rabi Active Reset", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.ActiveResetRabi", "s005c_power_rabi_active_reset_ge.ActiveResetRabi", supports_liveplot=False),
     ExperimentSpec("drag", "DRAG", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.DragCalibration", "s005a_drag.DragCalibration", supports_liveplot=False),
-    ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.AAE", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
+    ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.aae.PowerRabiChevron", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
     ExperimentSpec("ramsey_ge", "Ramsey", "Coherence", "QickworkspaceV2.experiments.coherence.Ramsey", "s006_Ramsey_ge.Ramsey"),
     ExperimentSpec("spin_echo_ge", "Spin Echo", "Coherence", "QickworkspaceV2.experiments.coherence.SpinEcho", "s007_SpinEcho_ge.SpinEcho"),
     ExperimentSpec("t1_ge", "T1", "Coherence", "QickworkspaceV2.experiments.coherence.T1", "s008_T1_ge.T1"),
@@ -45,12 +51,9 @@ EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
     ExperimentSpec("ramsey_ef", "Ramsey EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.RamseyEf", "s012_Ramsey_ef.Ramsey_ef"),
     ExperimentSpec("t1_ef", "T1 EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.T1Ef", "s013_T1_ef.T1_ef"),
     ExperimentSpec("allxy", "AllXY", "Advanced", "QickworkspaceV2.experiments.characterization.AllXY", "s014_AllXY.AllXY", supports_liveplot=False),
-    ExperimentSpec("single_shot", "SingleShot", "Advanced", "QickworkspaceV2.experiments.setup.SingleShot_gef", "s000_SingleShot_prog.SingleShot_gef", supports_liveplot=False),
-    ExperimentSpec("single_shot_opt", "SingleShot Opt", "Advanced", "QickworkspaceV2.experiments.setup.SingleShot_ge_opt", "s000_SingleShot_opt.SingleShot_ge_opt", supports_liveplot=False),
     ExperimentSpec("qubit_temp", "Qubit Temp", "Advanced", "QickworkspaceV2.experiments.qubit_ef.rabi_ef.QubitTemp", "s013_qubit_temp.QubitTemperatureEf"),
     ExperimentSpec("ac_stark", "AC Stark", "Advanced", "QickworkspaceV2.experiments.coherence.ACStark", "s006_ac_stark.AcStarkCalib"),
     ExperimentSpec("rb", "Single Qubit RB", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarking", "s015_Single_qubit_RB.RandomizedBenchmarking", supports_liveplot=False),
-    ExperimentSpec("auto_rb", "Auto RB", "RB", "QickworkspaceV2.experiments.characterization.AutoRB", "s015_Auto_RB.AutoRB", supports_liveplot=False),
     ExperimentSpec("rb_asm", "RB ASM", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarkingAsm", "s015_RB_asm.RandomizedBenchmarkingAsm", supports_liveplot=False),
     ExperimentSpec("tomography", "State Tomography", "Tomography", "QickworkspaceV2.experiments.characterization.Tomography", "s016_state_tomography.Tomography", supports_liveplot=False),
 )
@@ -61,7 +64,13 @@ _BY_CLASS_PATH = {spec.class_path: spec for spec in EXPERIMENT_SPECS}
 
 
 def experiment_schema() -> dict[str, Any]:
-    """Return a JSON-serialisable experiment catalog."""
+    """Return a JSON-serialisable experiment catalog.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     categories: dict[str, list[dict[str, Any]]] = {}
     for spec in EXPERIMENT_SPECS:
         categories.setdefault(spec.category, []).append(asdict(spec))
@@ -69,7 +78,23 @@ def experiment_schema() -> dict[str, Any]:
 
 
 def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
-    """Resolve public id, legacy GUI id, or full class path to a spec."""
+    """Resolve public id, legacy GUI id, or full class path to a spec.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    ExperimentSpec
+        Result of the operation.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
+    """
     spec = _BY_ID.get(identifier) or _BY_LEGACY.get(identifier) or _BY_CLASS_PATH.get(identifier)
     if spec is None:
         valid = sorted(_BY_ID)
@@ -78,10 +103,34 @@ def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
 
 
 def canonical_class_path(identifier: str) -> str:
+    """Return the canonical class path result.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
     return resolve_experiment_spec(identifier).class_path
 
 
 def resolve_experiment_class(identifier: str):
+    """Resolve experiment class.
+
+    Parameters
+    ----------
+    identifier : str
+        Value for ``identifier``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     class_path = canonical_class_path(identifier)
     module_name, class_name = class_path.rsplit(".", 1)
     module = import_module(module_name)
@@ -89,11 +138,34 @@ def resolve_experiment_class(identifier: str):
 
 
 def fit_updates_from_result(result) -> dict[str, Any]:
-    """Convert known fit_result entries into config update suggestions."""
+    """Convert known fit_result entries into config update suggestions.
+
+    Parameters
+    ----------
+    result : Any
+        Experiment result to process.
+
+    Returns
+    -------
+    dict[str, Any]
+        Result of the operation.
+    """
     fit_result = getattr(result, "fit_result", {}) or {}
     experiment_type = (getattr(result, "experiment_type", "") or "").lower()
 
     def value_of(name):
+        """Return the value of result.
+
+        Parameters
+        ----------
+        name : Any
+            Name of the target object.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         item = fit_result.get(name)
         if item is None:
             return None

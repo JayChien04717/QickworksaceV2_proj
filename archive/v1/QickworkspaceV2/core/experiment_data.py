@@ -10,14 +10,56 @@ Old code that unpacks ``(fit_params, error) = expt.run()`` still works via
 
 from __future__ import annotations
 
-import json
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
 import numpy as np
+
+
+def _json_value(value):
+    """Recursively convert scientific Python values to JSON-native values."""
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _json_value(value.tolist())
+    if isinstance(value, np.generic):
+        return _json_value(value.item())
+    if isinstance(value, complex):
+        return {"__complex__": [value.real, value.imag]}
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
+def _restore_json_value(value):
+    """Restore values encoded by :func:`_json_value`."""
+    if isinstance(value, dict):
+        if set(value) == {"__complex__"}:
+            real, imag = value["__complex__"]
+            return complex(real, imag)
+        return {key: _restore_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_restore_json_value(item) for item in value]
+    return value
+
+
+def _new_experiment_id() -> str:
+    """Return the new experiment id result.
+
+    Returns
+    -------
+    str
+        Result of the operation.
+    """
+    from ..tools.hdf5_store import generate_experiment_id
+
+    return generate_experiment_id()
 
 
 class QualityFlag(Enum):
@@ -48,17 +90,21 @@ class ExperimentData:
     * ``ExperimentData.load(path)`` — HDF5 load
     """
 
-    # Identity
     experiment_type: str = ""
-    experiment_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    timestamp: datetime = field(default_factory=datetime.now)
+    experiment_id: str = field(default_factory=_new_experiment_id)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # Raw data
-    raw_iq: Optional[np.ndarray] = None
+    raw_iq: Any = None
     x_axis: Optional[np.ndarray] = None
     y_axis: Optional[np.ndarray] = None
 
-    # Fit results (backward-compat arrays)
+    # Dimension-aware native HDF5 payload. Existing raw_iq/x_axis/y_axis remain
+    # the compatibility surface for ordinary 1D/2D experiments.
+    axes: dict = field(default_factory=dict)
+    raw_data: dict = field(default_factory=dict)
+    analysis_data: dict = field(default_factory=dict)
+    dataset_dims: dict = field(default_factory=dict)
+
     fit_params: Optional[np.ndarray] = None
     fit_errors: Optional[np.ndarray] = None
 
@@ -68,22 +114,27 @@ class ExperimentData:
     # Scalar result for experiments that return a single number (e.g. frequency)
     scalar_result: Optional[float] = None
 
-    # Figures (matplotlib Figure objects)
     figures: list = field(default_factory=list)
 
-    # Quality
     quality: QualityFlag = QualityFlag.NO_INFORMATION
     quality_message: str = ""
 
-    # Config snapshot
+    # Legacy config metadata. New experiment runs leave this empty; config
+    # management and presentation remain owned by ExperimentConfig.
     config: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
 
-    # Composite / lineage
+    # Native HDF5 discovery and presentation metadata
+    data_kind: str = ""
+    analysis_id: str = ""
+    plot_id: str = ""
+    comment: str = ""
+    tags: list = field(default_factory=list)
+    session_id: Optional[str] = None
+
     parent_id: Optional[str] = None
     children: list = field(default_factory=list)
 
-    # Axis save info
     x_name: str = ""
     x_unit: str = ""
     x_scale: float = 1.0
@@ -91,21 +142,39 @@ class ExperimentData:
     y_unit: str = ""
     y_scale: float = 1.0
 
-    # Acquisition info
     interrupted: bool = False
     avg_count: int = 0
 
-    # ── Backward-compat dunder methods ──────────────────────────────────────
 
     def __iter__(self):
-        """Support ``fit_params, error = result``."""
+        """Support ``fit_params, error = result``.
+
+        Yields
+        ------
+        Any
+            Values produced by the iterator.
+        """
         yield self.fit_params
         yield self.fit_errors
 
     def __getitem__(self, idx):
-        """
-        String key  → ``result['pi_gain']``  shortcut for ``fit_result['pi_gain'][0]``.
-        Integer idx → ``result[0]`` (fit_params), ``result[1]`` (fit_errors).
+        """String key  → ``result['pi_gain']``  shortcut for ``fit_result['pi_gain'][0]``.
+                        Integer idx → ``result[0]`` (fit_params), ``result[1]`` (fit_errors).
+
+        Parameters
+        ----------
+        idx : Any
+            Value for ``idx``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        KeyError
+            If the operation cannot be completed.
         """
         if isinstance(idx, str):
             entry = self.fit_result.get(idx)
@@ -117,7 +186,18 @@ class ExperimentData:
         return (self.fit_params, self.fit_errors)[idx]
 
     def __float__(self):
-        """Support ``freq = float(result)`` for single-value experiments."""
+        """Support ``freq = float(result)`` for single-value experiments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
+        """
         if self.scalar_result is not None:
             return float(self.scalar_result)
         if self.fit_params is not None and len(self.fit_params) > 0:
@@ -125,52 +205,128 @@ class ExperimentData:
         raise TypeError(f"ExperimentData '{self.experiment_type}' has no scalar result")
 
     def __bool__(self):
-        """True when data was acquired and fit succeeded."""
+        """True when data was acquired and fit succeeded.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self.raw_iq is not None and self.fit_params is not None
 
-    # ── Convenience ─────────────────────────────────────────────────────────
 
     def is_good(self) -> bool:
+        """Return whether is good.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         return self.quality == QualityFlag.GOOD
 
     def get_param(self, name: str, default=None):
-        """Return named fit result value, or default."""
+        """Return named fit result value, or default.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        default : Any, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         entry = self.fit_result.get(name)
         if entry is None:
             return default
         return entry[0] if isinstance(entry, (tuple, list)) else entry
 
     def get_error(self, name: str, default=None):
-        """Return named fit result uncertainty, or default."""
+        """Return named fit result uncertainty, or default.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        default : Any, default: None
+            Value for ``default``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         entry = self.fit_result.get(name)
         if isinstance(entry, (tuple, list)) and len(entry) > 1:
             return entry[1]
         return default
 
-    # ── Serialisation ───────────────────────────────────────────────────────
+    def get_readout(self, readout: int | str = 0):
+        """Return one raw readout while keeping ``raw_iq`` backward compatible.
+
+        Multi-readout experiments store their complete matrix in
+        ``raw_data['readouts']`` and label its first dimension with the
+        ``readout`` axis.  Single-readout results simply return ``raw_iq`` for
+        index 0.
+        """
+        payload = self.raw_data.get("readouts")
+        if payload is None:
+            if readout in (0, "0"):
+                return self.raw_iq
+            raise IndexError("This result contains only the primary readout")
+
+        values = payload.get("values") if isinstance(payload, dict) else payload
+        values = np.asarray(values)
+        if isinstance(readout, str) and not readout.isdigit():
+            labels_payload = self.axes.get("readout")
+            labels = (
+                labels_payload.get("values")
+                if isinstance(labels_payload, dict)
+                else labels_payload
+            )
+            labels = [str(label) for label in np.asarray(labels).reshape(-1)]
+            try:
+                readout = labels.index(readout)
+            except ValueError as exc:
+                raise KeyError(
+                    f"Unknown readout {readout!r}; available labels: {labels}"
+                ) from exc
+        return values[int(readout)]
+
 
     def to_dict(self) -> dict:
-        """Return a JSON-serialisable dict (numpy arrays → lists)."""
+        """Return a JSON-serialisable dict (numpy arrays → lists).
 
-        def _arr(v):
-            return v.tolist() if isinstance(v, np.ndarray) else v
+        Returns
+        -------
+        dict
+            Result of the operation.
+        """
 
-        return {
+        payload = {
             "experiment_type": self.experiment_type,
             "experiment_id": self.experiment_id,
             "timestamp": self.timestamp.isoformat(),
-            "fit_params": _arr(self.fit_params),
-            "fit_errors": _arr(self.fit_errors),
-            "fit_result": {
-                k: (list(v) if isinstance(v, (tuple, list, np.ndarray)) else v)
-                for k, v in self.fit_result.items()
-            },
+            "raw_iq": self.raw_iq,
+            "x_axis": self.x_axis,
+            "y_axis": self.y_axis,
+            "axes": self.axes,
+            "raw_data": self.raw_data,
+            "analysis_data": self.analysis_data,
+            "fit_params": self.fit_params,
+            "fit_errors": self.fit_errors,
+            "fit_result": self.fit_result,
             "scalar_result": self.scalar_result,
             "quality": self.quality.value,
             "quality_message": self.quality_message,
             "config": self.config,
             "metadata": self.metadata,
             "parent_id": self.parent_id,
+            "children": self.children,
             "x_name": self.x_name,
             "x_unit": self.x_unit,
             "x_scale": self.x_scale,
@@ -179,14 +335,41 @@ class ExperimentData:
             "y_scale": self.y_scale,
             "interrupted": self.interrupted,
             "avg_count": self.avg_count,
+            "data_kind": self.data_kind,
+            "analysis_id": self.analysis_id,
+            "plot_id": self.plot_id,
+            "comment": self.comment,
+            "tags": list(self.tags),
+            "session_id": self.session_id,
+            "dataset_dims": self.dataset_dims,
         }
+        return _json_value(payload)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExperimentData":
+        """Return the from dict result.
+
+        Parameters
+        ----------
+        d : dict
+            Value for ``d``.
+
+        Returns
+        -------
+        'ExperimentData'
+            Result of the operation.
+        """
+        d = _restore_json_value(d)
         obj = cls(
             experiment_type=d.get("experiment_type", ""),
-            experiment_id=d.get("experiment_id", str(uuid.uuid4())[:8]),
-            timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(),
+            experiment_id=d.get("experiment_id") or _new_experiment_id(),
+            timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(timezone.utc),
+            raw_iq=np.asarray(d["raw_iq"]) if isinstance(d.get("raw_iq"), list) else d.get("raw_iq"),
+            x_axis=np.asarray(d["x_axis"]) if d.get("x_axis") is not None else None,
+            y_axis=np.asarray(d["y_axis"]) if d.get("y_axis") is not None else None,
+            axes=d.get("axes", {}),
+            raw_data=d.get("raw_data", {}),
+            analysis_data=d.get("analysis_data", {}),
             fit_params=np.array(d["fit_params"]) if d.get("fit_params") is not None else None,
             fit_errors=np.array(d["fit_errors"]) if d.get("fit_errors") is not None else None,
             fit_result=d.get("fit_result", {}),
@@ -196,6 +379,7 @@ class ExperimentData:
             config=d.get("config", {}),
             metadata=d.get("metadata", {}),
             parent_id=d.get("parent_id"),
+            children=d.get("children", []),
             x_name=d.get("x_name", ""),
             x_unit=d.get("x_unit", ""),
             x_scale=d.get("x_scale", 1.0),
@@ -204,67 +388,82 @@ class ExperimentData:
             y_scale=d.get("y_scale", 1.0),
             interrupted=d.get("interrupted", False),
             avg_count=d.get("avg_count", 0),
+            data_kind=d.get("data_kind", ""),
+            analysis_id=d.get("analysis_id", ""),
+            plot_id=d.get("plot_id", ""),
+            comment=d.get("comment", ""),
+            tags=d.get("tags", []),
+            session_id=d.get("session_id"),
+            dataset_dims=d.get("dataset_dims", {}),
         )
         return obj
 
-    def save(self, filepath: str) -> str:
-        """Save ExperimentData to HDF5 (raw IQ + metadata)."""
-        import os
+    def save(
+        self,
+        filepath: Optional[str] = None,
+        *,
+        comment: str = "",
+        tags=(),
+        data_root: Optional[str] = None,
+        catalog: bool = True,
+    ):
+        """Save through the native HDF5 v1 writer and update its catalog.
 
-        import h5py
+        Parameters
+        ----------
+        filepath : Optional[str]
+            Value for ``filepath``.
+        comment : str, default: ''
+            Value for ``comment``.
+        tags : Any, default: ()
+            Value for ``tags``.
+        data_root : Optional[str]
+            Value for ``data_root``.
+        catalog : bool, default: True
+            Value for ``catalog``.
 
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        with h5py.File(filepath, "w") as f:
-            # Root attrs: JSON snapshot of everything except arrays
-            f.attrs["meta"] = json.dumps(self.to_dict())
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        from ..tools.hdf5_store import save_result
 
-            if self.raw_iq is not None:
-                iq = np.asarray(self.raw_iq)
-                dg = f.create_group("data")
-                dg.create_dataset("avgi", data=np.real(iq).astype(np.float32))
-                dg.create_dataset("avgq", data=np.imag(iq).astype(np.float32))
-                dg.create_dataset("mag", data=np.abs(iq).astype(np.float32))
-                dg.create_dataset("phase", data=np.degrees(np.arctan2(np.imag(iq), np.real(iq))).astype(np.float32))
-
-            if self.x_axis is not None:
-                xg = f.create_group("x")
-                xg.create_dataset("values", data=(self.x_axis * self.x_scale))
-                xg.attrs["name"] = self.x_name
-                xg.attrs["unit"] = self.x_unit
-
-            if self.y_axis is not None:
-                yg = f.create_group("y")
-                yg.create_dataset("values", data=(self.y_axis * self.y_scale))
-                yg.attrs["name"] = self.y_name
-                yg.attrs["unit"] = self.y_unit
-
-        return filepath
+        return save_result(
+            self,
+            filepath,
+            comment=comment,
+            tags=tags,
+            data_root=data_root,
+            catalog=catalog,
+        )
 
     @classmethod
     def load(cls, filepath: str) -> "ExperimentData":
-        """Load ExperimentData from HDF5 file."""
-        import h5py
+        """Load native v1 or the previous local ExperimentData HDF5 format.
 
-        with h5py.File(filepath, "r") as f:
-            obj = cls.from_dict(json.loads(f.attrs["meta"]))
+        Parameters
+        ----------
+        filepath : str
+            Value for ``filepath``.
 
-            if "data" in f:
-                dg = f["data"]
-                obj.raw_iq = dg["avgi"][:] + 1j * dg["avgq"][:]
+        Returns
+        -------
+        'ExperimentData'
+            Result of the operation.
+        """
+        from ..tools.hdf5_store import load_result
 
-            if "x" in f:
-                xg = f["x"]
-                scale = obj.x_scale if obj.x_scale != 0 else 1.0
-                obj.x_axis = xg["values"][:] / scale
-
-            if "y" in f:
-                yg = f["y"]
-                scale = obj.y_scale if obj.y_scale != 0 else 1.0
-                obj.y_axis = yg["values"][:] / scale
-
-        return obj
+        return load_result(filepath)
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         status = "interrupted" if self.interrupted else "complete"
         return (
             f"ExperimentData(type={self.experiment_type!r}, "

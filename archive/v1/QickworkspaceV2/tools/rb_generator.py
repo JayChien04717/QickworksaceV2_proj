@@ -3,18 +3,40 @@ import random
 
 
 def rx(theta):
-    """Construct the single-qubit X-rotation matrix R_x(theta)."""
+    """Construct the single-qubit X-rotation matrix R_x(theta).
+
+    Parameters
+    ----------
+    theta : Any
+        Value for ``theta``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return np.array([[np.cos(theta/2), -1j*np.sin(theta/2)],
                      [-1j*np.sin(theta/2), np.cos(theta/2)]])
 
 
 def ry(theta):
-    """Construct the single-qubit Y-rotation matrix R_y(theta)."""
+    """Construct the single-qubit Y-rotation matrix R_y(theta).
+
+    Parameters
+    ----------
+    theta : Any
+        Value for ``theta``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return np.array([[np.cos(theta/2), -np.sin(theta/2)],
                      [np.sin(theta/2), np.cos(theta/2)]])
 
 
-I = np.eye(2, dtype=complex)
+IDENTITY = np.eye(2, dtype=complex)
 X_half  = rx( np.pi/2)
 mX_half = rx(-np.pi/2)
 Y_half  = ry( np.pi/2)
@@ -23,7 +45,7 @@ X = X_half @ X_half
 Y = Y_half @ Y_half
 
 gate_map = {
-    "I":    I,
+    "I":    IDENTITY,
     "X/2":  X_half,
     "-X/2": mX_half,
     "Y/2":  Y_half,
@@ -62,7 +84,7 @@ clifford_decompositions = [
 # Build Clifford matrices — list left-to-right = gate applied first to |ψ⟩
 clifford_matrices = []
 for decomp in clifford_decompositions:
-    mat = I.copy()
+    mat = IDENTITY.copy()
     for g in decomp:
         mat = gate_map[g] @ mat
     clifford_matrices.append(mat)
@@ -71,7 +93,20 @@ assert len(clifford_matrices) == 24
 
 
 def _matrix_distance(A, B):
-    """Distance up to global phase: checks both +phase and -phase."""
+    """Distance up to global phase: checks both +phase and -phase.
+
+    Parameters
+    ----------
+    A : Any
+        Value for ``A``.
+    B : Any
+        Value for ``B``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     return min(np.linalg.norm(A - B, 'fro'),
                np.linalg.norm(A + B, 'fro'))
 
@@ -95,7 +130,18 @@ assert len(inverse_table) == 24
 
 
 def find_clifford_index(U):
-    """Return index of the Clifford closest to U (up to global phase)."""
+    """Return index of the Clifford closest to U (up to global phase).
+
+    Parameters
+    ----------
+    U : Any
+        Value for ``U``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     best_idx, best_dist = 0, np.inf
     for idx, m in enumerate(clifford_matrices):
         d = _matrix_distance(U, m)
@@ -118,8 +164,7 @@ INTERLEAVE_GATES = {
 
 
 def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
-    """
-    Generate n_sample RB (or IRB) sequences of length n_clifford.
+    """Generate n_sample RB (or IRB) sequences of length n_clifford.
 
     Parameters
     ----------
@@ -139,6 +184,11 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
     -------
     results : list of list of str
         Length n_sample. Each element is a flat list of gate strings.
+
+    Raises
+    ------
+    ValueError
+        If the operation cannot be completed.
     """
     rng = random.Random(seed)
 
@@ -158,7 +208,7 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
 
     for sample_idx in range(n_sample):
         sequence_indices = []
-        current_mat = I.copy()
+        current_mat = IDENTITY.copy()
         interleave_pulse_log = []
 
         for _ in range(n_clifford):
@@ -196,12 +246,21 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
 
 
 def verify_sequence(full_sequence):
-    """
-    Verify that the full 1D flat sequence (rb gates + recovery) returns to Identity.
+    """Verify that the full 1D flat sequence (rb gates + recovery) returns to Identity.
 
-    Returns True if residual matrix distance from Identity is less than 1e-6.
+            Returns True if residual matrix distance from Identity is less than 1e-6.
+
+    Parameters
+    ----------
+    full_sequence : Any
+        Value for ``full_sequence``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
     """
-    mat = I.copy()
+    mat = IDENTITY.copy()
     for g in full_sequence:
         mat = gate_map[g] @ mat
     return _matrix_distance(mat, I2) < 1e-6

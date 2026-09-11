@@ -11,7 +11,6 @@ from scipy.optimize import curve_fit
 from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
 from ...core.experiment_data import ExperimentData, QualityFlag
-from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
 from ...plotter.liveplot import liveplotfun
 
 
@@ -19,14 +18,28 @@ class DragProgram(BaseProgram):
     """QICK program for DRAG calibration using an ASMv2 hardware iteration loop."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.setup_resonator(cfg)
-        self.declare_gen_auto(cfg["qb_ch"], cfg["nqz_qb"], "qb_mixer", cfg)
+        self.setup_qubit_gen(cfg, "ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="x180_ge",
                             phase=0, gain_key="pi_gain_ge")
         self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="mx180_ge",
                             phase=180, gain_key="pi_gain_ge")
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
             self.apply_cool(cfg)
@@ -52,7 +65,7 @@ class DragCalibration(BaseExperiment):
     """
 
     EXPT_NAME = "s005a_drag_ge"
-    TAG = "DRAGCalibration"
+    TAG = "Drag"
     X_LABEL = "DRAG Parameter (α)"
     Y_LABEL = "Iterations (N)"
     TITLE_PREFIX = "DRAG Calibration"
@@ -66,6 +79,18 @@ class DragCalibration(BaseExperiment):
     Y_SAVE_SCALE = 1.0
 
     def _build_scan_axes(self):
+        """Build scan axes.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         cfg = self.cfg
         if "alpha_start" not in cfg or "alpha_stop" not in cfg or "alpha_steps" not in cfg:
             raise ValueError("cfg must contain 'alpha_start', 'alpha_stop', 'alpha_steps'.")
@@ -80,11 +105,41 @@ class DragCalibration(BaseExperiment):
         return alphas, iters
 
     def run(self, py_avg, show_final_plot=False, **kwargs):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any
+            Number of Python-level acquisition averages.
+        show_final_plot : Any, default: False
+            Whether to show final plot.
+        **kwargs : Any
+            Additional keyword arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         alphas, iters = self._build_scan_axes()
         self._sweep_vals_x = alphas
         self._sweep_vals_y = iters
 
         def _make_prog(alpha_val, iter_val):
+            """Create prog.
+
+            Parameters
+            ----------
+            alpha_val : Any
+                Value for ``alpha_val``.
+            iter_val : Any
+                Value for ``iter_val``.
+
+            Returns
+            -------
+            Any
+                Result of the operation.
+            """
             self.cfg["drag_alpha"] = float(alpha_val)
             self.cfg["iteration"] = int(iter_val)
             return DragProgram(
@@ -130,9 +185,9 @@ class DragCalibration(BaseExperiment):
             fit_params=self.fit_params,
             fit_errors=self.fit_errors,
             fit_result={k: (v, None) for k, v in fit_result.items()},
+            figures=[self._last_analysis_figure] if getattr(self, "_last_analysis_figure", None) is not None else [],
             scalar_result=float(optimal_alpha) if optimal_alpha is not None else None,
             quality=QualityFlag.NO_INFORMATION,
-            config=dict(self.cfg) if hasattr(self.cfg, "__iter__") else {},
             interrupted=interrupted,
             avg_count=avg_count,
             x_name=self.X_SAVE_NAME,
@@ -141,11 +196,20 @@ class DragCalibration(BaseExperiment):
             y_name=self.Y_SAVE_NAME,
             y_unit=self.Y_SAVE_UNIT,
             y_scale=self.Y_SAVE_SCALE,
+            metadata={"iq_process": "abs"},
+            dataset_dims={"iq": ["y", "x"]},
         )
         self.result = result
         return result
 
     def _create_program(self):
+        """Create the QICK program for this experiment.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         self.cfg.setdefault("drag_alpha", self.cfg.get("alpha_start", 0.5))
         self.cfg.setdefault("iteration", self.cfg.get("iteration_start", 1))
         return DragProgram(
@@ -156,15 +220,58 @@ class DragCalibration(BaseExperiment):
         )
 
     def _extract_sweep_axis(self, prog):
+        """Extract the primary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._sweep_vals_x
 
     def _extract_sweep_axis_y(self, prog):
+        """Extract the secondary sweep axis from the program.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._sweep_vals_y
 
     def analyze_and_plot(self):
+        """Return the analyze and plot result.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._post_fit()
 
     def _post_fit(self, x_vals=None):
+        """Fit the acquired data after acquisition.
+
+        Parameters
+        ----------
+        x_vals : Any, default: None
+            Independent-variable values.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         if self.iqdata is None:
             print("No data. Call run() first.")
             return None
@@ -180,6 +287,24 @@ class DragCalibration(BaseExperiment):
 
         try:
             def parabola(x, a, b, c):
+                """Return the parabola result.
+
+                Parameters
+                ----------
+                x : Any
+                    Independent-variable values.
+                a : Any
+                    Value for ``a``.
+                b : Any
+                    Value for ``b``.
+                c : Any
+                    Value for ``c``.
+
+                Returns
+                -------
+                Any
+                    Result of the operation.
+                """
                 return a * (x - b) ** 2 + c
 
             for idx_pk, label in [(idx_max, "max"), (idx_min, "min")]:
@@ -229,6 +354,7 @@ class DragCalibration(BaseExperiment):
         fig.suptitle(self.TITLE_PREFIX, fontsize=13)
         fig.tight_layout()
         plt.show()
+        self._last_analysis_figure = fig
 
         optimal_alpha = round(float(optimal_alpha), 6)
         self.fit_params = np.array([optimal_alpha])
@@ -237,6 +363,18 @@ class DragCalibration(BaseExperiment):
         return self._drag_fit_result
 
     def _save_comment(self, dict_val):
+        """Return the comment stored with the result.
+
+        Parameters
+        ----------
+        dict_val : Any
+            Value for ``dict_val``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         fit_result = getattr(self, "_drag_fit_result", None)
         if fit_result:
             a = fit_result.get("optimal_alpha", "N/A")

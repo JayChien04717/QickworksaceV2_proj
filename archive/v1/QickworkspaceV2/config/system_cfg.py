@@ -28,17 +28,14 @@ Typical notebook usage:
     ])
 """
 
-# ── Hardware configuration ───────────────────────────────────────────────────
 # One dict per qubit.  Nested sub-dicts (ch, res, qb, cooling) are flattened
 # by ExperimentConfig.get_qubit(), so experiments always see a flat dict.
-#
 # Dot-notation updates work on the nested keys:
 #   config_all.update("res.res_gain_ge", 0.4, q_index="Q1")
 # Plain-key updates (auto-search) also work:
 #   config_all.update("res_gain_ge", 0.4, q_index="Q1")
 
 config_list = [
-    ########## Q1 Config ###########
     {
         "name": "Q1",
         "ch": {
@@ -75,7 +72,7 @@ config_list = [
             "pi_gain_ef": 0.1,
             "pi2_gain_ef": 0.1,
             "qb_flat_top_length_ef": 0.1,
-            "ramsey_freq": 2,
+            "virtual_detune": 2,
             "nqz_qb": 1,
             "nqz_qb_ef": 1,
         },
@@ -95,7 +92,6 @@ config_list = [
         "trig_time": 0.5,
         "relax_delay": 10,
     },
-    ########## Q2 Config ###########
     {
         "name": "Q2",
         "ch": {
@@ -132,7 +128,7 @@ config_list = [
             "pi_gain_ef": 0.1,
             "pi2_gain_ef": 0.1,
             "qb_flat_top_length_ef": 0.1,
-            "ramsey_freq": 2,
+            "virtual_detune": 2,
             "nqz_qb": 1,
             "nqz_qb_ef": 1,
         },
@@ -152,7 +148,6 @@ config_list = [
         "trig_time": 0.5,
         "relax_delay": 10,
     },
-    ########## Q3 Config ###########
     {
         "name": "Q3",
         "ch": {
@@ -189,7 +184,7 @@ config_list = [
             "pi_gain_ef": 0.1,
             "pi2_gain_ef": 0.1,
             "qb_flat_top_length_ef": 0.1,
-            "ramsey_freq": 2,
+            "virtual_detune": 2,
             "nqz_qb": 1,
             "nqz_qb_ef": 1,
         },
@@ -209,7 +204,6 @@ config_list = [
         "trig_time": 0.5,
         "relax_delay": 10,
     },
-    ########## Q4 Config ###########
     {
         "name": "Q4",
         "ch": {
@@ -246,7 +240,7 @@ config_list = [
             "pi_gain_ef": 0.1,
             "pi2_gain_ef": 0.1,
             "qb_flat_top_length_ef": 0.1,
-            "ramsey_freq": 2,
+            "virtual_detune": 2,
             "nqz_qb": 1,
             "nqz_qb_ef": 1,
         },

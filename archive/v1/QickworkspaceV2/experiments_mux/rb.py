@@ -13,13 +13,19 @@ from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
 from ..tools.fitting import error_fit_err, fitrb, rb_error, rb_func
-from ..tools.system_tool import clean_config
 
 
 class MuxRBProgram(AveragerProgramV2):
     """One RB sequence applied to all armed qubits with mux readout."""
 
     def _initialize(self, cfg):
+        """Initialize pulse and acquisition resources.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg["active_ro_chs"])
 
@@ -56,6 +62,17 @@ class MuxRBProgram(AveragerProgramV2):
             self._add_standard_gates(cfg, slot, name)
 
     def _add_standard_gates(self, cfg, slot, name):
+        """Add standard gates.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        name : Any
+            Name of the target object.
+        """
         gates = [
             ("x180_ge", 0, "pi_gain_ge"),
             ("y180_ge", 90, "pi_gain_ge"),
@@ -68,6 +85,21 @@ class MuxRBProgram(AveragerProgramV2):
             self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
+        """Add gate pulse.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        slot : Any
+            Value for ``slot``.
+        pulse_name : Any
+            Name of the pulse.
+        phase : Any
+            Value for ``phase``.
+        gain : Any
+            Value for ``gain``.
+        """
         qb_ch = cfg["qb_ch"][slot]
         pulse_type = cfg["pulse_type"][slot]
         if pulse_type == "const":
@@ -119,6 +151,15 @@ class MuxRBProgram(AveragerProgramV2):
             )
 
     def _pulse_gate(self, cfg, gate):
+        """Return the pulse gate result.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        gate : Any
+            Value for ``gate``.
+        """
         resolved = resolve_gate(gate)
         if resolved in ("I", "-I", None, "None"):
             self.delay_auto(cfg["sigma_ge"][cfg["active_slots"][0]] * 5)
@@ -128,6 +169,13 @@ class MuxRBProgram(AveragerProgramV2):
         self.delay_auto(0.01)
 
     def _body(self, cfg):
+        """Execute one iteration of the pulse sequence.
+
+        Parameters
+        ----------
+        cfg : Any
+            Experiment configuration mapping.
+        """
         for gate in cfg["gate_seq"]:
             self._pulse_gate(cfg, gate)
         self.delay_auto(0.05)
@@ -143,6 +191,13 @@ class MuxRandomizedBenchmarking(BaseExperiment):
     TITLE_PREFIX = "Mux RB"
 
     def __init__(self, config):
+        """Initialize the MuxRandomizedBenchmarking instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.x = None
         self.rb_result = None
@@ -152,6 +207,20 @@ class MuxRandomizedBenchmarking(BaseExperiment):
 
     @staticmethod
     def _extract_iq(iq_list, n_trace):
+        """Extract iq.
+
+        Parameters
+        ----------
+        iq_list : Any
+            Value for ``iq_list``.
+        n_trace : Any
+            Value for ``n_trace``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         vals = []
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx][0]).squeeze()
@@ -163,6 +232,20 @@ class MuxRandomizedBenchmarking(BaseExperiment):
 
     @staticmethod
     def _process_plot_data(iqdata, iq_process):
+        """Prepare acquired data for plotting.
+
+        Parameters
+        ----------
+        iqdata : Any
+            Value for ``iqdata``.
+        iq_process : Any
+            IQ processing mode.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         iq_process = (iq_process or "abs").lower()
         if iq_process in {"real", "i", "avgi"}:
             return np.real(iqdata)
@@ -184,6 +267,39 @@ class MuxRandomizedBenchmarking(BaseExperiment):
         randomize_depth_order=False,
         plot=True,
     ):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any
+            Number of Python-level acquisition averages.
+        max_circuit_depth : Any
+            Value for ``max_circuit_depth``.
+        delta_clifford : Any
+            Value for ``delta_clifford``.
+        number_sample : Any
+            Value for ``number_sample``.
+        interleaved_gate : Any, default: None
+            Value for ``interleaved_gate``.
+        seed : Any, default: None
+            Value for ``seed``.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        randomize_depth_order : Any, default: False
+            Value for ``randomize_depth_order``.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         from ..tools.rb_generator import INTERLEAVE_GATES, single_qb_rb
 
         if interleaved_gate is not None and interleaved_gate not in INTERLEAVE_GATES:
@@ -202,6 +318,7 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             [int(rng.integers(0, 2**31)) for _ in range(number_sample)]
             for _ in range(len(self.x))
         ]
+        sequences_matrix = [[None] * number_sample for _ in range(len(self.x))]
         depth_indices = np.arange(len(self.x))
         if randomize_depth_order:
             rng.shuffle(depth_indices)
@@ -220,6 +337,7 @@ class MuxRandomizedBenchmarking(BaseExperiment):
                             interleave=interleaved_gate,
                             seed=seeds_matrix[d_idx][sample_idx],
                         )[0]
+                        sequences_matrix[d_idx][sample_idx] = seq
                         run_cfg = dict(cfg)
                         run_cfg["gate_seq"] = seq
                         prog = MuxRBProgram(
@@ -291,13 +409,31 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             x_axis=self.x.astype(float),
             y_axis=plot_data.mean(axis=2),
             fit_result=fit_result,
-            config=clean_config(cfg),
             metadata={
                 "qubit_names": qubit_names,
                 "number_sample": number_sample,
                 "interleaved_gate": interleaved_gate,
                 "fit_params": fit_params,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
             },
+            axes={
+                "qubit": {"values": qubit_names},
+                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["qubit", "depth", "sample"]},
+            analysis_data={
+                "mean_signal": {"values": plot_data.mean(axis=2), "dims": ["qubit", "depth"]},
+                "standard_error": {
+                    "values": plot_data.std(axis=2) / np.sqrt(max(number_sample, 1)),
+                    "dims": ["qubit", "depth"],
+                },
+            },
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
             figures=figures,
             quality=QualityFlag.GOOD if self.rb_result is not None else QualityFlag.BAD,
             interrupted=interrupted,
@@ -307,6 +443,23 @@ class MuxRandomizedBenchmarking(BaseExperiment):
         return result
 
     def plot(self, show_individual=False):
+        """Plot the operation.
+
+        Parameters
+        ----------
+        show_individual : Any, default: False
+            Whether to show individual.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        RuntimeError
+            If the operation cannot be completed.
+        """
         if self.result is None:
             raise RuntimeError("Call run() first.")
         return self.result.figures
@@ -319,6 +472,13 @@ class MuxAutoRB:
     """Run mux reference RB plus optional interleaved RB gates."""
 
     def __init__(self, config):
+        """Initialize the MuxAutoRB instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         self.cfg = config
         self.results = {}
         self.rb_objects = {}
@@ -334,6 +494,35 @@ class MuxAutoRB:
         iq_process="abs",
         plot=True,
     ):
+        """Run the operation.
+
+        Parameters
+        ----------
+        py_avg : Any
+            Number of Python-level acquisition averages.
+        max_circuit_depth : Any
+            Value for ``max_circuit_depth``.
+        delta_clifford : Any
+            Value for ``delta_clifford``.
+        number_sample : Any
+            Value for ``number_sample``.
+        interleaved_gates : Any, default: None
+            Value for ``interleaved_gates``.
+        seed : Any, default: None
+            Value for ``seed``.
+        iq_process : Any, default: 'abs'
+            IQ processing mode.
+        plot : Any, default: True
+            Value for ``plot``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
+        from ..tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         gates = [None] + list(interleaved_gates or [])
         for gate in tqdm(gates, desc="Mux AutoRB"):
             label = "ref" if gate is None else gate
@@ -348,11 +537,20 @@ class MuxAutoRB:
                 iq_process=iq_process,
                 plot=plot,
             )
+            result.parent_id = session_id
+            result.session_id = session_id
             self.rb_objects[label] = rb
             self.results[label] = result.fit_result
         return self.results
 
     def summary(self):
+        """Return a summary of the current state.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         lines = ["Mux AutoRB Summary"]
         for label, fit in self.results.items():
             lines.append(f"[{label}]")

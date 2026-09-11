@@ -13,15 +13,45 @@ class TextReport:
     """Plain-text report that displays cleanly in notebooks and REPLs."""
 
     def __init__(self, text: str) -> None:
+        """Initialize the TextReport instance.
+
+        Parameters
+        ----------
+        text : str
+            Value for ``text``.
+        """
         self.text = text
 
     def __str__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.text
 
     def __repr__(self) -> str:
+        """Return a human-readable representation.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         return self.text
 
     def _repr_pretty_(self, printer, cycle: bool) -> None:
+        """Return the repr pretty result.
+
+        Parameters
+        ----------
+        printer : Any
+            Value for ``printer``.
+        cycle : bool
+            Value for ``cycle``.
+        """
         printer.text("..." if cycle else self.text)
 
 
@@ -38,6 +68,7 @@ class BaseInstrumentManager:
     """
 
     def __init__(self) -> None:
+        """Initialize the BaseInstrumentManager instance."""
         self._instruments: dict[str, InstrumentSpec] = {}
 
     def add_instrument(
@@ -52,7 +83,37 @@ class BaseInstrumentManager:
         notes: str = "",
         **driver_kwargs: Any,
     ) -> Any:
-        """Create a driver and register it by name."""
+        """Create a driver and register it by name.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        driver : type | Callable[..., Any]
+            Value for ``driver``.
+        address : str
+            Instrument resource address.
+        kind : str | None, default: None
+            Value for ``kind``.
+        limits : Mapping[str, tuple[float, float]] | None, default: None
+            Value for ``limits``.
+        auto_limits : bool, default: True
+            Value for ``auto_limits``.
+        notes : str, default: ''
+            Value for ``notes``.
+        **driver_kwargs : Any
+            Value for ``driver_kwargs``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
 
         if name in self._instruments:
             raise ValueError(f"Instrument name already exists: {name!r}")
@@ -81,7 +142,32 @@ class BaseInstrumentManager:
         ramp_interval: float | None = None,
         notes: str = "",
     ) -> Any:
-        """Add a Yokogawa GS200 DC source."""
+        """Add a Yokogawa GS200 DC source.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        address : str
+            Instrument resource address.
+        limits : Mapping[str, tuple[float, float]] | None, default: None
+            Value for ``limits``.
+        auto_limits : bool, default: True
+            Value for ``auto_limits``.
+        voltage_ramp_step : float | None, default: None
+            Value for ``voltage_ramp_step``.
+        current_ramp_step : float | None, default: None
+            Value for ``current_ramp_step``.
+        ramp_interval : float | None, default: None
+            Value for ``ramp_interval``.
+        notes : str, default: ''
+            Value for ``notes``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
 
         import pyvisa as visa
 
@@ -114,7 +200,26 @@ class BaseInstrumentManager:
         auto_limits: bool = True,
         notes: str = "",
     ) -> Any:
-        """Add a Rohde & Schwarz SGS100A RF source."""
+        """Add a Rohde & Schwarz SGS100A RF source.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        address : str
+            Instrument resource address.
+        limits : Mapping[str, tuple[float, float]] | None, default: None
+            Value for ``limits``.
+        auto_limits : bool, default: True
+            Value for ``auto_limits``.
+        notes : str, default: ''
+            Value for ``notes``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
 
         from .sgs100a import RohdeSchwarzSGS100A
 
@@ -137,7 +242,26 @@ class BaseInstrumentManager:
         auto_limits: bool = True,
         notes: str = "",
     ) -> Any:
-        """Add an Anritsu MG3692 RF source."""
+        """Add an Anritsu MG3692 RF source.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        address : str
+            Instrument resource address.
+        limits : Mapping[str, tuple[float, float]] | None, default: None
+            Value for ``limits``.
+        auto_limits : bool, default: True
+            Value for ``auto_limits``.
+        notes : str, default: ''
+            Value for ``notes``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
 
         from .mg3692 import AnritsuMG3692
 
@@ -158,18 +282,55 @@ class BaseInstrumentManager:
     addmg3692 = add_mg3692
 
     def get(self, name: str) -> Any:
+        """Return the get result.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         return self._instruments[name].driver
 
     def spec(self, name: str) -> InstrumentSpec:
+        """Return the spec result.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+
+        Returns
+        -------
+        InstrumentSpec
+            Result of the operation.
+        """
         return self._instruments[name]
 
     @property
     def names(self) -> list[str]:
+        """Return the names result.
+
+        Returns
+        -------
+        list[str]
+            Result of the operation.
+        """
         return list(self._instruments)
 
     @property
     def status(self) -> TextReport:
-        """Return a printable status table for all registered instruments."""
+        """Return a printable status table for all registered instruments.
+
+        Returns
+        -------
+        TextReport
+            Result of the operation.
+        """
 
         if not self._instruments:
             return TextReport("No instruments registered.")
@@ -178,7 +339,18 @@ class BaseInstrumentManager:
         )
 
     def help(self, name: str | None = None) -> TextReport:
-        """Return output ranges and common commands."""
+        """Return output ranges and common commands.
+
+        Parameters
+        ----------
+        name : str | None, default: None
+            Name of the target object.
+
+        Returns
+        -------
+        TextReport
+            Result of the operation.
+        """
 
         if name is None:
             if not self._instruments:
@@ -207,12 +379,39 @@ class BaseInstrumentManager:
         return TextReport("\n".join(lines))
 
     def limits(self, name: str | None = None) -> dict[str, LimitMap] | LimitMap:
+        """Return the limits result.
+
+        Parameters
+        ----------
+        name : str | None, default: None
+            Name of the target object.
+
+        Returns
+        -------
+        dict[str, LimitMap] | LimitMap
+            Result of the operation.
+        """
         if name is not None:
             return dict(self.spec(name).limits)
         return {item: dict(spec.limits) for item, spec in self._instruments.items()}
 
     def set(self, name: str, parameter: str, value: Any) -> None:
-        """Set a driver property after checking registered limits."""
+        """Set a driver property after checking registered limits.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        parameter : str
+            Value for ``parameter``.
+        value : Any
+            Value to apply.
+
+        Raises
+        ------
+        AttributeError
+            If the operation cannot be completed.
+        """
 
         spec = self.spec(name)
         self._validate_range(spec, parameter, value)
@@ -221,6 +420,22 @@ class BaseInstrumentManager:
         setattr(spec.driver, parameter, value)
 
     def set_yoko(self, name: str, value: float, mode: str = "current") -> None:
+        """Set yoko.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        value : float
+            Value to apply.
+        mode : str, default: 'current'
+            Value for ``mode``.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         spec = self.spec(name)
         if mode not in {"current", "voltage"}:
             raise ValueError("mode must be 'current' or 'voltage'")
@@ -231,17 +446,41 @@ class BaseInstrumentManager:
         setattr(driver, mode, value)
 
     def value(self, name: str) -> dict[str, Any]:
-        """Return the primary output value for one instrument."""
+        """Return the primary output value for one instrument.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+
+        Returns
+        -------
+        dict[str, Any]
+            Result of the operation.
+        """
 
         spec = self.spec(name)
         return self._primary_value(spec)
 
     def set_value(self, name: str, value: float, *, mode: str | None = None) -> None:
-        """
-        Set the primary output value.
+        """Set the primary output value.
 
-        For Yoko/DC sources this sets current or voltage. For RF sources this
-        sets power. Use ``set(name, "frequency", value)`` for RF frequency.
+                        For Yoko/DC sources this sets current or voltage. For RF sources this
+                        sets power. Use ``set(name, "frequency", value)`` for RF frequency.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        value : float
+            Value to apply.
+        mode : str | None, default: None
+            Value for ``mode``.
+
+        Raises
+        ------
+        AttributeError
+            If the operation cannot be completed.
         """
 
         spec = self.spec(name)
@@ -261,8 +500,28 @@ class BaseInstrumentManager:
         parallel: bool = True,
         max_workers: int | None = None,
     ) -> TextReport:
-        """
-        Set multiple Yoko/DC source output values.
+        """Set multiple Yoko/DC source output values.
+
+        Parameters
+        ----------
+        targets : Mapping[str, float | Mapping[str, Any]]
+            Value for ``targets``.
+        mode : str | None, default: None
+            Value for ``mode``.
+        parallel : bool, default: True
+            Value for ``parallel``.
+        max_workers : int | None, default: None
+            Value for ``max_workers``.
+
+        Returns
+        -------
+        TextReport
+            Result of the operation.
+
+        Raises
+        ------
+        TypeError
+            If the operation cannot be completed.
 
         Examples
         --------
@@ -306,7 +565,19 @@ class BaseInstrumentManager:
         current_step: float | None = None,
         interval: float | None = None,
     ) -> None:
-        """Configure ramp settings for a Yoko/DC source."""
+        """Configure ramp settings for a Yoko/DC source.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        voltage_step : float | None, default: None
+            Value for ``voltage_step``.
+        current_step : float | None, default: None
+            Value for ``current_step``.
+        interval : float | None, default: None
+            Value for ``interval``.
+        """
 
         driver = self.get(name)
         configure_ramp = getattr(driver, "configure_ramp", None)
@@ -325,7 +596,18 @@ class BaseInstrumentManager:
             driver.ramp_interval = interval
 
     def ramp(self, name: str) -> dict[str, Any]:
-        """Return ramp settings for a Yoko/DC source."""
+        """Return ramp settings for a Yoko/DC source.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+
+        Returns
+        -------
+        dict[str, Any]
+            Result of the operation.
+        """
 
         driver = self.get(name)
         ramp_rate = getattr(driver, "ramp_rate", None)
@@ -338,13 +620,33 @@ class BaseInstrumentManager:
         }
 
     def on(self, name: str) -> None:
+        """Enable the instrument output.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        """
         self.get(name).on()
 
     def off(self, name: str) -> None:
+        """Disable the instrument output.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        """
         self.get(name).off()
 
     def close(self, name: str | None = None) -> None:
-        """Close one instrument or every registered instrument."""
+        """Close one instrument or every registered instrument.
+
+        Parameters
+        ----------
+        name : str | None, default: None
+            Name of the target object.
+        """
 
         names = [name] if name is not None else list(self._instruments)
         for item in names:
@@ -354,6 +656,22 @@ class BaseInstrumentManager:
                 close()
 
     def _validate_range(self, spec: InstrumentSpec, parameter: str, value: Any) -> None:
+        """Validate range.
+
+        Parameters
+        ----------
+        spec : InstrumentSpec
+            Value for ``spec``.
+        parameter : str
+            Value for ``parameter``.
+        value : Any
+            Value to apply.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         if parameter not in spec.limits:
             return
         low, high = spec.limits[parameter]
@@ -364,6 +682,24 @@ class BaseInstrumentManager:
             )
 
     def _validate_set_value(self, name: str, value: float, mode: str | None) -> None:
+        """Validate set value.
+
+        Parameters
+        ----------
+        name : str
+            Name of the target object.
+        value : float
+            Value to apply.
+        mode : str | None
+            Value for ``mode``.
+
+        Raises
+        ------
+        AttributeError
+            If the operation cannot be completed.
+        ValueError
+            If the operation cannot be completed.
+        """
         spec = self.spec(name)
         if spec.kind == "yoko" or self._is_dc_source(spec.driver):
             target_mode = mode or "current"
@@ -382,6 +718,25 @@ class BaseInstrumentManager:
         *,
         mode: str | None,
     ) -> dict[str, dict[str, Any]]:
+        """Normalize targets.
+
+        Parameters
+        ----------
+        targets : Mapping[str, float | Mapping[str, Any]]
+            Value for ``targets``.
+        mode : str | None
+            Value for ``mode``.
+
+        Returns
+        -------
+        dict[str, dict[str, Any]]
+            Result of the operation.
+
+        Raises
+        ------
+        ValueError
+            If the operation cannot be completed.
+        """
         normalized = {}
         for name, target in targets.items():
             if name in normalized:
@@ -404,6 +759,20 @@ class BaseInstrumentManager:
         *,
         max_workers: int | None,
     ) -> TextReport:
+        """Set values parallel.
+
+        Parameters
+        ----------
+        targets : Mapping[str, Mapping[str, Any]]
+            Value for ``targets``.
+        max_workers : int | None
+            Value for ``max_workers``.
+
+        Returns
+        -------
+        TextReport
+            Result of the operation.
+        """
         workers = max_workers or len(targets)
         lines = []
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -419,6 +788,18 @@ class BaseInstrumentManager:
         return TextReport("\n".join(lines))
 
     def _format_status_line(self, spec: InstrumentSpec) -> str:
+        """Format status line.
+
+        Parameters
+        ----------
+        spec : InstrumentSpec
+            Value for ``spec``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         driver = spec.driver
         output = self._safe_get(driver, "output")
         if output is None:
@@ -431,6 +812,18 @@ class BaseInstrumentManager:
         )
 
     def _status_value(self, spec: InstrumentSpec) -> str:
+        """Return the status value result.
+
+        Parameters
+        ----------
+        spec : InstrumentSpec
+            Value for ``spec``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         primary = self._primary_value(spec)
         pieces = []
         if primary:
@@ -455,6 +848,18 @@ class BaseInstrumentManager:
         return ", ".join(pieces) if pieces else "unknown"
 
     def _primary_value(self, spec: InstrumentSpec) -> dict[str, Any]:
+        """Return the primary value result.
+
+        Parameters
+        ----------
+        spec : InstrumentSpec
+            Value for ``spec``.
+
+        Returns
+        -------
+        dict[str, Any]
+            Result of the operation.
+        """
         driver = spec.driver
         get_value = getattr(driver, "GetValue", None)
         if callable(get_value):
@@ -476,6 +881,18 @@ class BaseInstrumentManager:
         return {}
 
     def _safe_snapshot(self, driver: Any) -> dict[str, Any]:
+        """Return the safe snapshot result.
+
+        Parameters
+        ----------
+        driver : Any
+            Value for ``driver``.
+
+        Returns
+        -------
+        dict[str, Any]
+            Result of the operation.
+        """
         snapshot = getattr(driver, "snapshot", None)
         if callable(snapshot):
             try:
@@ -485,6 +902,20 @@ class BaseInstrumentManager:
         return {}
 
     def _safe_get(self, driver: Any, attr: str) -> Any:
+        """Return the safe get result.
+
+        Parameters
+        ----------
+        driver : Any
+            Value for ``driver``.
+        attr : str
+            Value for ``attr``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         try:
             value = getattr(driver, attr)
         except Exception:
@@ -499,6 +930,20 @@ class BaseInstrumentManager:
         return value
 
     def _driver_limits(self, driver: Any, *, auto_limits: bool = True) -> LimitMap:
+        """Return the driver limits result.
+
+        Parameters
+        ----------
+        driver : Any
+            Value for ``driver``.
+        auto_limits : bool, default: True
+            Value for ``auto_limits``.
+
+        Returns
+        -------
+        LimitMap
+            Result of the operation.
+        """
         if auto_limits:
             discover_limits = getattr(driver, "discover_limits", None)
             if callable(discover_limits):
@@ -517,6 +962,20 @@ class BaseInstrumentManager:
         return dict(getattr(driver, "DEFAULT_LIMITS", {}))
 
     def _driver_address(self, driver: Any, fallback: str) -> str:
+        """Return the driver address result.
+
+        Parameters
+        ----------
+        driver : Any
+            Value for ``driver``.
+        fallback : str
+            Value for ``fallback``.
+
+        Returns
+        -------
+        str
+            Result of the operation.
+        """
         for attr in ("resource_name", "VISAaddress", "address"):
             value = getattr(driver, attr, None)
             if value:
@@ -526,6 +985,18 @@ class BaseInstrumentManager:
         return str(value or fallback)
 
     def _is_dc_source(self, driver: Any) -> bool:
+        """Return whether is dc source.
+
+        Parameters
+        ----------
+        driver : Any
+            Value for ``driver``.
+
+        Returns
+        -------
+        bool
+            Result of the operation.
+        """
         return all(hasattr(driver, attr) for attr in ("current", "voltage"))
 
 

@@ -4,6 +4,26 @@ from scipy.special import comb
 from .utils import complex_fit
 
 def fit_rational_fraction_pole_basis(x, y, n, poles = None, den = None):
+    """Fit rational fraction pole basis.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    y : Any
+        Dependent-variable values.
+    n : Any
+        Value for ``n``.
+    poles : Any, default: None
+        Value for ``poles``.
+    den : Any, default: None
+        Value for ``den``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if den is None:
         den = np.ones(x.shape)
     
@@ -38,6 +58,24 @@ def fit_rational_fraction_pole_basis(x, y, n, poles = None, den = None):
     return num, den
 
 def fit_rational_fraction_polynomial_basis(x, y, n, den = None):
+    """Fit rational fraction polynomial basis.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    y : Any
+        Dependent-variable values.
+    n : Any
+        Value for ``n``.
+    den : Any, default: None
+        Value for ``den``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     if den is None:
         den = np.ones(x.shape)
 
@@ -67,6 +105,22 @@ def fit_rational_fraction_polynomial_basis(x, y, n, den = None):
     return num, den, solution
 
 def convergence_criteria(array, convergance_precision, min_converged_passes):
+    """Return the convergence criteria result.
+
+    Parameters
+    ----------
+    array : Any
+        Value for ``array``.
+    convergance_precision : Any
+        Value for ``convergance_precision``.
+    min_converged_passes : Any
+        Value for ``min_converged_passes``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     array_convergence = np.diff(array)/array[:-1]
 
     if np.prod(np.abs(array_convergence[-min_converged_passes:]) < convergance_precision):
@@ -74,6 +128,30 @@ def convergence_criteria(array, convergance_precision, min_converged_passes):
     return False
 
 def iterative_solver(x, y, n, min_rec_depth=10, max_rec_depth=100, convergance_precision=0.01, min_converged_passes=5):
+    """Return the iterative solver result.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    y : Any
+        Dependent-variable values.
+    n : Any
+        Value for ``n``.
+    min_rec_depth : Any, default: 10
+        Value for ``min_rec_depth``.
+    max_rec_depth : Any, default: 100
+        Value for ``max_rec_depth``.
+    convergance_precision : Any, default: 0.01
+        Value for ``convergance_precision``.
+    min_converged_passes : Any, default: 5
+        Value for ``min_converged_passes``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     residuals = []
 
     center = 0.5*(np.max(x) + np.min(x))
@@ -104,6 +182,20 @@ def iterative_solver(x, y, n, min_rec_depth=10, max_rec_depth=100, convergance_p
     return num, den, solution, residuals
 
 def convert_solution(x, solution):
+    """Convert solution.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    solution : Any
+        Value for ``solution``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     n = (len(solution) // 2) - 1
     scalled_solution = np.copy(solution)
     
@@ -130,6 +222,30 @@ def convert_solution(x, solution):
 
 
 def get_rationnal_fit(x, y, n, return_true_solution=True, return_residuals=False, *args, **kwargs):
+    """Return rationnal fit.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    y : Any
+        Dependent-variable values.
+    n : Any
+        Value for ``n``.
+    return_true_solution : Any, default: True
+        Value for ``return_true_solution``.
+    return_residuals : Any, default: False
+        Value for ``return_residuals``.
+    *args : Any
+        Additional positional arguments.
+    **kwargs : Any
+        Additional keyword arguments.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     num, den, solution, residuals = iterative_solver(x, y, n, *args, **kwargs)
     if return_true_solution:
         solution = convert_solution(x, solution)
@@ -140,6 +256,20 @@ def get_rationnal_fit(x, y, n, return_true_solution=True, return_residuals=False
         return solution, num/den
 
 def rationnal_function(x, coefs):
+    """Return the rationnal function result.
+
+    Parameters
+    ----------
+    x : Any
+        Independent-variable values.
+    coefs : Any
+        Value for ``coefs``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     n = (len(coefs) // 2) - 1
 
     n_mesh, x_mesh = np.meshgrid(np.arange(n+1), x)
@@ -151,6 +281,28 @@ def rationnal_function(x, coefs):
     return num/den
 
 def reflection_purcell(freq, f_a_0, f_b_0, kappa_a, kappa_b, g):
+    """Return the reflection purcell result.
+
+    Parameters
+    ----------
+    freq : Any
+        Value for ``freq``.
+    f_a_0 : Any
+        Value for ``f_a_0``.
+    f_b_0 : Any
+        Value for ``f_b_0``.
+    kappa_a : Any
+        Value for ``kappa_a``.
+    kappa_b : Any
+        Value for ``kappa_b``.
+    g : Any
+        Value for ``g``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     delta_a = freq - f_a_0
     delta_b = freq - f_b_0
 
@@ -171,6 +323,20 @@ if __name__ == "__main__":
     # y = reflection_purcell(x, -2, -1, 0.1, 3, 0.5) + noise*np.random.normal(0, 1, (x.size)) + noise*1j*np.random.normal(0, 1, (x.size))
 
     def fit_func(x, *args):
+        """Fit func.
+
+        Parameters
+        ----------
+        x : Any
+            Independent-variable values.
+        *args : Any
+            Additional positional arguments.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         n = len(args)//2
         coefs = np.array(args[:n]) + 1j*np.array(args[n:])
         return rationnal_function(x, coefs)

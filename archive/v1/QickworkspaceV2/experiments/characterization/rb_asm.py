@@ -59,12 +59,12 @@ from qick.asm_v2 import AsmInst, Macro
 
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
+from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import RBAnalysis
 from ...tools.fitting import fitrb, rb_func, rb_error, error_fit_err
 
 
-# ── Internal: ALU macro ──────────────────────────────────────────────────────
 
 class _RegOp(Macro):
     """Store ALU result in-place: ``dst = dst {op} src``.
@@ -86,6 +86,18 @@ class _RegOp(Macro):
     """
 
     def expand(self, prog):
+        """Return the expand result.
+
+        Parameters
+        ----------
+        prog : Any
+            Value for ``prog``.
+
+        Returns
+        -------
+        Any
+            Result of the operation.
+        """
         dst = prog._get_reg(self.dst)
         src = "#%d" % self.src if isinstance(self.src, int) else prog._get_reg(self.src)
         return [
@@ -96,7 +108,6 @@ class _RegOp(Macro):
         ]
 
 
-# ── Gate encoding ────────────────────────────────────────────────────────────
 
 _GATE_CODES: dict[str, int] = {
     "I":    0,
@@ -118,7 +129,6 @@ _INTERLEAVED_FILE_SUFFIX: dict[str, str] = {
 }
 
 
-# ── QICK Program ─────────────────────────────────────────────────────────────
 
 class RBAsmProgram(BaseProgram):
     """QICK program: ASMv2 DMEM dispatch loop for RB.
@@ -152,13 +162,13 @@ class RBAsmProgram(BaseProgram):
     def compile_datamem(self):
         """Pack the gate sequence into dmem (8 codes per int32 word).
 
-        Bit layout of each 32-bit word::
+                        Bit layout of each 32-bit word::
 
-            bits  3: 0  → gate code for position 8k+0
-            bits  7: 4  → gate code for position 8k+1
-            bits 11: 8  → gate code for position 8k+2
-            ...
-            bits 31:28  → gate code for position 8k+7
+                            bits  3: 0  → gate code for position 8k+0
+                            bits  7: 4  → gate code for position 8k+1
+                            bits 11: 8  → gate code for position 8k+2
+                            ...
+                            bits 31:28  → gate code for position 8k+7
 
         Returns
         -------
@@ -193,12 +203,10 @@ class RBAsmProgram(BaseProgram):
         if cfg.get("cooling", False):
             self.cooling_body(cfg)
 
-        # ── initialise unpack registers ──────────────────────────────────
         self.write_reg("shift_reg", 0)
         self.write_reg("word_addr", 0)
         self.read_dmem("word_reg", "word_addr")   # preload word 0
 
-        # ── hardware loop ────────────────────────────────────────────────
         self.open_loop(len(cfg["gate_seq"]), name="gate_idx")
 
         # decode: gate_code = (word_reg >> shift_reg) & 0xF
@@ -250,7 +258,6 @@ class RBAsmProgram(BaseProgram):
         self.pulse(ch=ch, name=f"y90m_{pfx}", t=0)
         self.delay(slot)
 
-        # ── advance unpack counters ──────────────────────────────────────
         self.label("POST_GATE")
         self.inc_reg("shift_reg", 4)
         self.cond_jump("NO_WORD_ADVANCE", "shift_reg", "NZ", op="-", arg2=32)
@@ -265,7 +272,6 @@ class RBAsmProgram(BaseProgram):
         self.measure(cfg)
 
 
-# ── Experiment ───────────────────────────────────────────────────────────────
 
 class RandomizedBenchmarkingAsm(BaseExperiment):
     """Single-qubit RB using ASMv2 DMEM dispatch (constant pmem).
@@ -296,6 +302,13 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
     Analysis   = RBAnalysis
 
     def __init__(self, config):
+        """Initialize the RandomizedBenchmarkingAsm instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         super().__init__(config)
         self.cfg          = config
         self.x            = None
@@ -377,15 +390,21 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             print(f"  Depth order: {self.x[depth_indices].tolist()}")
 
         rb_result: list = [None] * n_depths
+        seeds_matrix: list = [None] * n_depths
+        sequences_matrix: list = [None] * n_depths
         for idx in tqdm(depth_indices, desc=desc):
             depth  = self.x[idx]
             rblist = []
+            depth_seeds = []
+            depth_sequences = []
             for _ in tqdm(range(number_sample), desc="Samples", leave=False):
                 child_seed = int(rng.integers(0, 2**31))
                 seqs = single_qb_rb(
                     n_clifford=depth, n_sample=1,
                     interleave=interleaved_gate, seed=child_seed,
                 )
+                depth_seeds.append(child_seed)
+                depth_sequences.append(seqs[0])
                 self.cfg["gate_seq"] = seqs[0]
                 self.cfg["prefix"]   = prefix
                 prog = RBAsmProgram(
@@ -394,12 +413,17 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                     final_delay=self.cfg["relax_delay"],
                     cfg=self.cfg,
                 )
-                iq_data = (
-                    prog.acquire(self.soc, rounds=py_avg, progress=False)[0][0]
-                    .dot([1, 1j])
+                iq_data = acquire_values(
+                    prog,
+                    self.soc,
+                    rounds=py_avg,
+                    progress=False,
+                    scalar_readout=True,
                 )
                 rblist.append(iq_data)
             rb_result[idx] = rblist
+            seeds_matrix[idx] = depth_seeds
+            sequences_matrix[idx] = depth_sequences
 
         self.rb_result = rb_result
 
@@ -407,8 +431,29 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         avg = _proc(np.array(self.rb_result)).mean(axis=1)
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
+            raw_iq=np.asarray(self.rb_result),
             x_axis=self.x.astype(float),
             y_axis=avg,
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "iq_process": iq_process,
+                "number_sample": number_sample,
+                "interleaved_gate": interleaved_gate,
+                "prefix": prefix,
+                "seeds": seeds_matrix,
+                "gate_sequences": sequences_matrix,
+                "randomized_depth_order": self.x[depth_indices].tolist(),
+            },
+            axes={
+                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "sample": {"values": np.arange(number_sample), "unit": "#"},
+            },
+            dataset_dims={"iq": ["depth", "sample"]},
+            analysis_data={"mean_signal": {"values": avg, "dims": ["depth"]}},
+            data_kind="rb",
+            analysis_id="rb",
+            plot_id="rb_decay",
+            avg_count=py_avg,
             quality=QualityFlag.NO_INFORMATION,
         )
         if self.Analysis is not None:
@@ -423,6 +468,8 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         ax=None,
         marker: str = "o",
         show_individual: bool = False,
+        *,
+        plot_analysis: bool = True,
     ):
         """Fit and plot the RB decay curve.
 
@@ -438,6 +485,8 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             Marker style.  Default ``"o"``.
         show_individual : bool, optional
             Scatter individual circuit samples as grey points.
+        plot_analysis : bool, optional
+            Whether to render the analysis figure.
 
         Returns
         -------
@@ -526,7 +575,7 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
 
         save_dir  = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
-        dict_val  = (
+        dict_val = (
             config_all.to_yaml(q_id=qb_idx)
             if config_all is not None
             else config_to_yaml(self.cfg)
@@ -540,13 +589,29 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                     "values": np.array(self.rb_result).T},
             comment=str(dict_val),
             tag="RB",
+            result=self.result,
         )
         print(f"RB data saved to {file_path}")
 
 
-# ── AutoRBAsm ─────────────────────────────────────────────────────────────────
 
 def _gate_fidelity(p_ref: float, p_irb: float, d: int = 2):
+    """Return the gate fidelity result.
+
+    Parameters
+    ----------
+    p_ref : float
+        Value for ``p_ref``.
+    p_irb : float
+        Value for ``p_irb``.
+    d : int, default: 2
+        Value for ``d``.
+
+    Returns
+    -------
+    Any
+        Result of the operation.
+    """
     epc = (d - 1) / d * (1 - p_irb / p_ref)
     return 1 - epc, epc
 
@@ -556,6 +621,26 @@ def _gate_fidelity_err(
     var_p_ref: float, var_p_irb: float,
     d: int = 2,
 ) -> float:
+    """Return the gate fidelity err result.
+
+    Parameters
+    ----------
+    p_ref : float
+        Value for ``p_ref``.
+    p_irb : float
+        Value for ``p_irb``.
+    var_p_ref : float
+        Value for ``var_p_ref``.
+    var_p_irb : float
+        Value for ``var_p_irb``.
+    d : int, default: 2
+        Value for ``d``.
+
+    Returns
+    -------
+    float
+        Result of the operation.
+    """
     c = (d - 1) / d
     return float(
         np.sqrt((c * p_irb / p_ref**2) ** 2 * var_p_ref
@@ -584,6 +669,13 @@ class AutoRBAsm:
     """
 
     def __init__(self, config):
+        """Initialize the AutoRBAsm instance.
+
+        Parameters
+        ----------
+        config : Any
+            Experiment configuration.
+        """
         self.cfg           = config
         self._rb_kwargs: dict = {}
         self.results: dict    = {}
@@ -621,6 +713,9 @@ class AutoRBAsm:
         iq_process : str, optional
             ``"abs"`` or ``"real"``.
         """
+        from ...tools.hdf5_store import generate_experiment_id
+
+        session_id = generate_experiment_id()
         self._rb_kwargs = dict(
             max_circuit_depth=max_circuit_depth,
             delta_clifford=delta_clifford,
@@ -634,15 +729,19 @@ class AutoRBAsm:
             label = "ref" if gate is None else gate
             rb = RandomizedBenchmarkingAsm(self.cfg)
             rb.run(py_avg, interleaved_gate=gate, **self._rb_kwargs)
+            rb.result.parent_id = session_id
+            rb.result.session_id = session_id
             self._rb_objects[label] = rb
 
-    def plot(self, show_individual: bool = False):
+    def plot(self, show_individual: bool = False, *, plot_analysis: bool = True):
         """Plot all RB/IRB decay curves and print gate fidelities.
 
         Parameters
         ----------
         show_individual : bool, optional
             Scatter individual circuit samples as grey points.
+        plot_analysis : bool, optional
+            Whether to render the analysis figure.
         """
         fig, ax = plt.subplots(figsize=(8, 6))
         colors  = plt.rcParams["axes.prop_cycle"].by_key()["color"]
