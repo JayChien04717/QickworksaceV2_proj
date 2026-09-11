@@ -5,7 +5,7 @@ __pycache__/
 .idea/
 *.h5
 !example/*.h5
-Data/
+/Data/
 qick/
 *.log
 .DS_Store
@@ -16,7 +16,7 @@ qick/
 .pytest_cache/
 .ruff_cache/
 .test-data/
-data/
+/data/
 dist/
 build/
 *.egg-info/

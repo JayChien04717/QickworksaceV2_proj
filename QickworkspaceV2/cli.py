@@ -18,8 +18,6 @@ def main():
     serve = sub.add_parser("serve")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
-    export = sub.add_parser("export-blueprint")
-    export.add_argument("directory")
     args = parser.parse_args()
     from QickworkspaceV2 import Session
 
@@ -36,7 +34,9 @@ def main():
     if args.command == "validate":
         print(json.dumps(device.summary(), indent=2, ensure_ascii=False))
     elif args.command == "catalog":
-        print(json.dumps(registry.catalog(), indent=2))
+        from QickworkspaceV2.runtime.catalog import catalog_payload
+
+        print(json.dumps(catalog_payload(registry), indent=2))
     elif args.command == "run":
         session = Session.from_project(args.project)
         result = session.run(args.experiment, target=args.target, **json.loads(args.parameters))
@@ -50,10 +50,6 @@ def main():
         from QickworkspaceV2.runtime.service import create_app
 
         uvicorn.run(create_app(Session.from_project(args.project)), host=args.host, port=args.port, workers=1)
-    elif args.command == "export-blueprint":
-        from QickworkspaceV2.integrations.nvidia import export_wrappers
-
-        print("\n".join(str(p) for p in export_wrappers(registry, args.directory)))
 
 
 if __name__ == "__main__":

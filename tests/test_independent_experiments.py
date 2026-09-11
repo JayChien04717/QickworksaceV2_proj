@@ -10,15 +10,17 @@ def test_each_experiment_owns_native_protocol_and_schema(session):
     for name in EXPERIMENT_MODULES:
         module = import_module("QickworkspaceV2.experiments." + name)
         spec = session.registry.get(name)
-        assert spec.build.__module__ == module.__name__
-        assert spec.parameters.__module__ == module.__name__
+        assert spec.build.__module__ == module.__name__ + ".program"
+        assert spec.parameters.__module__ == module.__name__ + ".parameters"
         programs = [
             v
             for v in vars(module).values()
-            if inspect.isclass(v) and v.__module__ == module.__name__ and v.__name__.endswith("Program")
+            if inspect.isclass(v) and v.__module__ == module.__name__ + ".program" and v.__name__.endswith("Program")
         ]
         assert len(programs) == 1
-        assert "_initialize" in vars(programs[0]) and "_body" in vars(programs[0])
+        assert hasattr(programs[0], "_initialize") and hasattr(programs[0], "_body")
+        assert programs[0].EXPERIMENT is spec
+        assert callable(spec.plot)
         if name.endswith(("_ge", "_ef")):
             assert "transition" not in spec.parameters.model_fields
 

@@ -6,6 +6,8 @@ from .base import ExperimentRegistry
 EXPERIMENT_MODULES = (
     "time_of_flight",
     "resonator_spec",
+    "resonator_punchout",
+    "broadband_resonator_spectrum",
     "single_shot",
     "qubit_spec_ge",
     "qubit_spec_ef",
@@ -32,6 +34,11 @@ EXPERIMENT_MODULES = (
     "drag_ef",
     "resonator_flux",
     "twpa_probe",
+    "active_reset_rabi",
+    "single_shot_gef",
+    "qubit_temperature",
+    "dispersive",
+    "ckp",
 )
 
 

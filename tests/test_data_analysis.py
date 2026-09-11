@@ -2,7 +2,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from QickworkspaceV2 import TraceData, ExperimentData
-from QickworkspaceV2.analysis import fit_curve, train_classifier, joint_probabilities
+from QickworkspaceV2.analysis import fit_exponential, fit_ramsey, train_classifier, joint_probabilities
 
 
 def test_accepted_data_roundtrip(accepted_record, tmp_path):
@@ -15,11 +15,11 @@ def test_accepted_data_roundtrip(accepted_record, tmp_path):
 
 def test_degenerate_data_not_calibrated():
     x = np.linspace(0, 100, 100)
-    assert not fit_curve("exponential", x, np.ones(100)).success
+    assert not fit_exponential(x, np.ones(100)).success
     y = np.exp(-x / 25)
     y[3] = np.nan
-    assert not fit_curve("exponential", x, y).success
-    assert not fit_curve("ramsey", [0, 1, 2], [0, 1, 0]).success
+    assert not fit_exponential(x, y).success
+    assert not fit_ramsey([0, 1, 2], [0, 1, 0]).success
 
 
 def test_analysis_failure_keeps_raw(session):

@@ -166,9 +166,11 @@ def create_app(session):
     def describe_device():
         return jsonable({"device": session.device.summary(), "capabilities": session.backend.capabilities()})
 
-    @app.get("/experiments")
+    @app.get("/catalog")
     def catalog():
-        return session.catalog()
+        from QickworkspaceV2.runtime.catalog import catalog_payload
+
+        return catalog_payload(session.registry)
 
     @app.post("/experiments/check")
     def check(request: RunRequest):
@@ -261,10 +263,10 @@ def create_app(session):
         job = get_job(job_id)
         if job["status"] != "completed":
             raise HTTPException(409, job)
-        from QickworkspaceV2.integrations.nvidia import to_blueprint
+        from QickworkspaceV2.data.transport import to_worker_result
 
         record = session.load(job["run_id"])
-        payload = to_blueprint(record, artifact_dir=session.store.directory(job["run_id"]))
+        payload = to_worker_result(record, artifact_dir=session.store.directory(job["run_id"]))
         payload["metadata"].update(
             acquisition_status="completed",
             quality=record.quality.value,

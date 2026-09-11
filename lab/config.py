@@ -21,4 +21,12 @@ def make_config():
     # Constant readout has no envelope. Use "flat_top" to apply res_sigma.
     config_all.update_all(res_pulse_type="const")
     # config_all["Q1"].update(qb_freq_ge=2872.65, pi_gain_ge=0.2)
+    # Chip-specific tuning examples (leave commented until measured):
+    # config_all["Q1"].update(sigma_ge=0.05, sigma_ef=0.05,
+    #                         ro_length=4.0, trig_time=0.5,
+    #                         ro_phase=0.0, ro_threshold=0.01)
+    # Per-experiment settings belong in qb.for_run(...):
+    # TOF: check_e=False, check_f=False, tof_threshold=None (envelope ADC units).
+    # GE/EF spectroscopy and Rabi: qb_gain_ge/ef, sigma_ge/ef, pulse_type_ge/ef.
+    # Single shot: ro_threshold=None trains a classifier; a number evaluates it.
     return config_all

@@ -226,7 +226,10 @@ def test_edited_envelopes_do_not_overlap_ge_ef_or_gate_layers(sigma, config_all,
 
     class GatePair(BaseProgram):
         def _initialize(self, cfg):
-            self.setup_device(cfg, gates=True)
+            for qc in cfg["qubits"].values():
+                self.setup_qubit_gen(qc, cfg["transition"])
+                self.setup_standard_gates(qc, cfg["transition"])
+            self.setup_readout(cfg)
 
         def _body(self, cfg):
             self.qubit("Q1").halfx()

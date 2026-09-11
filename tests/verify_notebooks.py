@@ -32,7 +32,7 @@ def verify():
     report = {"hardware_acquired": False, "notebooks": {}, "script_compiled": False}
     with TemporaryDirectory(prefix="qick-compile-") as directory:
         compiler = Measurement(None, QickConfig(config), data_path=directory)
-        for path in [ROOT / "QickworkspaceV2.ipynb", *sorted((ROOT / "notebooks").glob("*.ipynb"))]:
+        for path in [ROOT / "QickworkspaceV2.ipynb", ROOT / "ChipCalibration.ipynb", *sorted((ROOT / "notebooks").glob("*.ipynb"))]:
             book = nbformat.read(path, as_version=4)
             nbformat.validate(book)
             namespace = {"__name__": "__notebook__"}
@@ -46,6 +46,9 @@ def verify():
                     continue
                 ast.parse(source, filename=f"{path.name}:cell{index + 1}")
                 if role in ("imports", "configuration", "definition", "prepare"):
+                    if cell.metadata.get("requires_readout_calibration"):
+                        # Compiler fixture only; no measured calibration or file write.
+                        namespace["qb"].update(ro_threshold=0.01, ro_phase=0)
                     exec(compile(source, str(path), "exec"), namespace)
                 if role == "prepare":
                     program = compiler.compile(namespace["Program"], namespace["run_cfg"])

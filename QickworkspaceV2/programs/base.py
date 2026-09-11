@@ -28,6 +28,13 @@ class BaseProgram(AveragerProgramV2):
             **kwargs,
         )
 
+    def make_program(self):
+        # Reset compile-time gate frames on every compilation, without declaring
+        # hardware. Each experiment initializes its channels and pulses explicitly.
+        self.qubits = {q: Qubit(self, self.cfg["qubits"][q], self.cfg["transition"])
+                       for q in self.cfg["targets"]}
+        return super().make_program()
+
     def add_sweep_loop(self, cfg, value, default="sweep"):
         """Use the loop name written in the user's QickSweep1D, without translating it."""
         loops = tuple(getattr(value, "spans", {}))
@@ -67,7 +74,7 @@ class BaseProgram(AveragerProgramV2):
 
     def setup_resonator(self, cfg, prefix="ge"):
         if cfg.get("readout_mode") == "mux":
-            raise ValueError("Use setup_device for a multiplexed readout group")
+            raise ValueError("Use setup_readout for a multiplexed readout group")
         self.declare_gen_auto(cfg["res_ch"], cfg["nqz_res"], "res_mixer", cfg)
         ch = cfg["ro_ch"]
         freq = cfg.get(f"res_freq_{prefix}", cfg["res_freq_ge"])
@@ -188,16 +195,12 @@ class BaseProgram(AveragerProgramV2):
                 gain_key=f"{gain}_gain_{prefix}",
             )
 
-    def setup_device(self, cfg, *, gates=False):
+    def setup_readout(self, cfg):
+        """Declare resonator generators, ADCs and readout pulses together.
+
+        Qubit drive channels and gate pulses are declared by the experiment.
+        """
         self._using_device_helpers = True
-        self.qubits = {}
-        self._parallel_channels = None
-        for q in cfg["targets"]:
-            qc = cfg["qubits"][q]
-            self.setup_qubit_gen(qc, cfg.get("transition", "ge"))
-            self.qubits[q] = Qubit(self, qc, cfg.get("transition", "ge"))
-            if gates:
-                self.setup_standard_gates(qc, cfg.get("transition", "ge"))
         for group_id, group in cfg["readout_groups"].items():
             active = [q for q in cfg["targets"] if q in group["members"]]
             if not active:

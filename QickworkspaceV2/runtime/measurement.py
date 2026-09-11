@@ -1,16 +1,16 @@
 """Direct notebook acquisition: native Program + editable run_cfg, without a recipe schema."""
 
 from copy import deepcopy
-from importlib import import_module
 from uuid import uuid4
 import math
+import numpy as np
 
 from QickworkspaceV2.backends import QICKBackend, AcquisitionCancelled
 from QickworkspaceV2.backends.qick import extract_coords
 from QickworkspaceV2.device.editable import prepare_program_config
 from QickworkspaceV2.experiments.base import ProgramPlan
 from QickworkspaceV2.programs.sweeps import Sweep
-from QickworkspaceV2.data.models import ExperimentData
+from QickworkspaceV2.data.models import ExperimentData, TraceData
 from QickworkspaceV2.data.store import RunStore, atomic_json
 from QickworkspaceV2.data.serialization import jsonable
 from .session import _hardware_lease, _code_record, _versions, _range
@@ -75,6 +75,17 @@ def infer_axes(program):
     return tuple(axes)
 
 
+def readout_frequency(program):
+    """Read the compiled readout frequency for a direct or MUX host scan."""
+    q = program.cfg["targets"][0]
+    qc = program.cfg["qubits"][q]
+    if qc["readout_mode"] == "mux":
+        group = program.cfg["readout_groups"][qc["readout_group"]]
+        slot = group["members"][q]["tone_slot"]
+        return float(program.gen_chs[qc["res_ch"]]["mux_tones"][slot]["freq_rounded"])
+    return float(program.get_pulse_param(q + "__res_pulse", "freq", as_array=True))
+
+
 def validate_native_config(cfg):
     """Validate edited physical channels and gains without restricting experiment-specific keys."""
     adc = set()
@@ -120,6 +131,8 @@ class Measurement:
         self.backend = QICKBackend(soc, soccfg, resource_id=resource_id)
         self.store = RunStore(data_path)
         self.last_program = None
+        self.last_result = None
+        self.last_run_id = None
 
     @classmethod
     def from_pyro4(cls, ns_host, ns_port=8888, proxy_name="myqick", *, data_path="data"):
@@ -135,7 +148,12 @@ class Measurement:
         return self.backend.soccfg
 
     def compile(self, program, run_cfg):
-        cfg = prepare_program_config(run_cfg, getattr(program, "TRANSITION", None))
+        transition = (
+            program.transition_for(run_cfg)
+            if hasattr(program, "transition_for")
+            else getattr(program, "TRANSITION", None)
+        )
+        cfg = prepare_program_config(run_cfg, transition)
         validate_native_config(cfg)
         processors = self.soccfg["tprocs"]
         if len(processors) != 1 or processors[0].get("type") != "qick_processor":
@@ -163,15 +181,11 @@ class Measurement:
         averages = run_cfg.get("soft_avgs", 1) if py_avg is None else py_avg
         if not isinstance(averages, int) or isinstance(averages, bool) or averages < 1:
             raise ValueError("py_avg must be a positive integer")
-        module = import_module(program.__module__)
-        spec = (
-            getattr(module, "experiment", None)
-            if program.__module__.startswith("QickworkspaceV2.experiments.")
-            else None
-        )
+        spec = program.__dict__.get("EXPERIMENT")
         identifier = spec.id if spec else program.__name__
         analyzer = (spec.analyze if spec else None) if analyze == "auto" else analyze
         run_id = uuid4().hex
+        self.last_run_id, self.last_result = run_id, None
         metadata = {
             "targets": list(run_cfg.get("targets", [run_cfg.get("name", "Q1")])),
             "parameters": jsonable(run_cfg),
@@ -188,7 +202,7 @@ class Measurement:
             with self.backend.lock, _hardware_lease(self.backend.resource_id):
                 compiled = self.compile(program, run_cfg)
                 cfg = compiled.cfg
-                default_events = ("ground", "excited") if identifier == "single_shot" else ()
+                default_events = tuple(getattr(compiled, "READOUT_EVENTS", ()))
                 events = tuple(default_events if readout_events is None else readout_events)
                 counts = {ro["trigs"] for ro in compiled.ro_chs.values()}
                 if len(counts) != 1 or not counts or next(iter(counts)) < 1:
@@ -200,7 +214,19 @@ class Measurement:
                     raise ValueError("readout_events differ from compiled trigger count")
                 bindings = infer_axes(compiled) if axes is None else tuple(axes)
                 mode = getattr(program, "ACQUISITION_MODE", None)
-                shot_mode = (identifier == "single_shot") if capture_shots is None else capture_shots
+                shot_mode = (
+                    getattr(program, "CAPTURE_SHOTS", False) if capture_shots is None else capture_shots
+                )
+                if metadata["iq_process"] == "population":
+                    if mode == "decimated":
+                        raise ValueError("Decimated TOF traces do not contain single-shot populations")
+                    if capture_shots is False:
+                        raise ValueError("Population analysis requires capture_shots=True")
+                    if any(qc.get("ro_threshold") is None for qc in cfg["qubits"].values()):
+                        raise ValueError(
+                            "Set each selected qubit's ro_threshold before population acquisition"
+                        )
+                    shot_mode = True
                 plan = ProgramPlan(
                     program, cfg, bindings, events, shot_mode, metadata={"acquisition_mode": mode}
                 )
@@ -227,8 +253,19 @@ class Measurement:
                     if scale != 1:
                         for trace in preview.values():
                             trace.coords[bindings[0].name] *= scale
-                    partial = ExperimentData(identifier, preview, metadata=metadata, run_id=run_id)
+                    partial = ExperimentData(
+                        identifier,
+                        preview,
+                        metadata={
+                            **metadata,
+                            "acquisition_status": "partial",
+                            "completed_averages": done,
+                            "requested_averages": total,
+                        },
+                        run_id=run_id,
+                    )
                     partial.save(directory / "partial.h5")
+                    self.last_result = partial
                     if on_progress:
                         on_progress(
                             {"state": "acquiring", "completed": done, "total": total, "result": partial}
@@ -240,8 +277,12 @@ class Measurement:
                 if scale != 1:
                     for trace in traces.values():
                         trace.coords[bindings[0].name] *= scale
+                metadata.update(
+                    acquisition_status="completed", completed_averages=averages, requested_averages=averages
+                )
                 result = ExperimentData(identifier, traces, metadata=metadata, run_id=run_id)
                 self.store.save_acquisition(result)
+                self.last_result = result
                 if analyzer is not None:
                     try:
                         result.fits = analyzer(result)
@@ -257,12 +298,153 @@ class Measurement:
                     on_progress({"state": "completed", "result": result})
                 return result
         except BaseException as exc:
+            if isinstance(exc, (AcquisitionCancelled, KeyboardInterrupt)) and self.last_result is not None:
+                if self.last_result.metadata.get("acquisition_status") == "partial":
+                    self.last_result.metadata["interrupted"] = True
+                    self.last_result.save(directory / "partial.h5")
             self.store.status(
                 run_id,
                 "cancelled" if isinstance(exc, (AcquisitionCancelled, KeyboardInterrupt)) else "failed",
                 str(exc),
             )
             raise
+        finally:
+            from QickworkspaceV2.plotting import LivePlot
+
+            if isinstance(on_progress, LivePlot):
+                on_progress.close()
 
     def load(self, run_id, **kwargs):
         return self.store.load(run_id, **kwargs)
+
+    def analyze(self, result, analyzer):
+        """Analyze saved acquisition without reacquiring; persist a separate revision."""
+        if not callable(analyzer):
+            raise TypeError("analyzer must be a callable taking ExperimentData")
+        # Analyze a fresh raw copy so repeated analysis cannot accumulate mutations.
+        run_id = result.run_id if isinstance(result, ExperimentData) else result
+        partial = not (self.store.directory(run_id) / "acquisition.h5").exists()
+        analyzed = self.load(run_id, revision=0, partial=partial)
+        try:
+            analyzed.fits = analyzer(analyzed)
+            analyzed.analysis_status = "completed"
+            analyzed.analysis_message = "; ".join(
+                f"{q}: {fit.message}" for q, fit in analyzed.fits.items() if not fit.success
+            )
+        except Exception as exc:
+            analyzed.analysis_status, analyzed.analysis_message = "failed", str(exc)
+        analyzed.metadata["analysis_code"] = _code_record(analyzer)
+        self.store.save_analysis(analyzed, update_status=not partial)
+        if run_id == self.last_run_id:
+            self.last_result = analyzed
+        return analyzed
+
+    def scan(
+        self,
+        program,
+        run_cfg,
+        parameter,
+        values,
+        *,
+        axis_name=None,
+        unit="",
+        coordinate=None,
+        py_avg=None,
+        analyze="auto",
+        on_progress=None,
+        **run_options,
+    ):
+        """One host scan over a single target's editable key, saving every child run.
+
+        Readout frequency coordinates come from the compiled direct/MUX tone.
+        coordinate(program) is optional for custom host parameters. All other
+        sweep axes must agree across points before a rectangular parent is saved.
+        """
+        values = np.asarray(values)
+        if values.ndim != 1 or not len(values) or not np.isfinite(values.astype(float)).all():
+            raise ValueError("Host scan values must be a nonempty finite vector")
+        if "qubits" in run_cfg:
+            raise ValueError("Edit one target per direct host scan")
+        if coordinate is None and parameter == "res_freq_ge":
+            coordinate = readout_frequency
+        axis_name = axis_name or parameter
+        parent_id = uuid4().hex
+        self.last_result, self.last_run_id = None, None
+        children, actual = [], []
+        parent = None
+
+        def assemble(status):
+            traces = {}
+            for q, first in children[0].traces.items():
+                if axis_name in first.dims:
+                    raise ValueError("Host axis conflicts with an inner dimension; child runs remain saved")
+                for child in children[1:]:
+                    trace = child[q]
+                    if trace.dims != first.dims or any(
+                        not np.array_equal(trace.coords[d], first.coords[d]) for d in first.dims
+                    ):
+                        raise ValueError("Inner coordinates differ; use the saved child runs")
+                shots = None if first.shots is None else np.stack([child[q].shots for child in children])
+                traces[q] = TraceData(
+                    np.stack([child[q].iq for child in children]),
+                    (axis_name, *first.dims),
+                    {axis_name: np.asarray(actual), **first.coords},
+                    {axis_name: unit, **first.units},
+                    shots=shots,
+                    shot_dims=(axis_name, *first.shot_dims) if shots is not None else (),
+                    metadata=deepcopy(first.metadata),
+                )
+            metadata = {
+                **children[0].metadata,
+                "host_scan_parameter": parameter,
+                "child_runs": [r.run_id for r in children],
+                "requested_values": values.tolist(),
+                "completed_points": len(children),
+                "requested_points": len(values),
+                "acquisition_status": status,
+                "host_coordinate_source": "compiled" if coordinate else "requested",
+            }
+            return ExperimentData(children[0].experiment, traces, metadata=metadata, run_id=parent_id)
+
+        try:
+            for index, value in enumerate(values):
+                cancel = run_options.get("cancel")
+                if cancel is not None and cancel.is_set():
+                    raise AcquisitionCancelled("Host scan cancelled between points")
+                cfg = deepcopy(run_cfg)
+                cfg[parameter] = value.item()
+                child = self.run(program, cfg, py_avg=py_avg, analyze=analyze, **run_options)
+                children.append(child)
+                actual.append(float(coordinate(self.last_program) if coordinate else value))
+                parent = assemble("partial")
+                if index == 0:
+                    self.store.begin(parent_id, parent.experiment, parent.metadata)
+                parent.save(self.store.directory(parent_id) / "partial.h5")
+                self.last_run_id, self.last_result = parent_id, parent
+                if on_progress:
+                    on_progress(
+                        {"state": "acquiring", "completed": index + 1, "total": len(values), "result": parent}
+                    )
+            parent = assemble("completed")
+            self.store.save_acquisition(parent)
+            self.store.save_analysis(parent)
+            self.last_run_id, self.last_result = parent_id, parent
+            if on_progress:
+                on_progress({"state": "completed", "result": parent})
+            return parent
+        except BaseException as exc:
+            if parent is not None:
+                if self.last_run_id != parent_id:
+                    parent.metadata["interrupted_child_run"] = self.last_run_id
+                parent.metadata["interrupted"] = isinstance(exc, (KeyboardInterrupt, AcquisitionCancelled))
+                parent.save(self.store.directory(parent_id) / "partial.h5")
+                self.store.status(
+                    parent_id, "cancelled" if parent.metadata["interrupted"] else "failed", str(exc)
+                )
+                self.last_run_id, self.last_result = parent_id, parent
+            raise
+        finally:
+            from QickworkspaceV2.plotting import LivePlot
+
+            if isinstance(on_progress, LivePlot):
+                on_progress.close()

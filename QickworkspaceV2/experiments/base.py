@@ -73,6 +73,7 @@ class ExperimentSpec:
     plot: Callable | None = None
     description: str = ""
     version: str = "1.0.0"
+    updates: Callable | None = None
 
     def schema(self):
         return {

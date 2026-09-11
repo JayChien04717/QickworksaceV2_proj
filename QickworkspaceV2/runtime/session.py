@@ -195,7 +195,7 @@ class Session:
                 )
             occupied[port] = name
             for member in group["members"].values():
-                if abs(member["gain"]) > device.hardware.generators[port].max_gain:
+                if max(map(abs, _range(member["gain"]))) > device.hardware.generators[port].max_gain:
                     raise ValueError(f"Readout {name}: gain exceeds configured port limit")
         if cfg.get("edge"):
             edge = cfg["edge"]
@@ -285,6 +285,7 @@ class Session:
         except (OSError, TypeError):
             source = None
         metadata = {
+            "acquisition_status": "partial",
             "targets": list(plan.cfg["targets"]),
             "parameters": parsed.model_dump(),
             "transition": plan.cfg.get("transition", "ge"),
@@ -346,6 +347,7 @@ class Session:
                 if scale != 1:
                     for trace in traces.values():
                         trace.coords[plan.sweeps[0].name] *= scale
+            metadata["acquisition_status"] = "completed"
             result = ExperimentData(spec.id, traces, metadata, run_id=run_id)
             self.store.save_acquisition(result)
             self._analyze(result, spec)
@@ -355,6 +357,11 @@ class Session:
             state = "cancelled" if isinstance(exc, (AcquisitionCancelled, KeyboardInterrupt)) else "failed"
             self.store.status(run_id, state, str(exc))
             raise
+        finally:
+            from QickworkspaceV2.plotting import LivePlot
+
+            if isinstance(on_progress, LivePlot):
+                on_progress.close()
 
     @staticmethod
     def _compiled_record(program):
@@ -456,7 +463,7 @@ class Session:
             return result
 
     def scan(self, experiment, parameter, values, *, target="Q1", unit="", on_progress=None, **params):
-        """Host outer parameter scan, e.g. readout punchout, using the same run path."""
+        """Host outer parameter scan for procedures that require separate acquisitions."""
         values = np.asarray(values)
         if values.ndim != 1 or not len(values) or not np.isfinite(values.astype(float)).all():
             raise ValueError("Host scan values must be a nonempty finite one-dimensional array")
@@ -519,29 +526,18 @@ class Session:
             raise ValueError("Calibration proposal requires successful, quality-accepted fits")
         if result.metadata["calibration_scope"] != self.scope:
             raise ValueError("Run belongs to a different device/backend calibration scope")
-        transition = result.metadata.get("transition", "ge")
+        from QickworkspaceV2.calibration.updates import accepted_fit
+
+        spec = self.registry.get(result.experiment)
+        if spec.updates is None:
+            raise ValueError("This experiment does not declare calibration updates")
         updates = {}
-        for q, fit in result.fits.items():
-            root = f"qubits.{q}.transitions.{transition}"
-            if result.experiment in ("qubit_spec_ge", "qubit_spec_ef"):
-                updates[root + ".frequency_mhz"] = fit.parameters["center"]
-            elif result.experiment in ("power_rabi_ge", "power_rabi_ef"):
-                updates[root + ".pulse.pi_gain"] = fit.parameters["pi_gain"]
-                updates[root + ".pulse.pi2_gain"] = fit.parameters["pi2_gain"]
-            elif result.experiment in ("single_shot", "resonator_spec"):
-                group = self.device.readout(q)[0]
-                root = f"readout_groups.{group}.members.{q}"
-                keys = (
-                    {"rotation_deg": "rotation_deg", "threshold": "threshold"}
-                    if result.experiment == "single_shot"
-                    else {"frequency_mhz": "center"}
-                )
-                for key, metric in keys.items():
-                    updates[root + "." + key] = fit.parameters[metric]
+        for q in result.targets:
+            accepted_fit(result, q)
+            plan = spec.updates(result, q)
+            updates.update(plan.for_device())
         if not updates:
-            raise ValueError(
-                "This experiment reports metrics without automatic parameter updates; create an explicit proposal after review"
-            )
+            raise ValueError(plan.reason)
         return CalibrationProposal(
             updates,
             result.metadata["calibration_revision"],

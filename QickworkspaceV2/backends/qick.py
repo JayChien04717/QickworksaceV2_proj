@@ -70,6 +70,7 @@ def unpack_iq(program, plan, averaged, raw=None):
                 "adc_channel": channel,
                 "readout_group": qc["readout_group"],
                 "rotation_deg": qc["ro_phase"],
+                "threshold": qc.get("ro_threshold"),
                 "iq_offset_removed": False,
             },
         )

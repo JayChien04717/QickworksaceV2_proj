@@ -20,6 +20,8 @@ from QickworkspaceV2.backends.qick import extract_coords, unpack_iq
         "coupler_chevron",
         "allxy",
         "randomized_benchmarking",
+        "dispersive",
+        "ckp",
     ],
 )
 def test_real_qick_compiler(name, device, native_config, tmp_path):
@@ -155,7 +157,9 @@ def test_qubit_envelope_cache_preserves_distinct_shapes(device, native_config, t
 
     class Waveforms(BaseProgram):
         def _initialize(self, cfg):
-            self.setup_device(cfg)
+            for qc in cfg["qubits"].values():
+                self.setup_qubit_gen(qc, cfg["transition"])
+            self.setup_readout(cfg)
             qc = cfg["qubits"]["Q1"]
             self.setup_qb_pulse(qc, name="gauss")
             self.setup_qb_pulse(qc, name="same", shape="gaussian", phase=90, gain_override=0.025)
@@ -185,7 +189,9 @@ def test_native_envelope_memory_overflow_rejected_before_acquisition(device, nat
 
     class NativeEnvelopes(BaseProgram):
         def _initialize(self, cfg):
-            self.setup_device(cfg)
+            for qc in cfg["qubits"].values():
+                self.setup_qubit_gen(qc, cfg["transition"])
+            self.setup_readout(cfg)
             for name in ("first", "second"):
                 self.add_gauss(ch=1, name=name, sigma=0.2, length=1.0, even_length=True)
 

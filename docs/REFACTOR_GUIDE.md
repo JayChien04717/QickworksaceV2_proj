@@ -1,3 +1,7 @@
+> 日常晶片校正介面與目前實驗目錄結構請先看 [Notebook API](NOTEBOOK_API.md)。下文的直接 Measurement／native Program 範例仍供進階開發使用。
+
+> 目前自動化已改為 live worker catalog；不需產生腳本。最新清理與驗證見 [catalog 清理紀錄](../../docs/V2_CATALOG_CLEANUP.md)。下方既有日期／測試數量屬於對應歷史驗證。
+
 # QickworkspaceV2 重構說明：從目錄到每一次量測
 
 本文件對應目前重構後的專案，說明改了什麼、各層負責什麼，以及日常最常用的 API 實際做了哪些事。說明使用繁體中文；目前使用的兩本 Notebook，其標題、說明、程式註解與提示字串使用英文。
@@ -21,7 +25,7 @@
 | 多 qubit | 固定 qubit ID、generator、digital ADC、readout group、MUX tone slot | 同一套流程可選 Q1、Q2 或更多 qubit，資料不靠位置猜對應 |
 | 實驗粒度 | 28 個實驗分成獨立檔案，GE／EF 各自擁有 program 和分析入口 | 可獨立改 `t1_ge.py`，不必連帶修改 `t1_ef.py` |
 | 日常執行 | 新增直接接受 `Program + run_cfg` 的 `Measurement` | 直接使用改好的參數，不重新跑 recipe build |
-| 自動化 | 保留 `Session + ExperimentSpec`，提供參數驗證、校正與 worker | Blueprint 可以用簡單參數呼叫同一個 native program |
+| 自動化 | 保留 `Session + ExperimentSpec`，提供參數驗證、校正與 worker | Agent 可以用簡單參數呼叫同一個 native program |
 | 資料 | 使用帶有 dims、coords、units 的複數 IQ 與 shots | 保留多 ADC、多 readout event、多維掃描與 shot 對應 |
 | Fitting／plot | 分成資料、數學模型、分析結果與繪圖 | 分析失敗仍可保存並重讀原始量測 |
 | 校正 | 工作字典與持久 calibration store 分開；store 使用 proposal、revision | 不會因為量到一個 extrema 就暗中覆寫正式校正 |
@@ -52,7 +56,6 @@ QickworkspaceV2_proj-main/
 │   │   ├── direct/               獨立讀出：hardware.yaml + device.yaml
 │   │   └── mux/                  多 tone 共用讀出：hardware.yaml + device.yaml
 │   ├── procedures/               DC flux、TWPA power/frequency/flux 流程
-│   └── blueprint_scripts/        給 NVIDIA discovery 使用的 wrappers
 ├── notebooks/
 │   └── advanced_measurements.ipynb
 ├── QickworkspaceV2/               共用 SDK
@@ -81,27 +84,25 @@ QickworkspaceV2_proj-main/
 | 工具 | 做什麼 | 何時用 | 會不會量測 |
 |---|---|---|---|
 | `tests/verify_notebooks.py` | 檢查 notebook 格式與語法；以真正 QICK compiler 編譯主 notebook 的 program/config 與 `measure.py` 設定 | 改 notebook、program、config helper 後 | 不連線，不執行 acquisition 格 |
-| `tests/verify_blueprint.py` | 用提供的 NVIDIA core 原始碼驗證 wrapper discovery、JSON、array、PNG 與儲存合約 | 改 Blueprint adapter／wrapper 後 | 不連線，使用明確的數值資料 fixture 測合約 |
 
 三種名稱容易混淆：
 
 - 根目錄 **`measure.py`** 是人直接執行的量測腳本。
-- **`lab/blueprint_scripts/`** 是讓 agent 發起實際量測的 wrappers，會呼叫 worker。
 - **`tests/`** 是檢查前述功能的測試與維護工具。
 
 SDK、`measure.py` 和正式 notebook 不依賴 `tests/` 執行量測。保留驗證工具是為了日後修改實驗時，能檢查編譯、資料與橋接是否仍正確。
 
-驗證工具會使用額外依賴。Notebook checker 需要 QICK、nbformat 與 `tests/fixtures/qick_testbench.json`；Blueprint checker 需要本機提供官方 core 目錄，不會自行下載。後者會在 `.test-data/` 產生合約測試產物，並更新驗證報告。
+Notebook checker 需要 QICK、nbformat 與 `tests/fixtures/qick_testbench.json`。Worker 合約由 `tests/test_service.py`、`tests/test_catalog.py` 驗證，不連線實體儀器。
 
 ### 清掉了哪些不必要的檔案？
 
 - `lab/experiments/custom_t1.py` 和該目錄的初始化檔：重複的示範。正式 T1 GE／EF 已各有獨立模組；自訂 pulse／gate Program 範例保留在主 Notebook，方便直接修改。
 - `experiments/object_api.py` 與 `experiments/contracts.py`：沒有執行入口依賴的包裝與轉匯出層。公開型別直接從實際定義的模組匯出，移除未使用的 `BaseExperiment` wrapper。
 - 舊架構、authoring、migration 文件、Notebook 導覽頁：內容整合到本文件與根目錄 README，避免維護多份互相過時的說明。
-- 重構前的設計審查報告和歷史清理清單：已由目前架構說明取代；真正 compiler、Notebook 和 Blueprint 的驗證紀錄仍保留。
+- 重構前的設計審查報告和歷史清理清單：已由目前架構說明取代；真正 compiler、Notebook 和 Agent 的驗證紀錄仍保留。
 - 維護產生的快取與暫存輸出：完成檢查後清除。
 
-`lab/blueprint_scripts/` 的 28 個 wrappers 是 NVIDIA discovery 的入口，`lab/procedures/` 是可執行的儀器流程，兩者都有用途。`archive/v1/` 則保留原始實驗與資料作為遷移查閱來源；新 SDK 不會載入它。
+`lab/procedures/` 維護獨立的儀器流程。自動化從 worker `GET /catalog` 取得目前 registry 的完整 schema；不保留 wrappers 或 AST discovery。`archive/v1/` 保存原始遷移資料，不由 SDK 載入。
 
 ## 3. 整體架構：兩個入口，共用 native program
 
@@ -322,7 +323,7 @@ Editable config 和送進 program 的 resolved cfg 都使用相同欄位名稱�
 
 ## 7. 為什麼有 `build(ctx, p)`？
 
-**`build()` 是目前 `Session`／Blueprint 路徑的轉接點。QICK 本身不要求它，直接 Notebook 路徑也不呼叫它。**
+**`build()` 是目前 `Session`／Agent 路徑的轉接點。QICK 本身不要求它，直接 Notebook 路徑也不呼叫它。**
 
 Agent 常傳來這種容易驗證、容易序列化的要求：
 
@@ -425,7 +426,7 @@ result = lab.run(TimeRabiGEProgram, run_cfg, py_avg=5)
 | 在 notebook 自己寫 Program class | 不需要 |
 | 使用內建 Program 搭配自己的 analyzer | 不需要 |
 | 把實驗登錄成 Session 可呼叫的 ID | 目前 Spec contract 需要 |
-| 讓 Blueprint 只傳 start／stop／points 來呼叫 | 由 build 轉換成完整 cfg |
+| 讓 Agent 只傳 start／stop／points 來呼叫 | 由 build 轉換成完整 cfg |
 | 改 agent 可見的參數名稱、defaults、驗證規則 | 需要同步 Parameters 和 build |
 
 這是一個取捨：自動化路徑多維護一個小函式，換取明確、可驗證的對外參數。純人工作業可以只維護 Program。物理 sequence 應持續放在 `_initialize`／`_body`，不要把 build 寫成另一份 sequence。
@@ -501,7 +502,10 @@ class MySpecProgram(BaseProgram):
 ```python
 class MyGateProgram(BaseProgram):
     def _initialize(self, cfg):
-        self.setup_device(cfg, gates=True)
+        for qc in cfg["qubits"].values():
+            self.setup_qubit_gen(qc, cfg["transition"])
+            self.setup_standard_gates(qc, cfg["transition"])
+        self.setup_readout(cfg)
 
     def _body(self, cfg):
         with self.parallel():
@@ -873,18 +877,18 @@ Measurement 的結果沒有 Session calibration 所需的完整 scope/revision �
 
 共用數學模型位於 analysis，共用 pulse helper 位於 programs。修改共用工具可能影響多個實驗；修改單一 module 的 `_body()` 就維持在該實驗的範圍。
 
-主 Notebook 內保留自訂 pulse sequence 和 gate T1 範例，直接修改 Program class 與 cfg 即可。要讓新的實驗也供 Session／agent 使用，再參考 `experiments/t1_ge.py` 加上 Parameters、build、analyze 和 ExperimentSpec；不另放一支重複的 custom T1 示範檔。
+主 Notebook 內保留自訂 pulse sequence 和 gate T1 範例，直接修改 Program class 與 cfg 即可。要讓新的實驗也供 Session／agent 使用，再參考 `experiments/t1_ge/program.py` 加上 Parameters、build、analyze 和 ExperimentSpec；不另放一支重複的 custom T1 示範檔。
 
 ## 16. NVIDIA 與外部儀器如何接入
 
-NVIDIA wrapper 是一個 typed top-level function，參數容易被 discovery 找到。它把要求送到 worker，worker 的 Session 按 experiment ID 驗證／build／量測。回傳 tagged scalar、array、PNG、run ID 和品質資訊；完整 shots 仍由本地 RunStore 保存。
+UI、CLI 與 Agent 從 worker 的 `GET /catalog` 讀取同一份完整 JSON Schema。通用 HTTP client 提交與查詢 jobs；worker 的 Session 按 experiment ID 驗證、build 與量測。回傳 scalar、array、PNG、run ID 與品質資訊；完整 shots 仍由 RunStore 保存。
 
 ```powershell
-.venv/Scripts/qickworkspace export-blueprint lab/blueprint_scripts
+.venv/Scripts/qickworkspace catalog
 .venv/Scripts/qickworkspace serve
 ```
 
-第一個命令只產生 wrappers；第二個建立硬體連線並啟動服務，收到 run request 後才量測。CLI 的 validate／catalog 也不進行 acquisition。
+第一個命令顯示目前 project catalog；第二個建立硬體連線並啟動 worker，收到 run request 後才量測。validate／catalog 不進行 acquisition。
 
 進階擴充可在 project 的 `experiment_modules` 指定 Python module。`Session.from_project()` 讀取 module 的 `EXPERIMENTS` 清單，目前 CLI 讀取單一 `experiment`。若要讓同一個自訂 module 同時支援兩個入口，需提供 `experiment = ExperimentSpec(...)` 與 `EXPERIMENTS = [experiment]`。內建 28 個實驗已註冊，日常使用不需要設定這項。
 
@@ -892,7 +896,7 @@ NVIDIA wrapper 是一個 typed top-level function，參數容易被 discovery �
 
 外部 DC／TWPA 掃描使用 InstrumentAxis 綁定 read/write callback、單位、上下限、resource ID。每個外圈點呼叫原生實驗，保存 setpoint/readback 和 child run；結束或中斷時嘗試恢復初值。恢復可能因實體連線失敗而失敗，這個失敗會留下紀錄並回報，不會被當成成功。
 
-這部分詳細合約另見 [BLUEPRINT.md](BLUEPRINT.md)、`runtime/instrument_scan.py` 與 `lab/procedures/`。
+這部分詳細合約另見 [WORKER.md](WORKER.md)、`runtime/instrument_scan.py` 與 `lab/procedures/`。
 
 ## 17. 平常要改哪一個檔案
 
@@ -901,19 +905,19 @@ NVIDIA wrapper 是一個 typed top-level function，參數容易被 discovery �
 | 改某次量測 gain／範圍／steps | notebook 的 for_run／run_cfg 格，或 measure.py 的 make_run_config |
 | 改之後一連串實驗共用的 pulse 值 | notebook 的 qb.update，或 lab/config.py |
 | 換接線、mixer、ADC、MUX slot | 對應 profile 的 hardware.yaml／device.yaml |
-| 改 T1 GE sequence | experiments/t1_ge.py 的 Program |
-| 只改 T1 EF 的準備／讀出方法 | experiments/t1_ef.py |
+| 改 T1 GE sequence | experiments/t1_ge/program.py 的 Program |
+| 只改 T1 EF 的準備／讀出方法 | experiments/t1_ef/program.py |
 | 新增自己即時測試的 sequence | notebook 內 class；固定後放 experiments 裡獨立的 .py |
 | 改某個實驗的 fit 指標 | 該 module 的 analyze |
 | 改共用數學模型 | analysis 對應模組 |
 | 改所有實驗的圖形 | plotting/plots.py；特殊圖也可自己提供 |
-| 改 agent 可接受參數 | 該 module 的 Parameters 和 build，再重新 export wrappers |
+| 改 agent 可接受參數 | 該 module 的 Parameters 和 build，再重啟 worker 與 backend |
 | 改 TWPA pump power 流程 | lab/procedures/twpa_pump_power.py |
 | 檢查 notebook 是否仍可編譯 | tests/verify_notebooks.py |
 
 ## 18. 驗證紀錄與目前邊界
 
-本次清理後重新執行，**90 項測試與 Ruff 檢查通過**，涵蓋 config 副本、真實 QICK compiler、GE／EF、三 qubit、MUX、量化軸、sigma 改動後的銜接、資料／shots／分析、校正、儀器生命週期與 worker。另有先前 28 個 wrappers 通過官方 Blueprint 合約測試的紀錄，見 [VERIFICATION.md](VERIFICATION.md)。
+本次清理後重新執行，**90 項測試與 Ruff 檢查通過**，涵蓋 config 副本、真實 QICK compiler、GE／EF、三 qubit、MUX、量化軸、sigma 改動後的銜接、資料／shots／分析、校正、儀器生命週期與 worker。另有先前 28 個 wrappers 通過當時的 Blueprint 合約測試的紀錄，見 [VERIFICATION.md](VERIFICATION.md)。
 
 Notebook 英文化保留了 cell 結構與執行邏輯，只更換文字、註解和一個使用者錯誤提示。英文化後已確認兩本 notebook 使用英文、格式與語法正確；主 notebook 17 組設定和 measure.py 通過原生編譯。沒有執行硬體連線／acquisition 格。
 
@@ -930,12 +934,12 @@ Notebook 英文化保留了 cell 結構與執行邏輯，只更換文字、註�
 | BaseProgram／gate handle／wait_pulses | `QickworkspaceV2/programs/base.py` |
 | Sweep binding | `QickworkspaceV2/programs/sweeps.py` |
 | Parameters／BuildContext／ProgramPlan／Spec | `QickworkspaceV2/experiments/base.py` |
-| 使用者貼的 Time Rabi build | `QickworkspaceV2/experiments/time_rabi_ge.py` |
+| 使用者貼的 Time Rabi build | `QickworkspaceV2/experiments/time_rabi_ge/program.py` |
 | 直接 run、infer_axes、cfg 驗證 | `QickworkspaceV2/runtime/measurement.py` |
 | 自動化 prepare／run／scope／proposal | `QickworkspaceV2/runtime/session.py` |
 | Native compile／ADC mapping／shots | `QickworkspaceV2/backends/qick.py` |
 | ExperimentData／TraceData／FitResult | `QickworkspaceV2/data/models.py` |
 | request／acquisition／analysis revisions | `QickworkspaceV2/data/store.py` |
-| scalar／array／PNG adapter | `QickworkspaceV2/integrations/nvidia.py` |
+| scalar／array／PNG adapter | `QickworkspaceV2/data/transport.py` |
 
 最後一個容易混淆的名稱：`device/editable.py` 的 QubitConfig 是日常工作值 view；`device/models.py` 的 QubitConfig 是初始 device schema。日常不需要直接建構兩者，透過 `make_config()` 和 `config_all["Q1"]` 即可。
