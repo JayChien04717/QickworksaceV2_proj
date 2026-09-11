@@ -89,7 +89,9 @@ def test_worker_idempotency_and_payload(session):
         )
         assert conflict.status_code == 409
         payload = client.result(client.wait(first["id"], timeout=15, poll_interval=0.01)["id"])
-        assert payload["status"] == "failed"  # The constant IQ fixture must fail fit quality.
+        assert payload["status"] == "success"
+        assert payload["acquisition_status"] == "completed"
+        assert payload["quality"] == "bad"  # Constant IQ fails fitting, not acquisition.
         assert len(session.store.list()) == 1
         assert payload["metadata"]["calibration_updated"] is False
         assert payload["metadata"]["acquisition_status"] == "completed"

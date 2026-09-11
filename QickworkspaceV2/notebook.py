@@ -12,6 +12,8 @@ import math
 from QickworkspaceV2.data.store import atomic_json
 from QickworkspaceV2.calibration.updates import accepted_fit
 
+_LATEST_RESULT = object()
+
 
 def enable_notebook():
     """Configure inline rendering and SDK source reloading in an IPython kernel."""
@@ -60,6 +62,20 @@ class NotebookLab:
         self._measurement = None
         self.results = {}
         self._rb_reference = None
+
+    def save_labber(self, result=_LATEST_RESULT, path=None, **options):
+        """Export the given result, or the latest measurement, to a Labber log."""
+        if result is _LATEST_RESULT:
+            result = self.last_result
+            if result is None:
+                raise ValueError("No measurement result is available to export")
+        if result is None:
+            return {}  # A disabled external scan did not acquire anything.
+        from QickworkspaceV2.data.labber import save_labber_results
+        saved = (result.save_labber(path, **options) if path is not None
+                 else save_labber_results(result, load=self.load, **options))
+        print("Labber data:", saved)
+        return saved
 
     def connect(self, **connection):
         from QickworkspaceV2.runtime.measurement import Measurement

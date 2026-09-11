@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from threading import Event, RLock
 from uuid import uuid4
 import json
+import hashlib
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from QickworkspaceV2.backends import AcquisitionCancelled
@@ -22,6 +24,7 @@ class RunRequest(BaseModel):
     parameters: dict = Field(default_factory=dict)
     run_options: dict = Field(default_factory=dict)
     request_id: str = Field(default_factory=lambda: uuid4().hex, min_length=1, max_length=128)
+    catalog_revision: str | None = None
 
 
 def create_app(session):
@@ -92,6 +95,7 @@ def create_app(session):
             return
         update(job_id, "running")
         try:
+            require_catalog_revision(request.catalog_revision)
 
             def progress(event):
                 result = event.get("result")
@@ -129,7 +133,7 @@ def create_app(session):
     def health():
         return {
             "status": "ok",
-            "protocol_version": 1,
+            "protocol_version": 2,
             "backend": "qick",
             "hardware_verified": False,
             "connection_state": "proxy_configured" if session.backend.soc is not None else "unconfigured",
@@ -172,8 +176,18 @@ def create_app(session):
 
         return catalog_payload(session.registry)
 
+    def require_catalog_revision(expected):
+        current = catalog()["revision"]
+        if expected != current:
+            raise HTTPException(409, {
+                "code": "catalog_changed", "expected_revision": expected,
+                "current_revision": current, "message": "Reload the catalog and tool declarations before submitting.",
+            })
+
     @app.post("/experiments/check")
     def check(request: RunRequest):
+        if request.catalog_revision is not None:
+            require_catalog_revision(request.catalog_revision)
         try:
             validate_run_options(request)
             spec, parsed, plan, device, defaults, revision = session._prepare(
@@ -227,6 +241,7 @@ def create_app(session):
                 session._prepare(request.experiment, request.parameters, request.run_options)
             except (ValueError, KeyError, TypeError) as exc:
                 raise HTTPException(422, str(exc)) from exc
+            require_catalog_revision(request.catalog_revision)
             job_id, cancel = uuid4().hex, Event()
             with sqlite(db_path) as db:
                 db.execute(
@@ -240,6 +255,15 @@ def create_app(session):
             cancellations[job_id] = cancel
             executor.submit(execute, job_id, request, cancel)
         return get_job(job_id)
+
+    @app.get("/requests/lookup")
+    def lookup_request(request_id: str = Query(min_length=1, max_length=128)):
+        """Read-only recovery, including requests whose submission reply was lost."""
+        with sqlite(db_path) as db:
+            row = db.execute("SELECT id FROM jobs WHERE request_id=?", (request_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Request not found; this lookup never submits a measurement")
+        return get_job(row["id"])
 
     @app.get("/experiments/{job_id}")
     def status(job_id: str):
@@ -267,17 +291,49 @@ def create_app(session):
 
         record = session.load(job["run_id"])
         payload = to_worker_result(record, artifact_dir=session.store.directory(job["run_id"]))
+        # Reaching this endpoint requires the durable job to be completed.
+        # Acquisition state belongs to the worker journal, not analysis metadata.
+        payload.update(status="success", acquisition_status="completed")
+        payload.pop("error", None)
         payload["metadata"].update(
             acquisition_status="completed",
             quality=record.quality.value,
             created_at=record.created_at,
+            parameters=record.metadata.get("parameters", {}),
             **{
                 key: record.metadata[key]
                 for key in ("resolved_config", "device_snapshot", "run_options", "calibration_revision")
                 if key in record.metadata
             },
         )
+        payload["artifacts"] = artifacts(job["run_id"])
         return jsonable(payload)
+
+    def acquisition_file(run_id):
+        try:
+            path = session.store.directory(run_id) / "acquisition.h5"
+            resolved = path.resolve(strict=True)
+            if not resolved.is_relative_to(session.store.root) or resolved != path:
+                raise ValueError("Artifact must be stored directly inside the run store")
+            if not resolved.is_file():
+                raise FileNotFoundError()
+            return resolved
+        except (ValueError, OSError) as exc:
+            raise HTTPException(404, "Unknown acquisition artifact") from exc
+
+    @app.get("/runs/{run_id}/artifacts")
+    def artifacts(run_id: str):
+        path = acquisition_file(run_id)
+        with path.open("rb") as stream:
+            checksum = hashlib.file_digest(stream, "sha256").hexdigest()
+        return [{"name": "acquisition.h5", "run_id": run_id, "size_bytes": path.stat().st_size,
+                 "sha256": checksum, "media_type": "application/x-hdf5",
+                 "url": f"/runs/{run_id}/artifacts/acquisition.h5"}]
+
+    @app.get("/runs/{run_id}/artifacts/acquisition.h5")
+    def download_acquisition(run_id: str):
+        return FileResponse(acquisition_file(run_id), media_type="application/x-hdf5",
+                            filename=f"{run_id}-acquisition.h5")
 
     @app.get("/runs")
     def runs():

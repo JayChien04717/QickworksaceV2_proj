@@ -1,6 +1,7 @@
 """Canonical automation catalog shared by the worker and workspace CLI."""
 
 from QickworkspaceV2.device.models import RunDefaults
+from QickworkspaceV2.data.serialization import digest
 
 
 def catalog_payload(registry):
@@ -16,4 +17,4 @@ def catalog_payload(registry):
                 "description": "Reuse for retries of this logical measurement only.",
             },
         })
-    return {"experiments": entries}
+    return {"experiments": entries, "revision": digest(sorted(entries, key=lambda entry: entry["id"]))}

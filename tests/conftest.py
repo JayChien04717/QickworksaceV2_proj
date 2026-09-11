@@ -76,7 +76,8 @@ def accepted_record():
         {"delay": "us"},
     )
     result = ExperimentData(
-        "t1_ge", {"Q1": trace}, metadata={"targets": ["Q1"], "iq_process": "abs", "test_fixture": True}
+        "t1_ge", {"Q1": trace}, metadata={"targets": ["Q1"], "iq_process": "abs", "test_fixture": True,
+                                        "acquisition_status": "completed"}
     )
     result.fits = analyze(result)
     result.analysis_status = "completed"

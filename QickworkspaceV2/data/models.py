@@ -136,6 +136,11 @@ class ExperimentData:
         from QickworkspaceV2.plotting import plot_result
         return plot_result(self, **kwargs)
 
+    def save_labber(self, path=None, **options):
+        """Export a Labber log with complete V2 data embedded in /metagroup."""
+        from QickworkspaceV2.data.labber import save_labber
+        return save_labber(self, path, **options)
+
     def save(self, path):
         """Atomic standalone HDF5, preserving complex data and every named axis."""
         import h5py

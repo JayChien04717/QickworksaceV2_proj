@@ -71,9 +71,12 @@ def to_worker_result(result, *, artifact_dir=None, max_array_values=20000):
         plot_error = str(exc)
     else:
         plot_error = ""
-    accepted = result.analysis_status != "failed" and (not result.fits or result.is_good())
+    acquisition_status = result.metadata.get("acquisition_status", "unknown")
     payload = {
-        "status": "success" if accepted else "failed",
+        "status": "success" if acquisition_status == "completed" else "failed",
+        "acquisition_status": acquisition_status,
+        "analysis_status": result.analysis_status,
+        "quality": result.quality.value,
         "data": data,
         "plots": plots,
         "metadata": {
@@ -82,6 +85,8 @@ def to_worker_result(result, *, artifact_dir=None, max_array_values=20000):
             "targets": result.metadata["targets"],
             "backend": "qick",
             "analysis_status": result.analysis_status,
+            "acquisition_status": acquisition_status,
+            "quality": result.quality.value,
             "analysis_message": result.analysis_message,
             "plot_error": plot_error,
             "data_path": str(result.path) if result.path else None,
@@ -91,6 +96,6 @@ def to_worker_result(result, *, artifact_dir=None, max_array_values=20000):
             "calibration_updated": False,
         },
     }
-    if not accepted:
-        payload["error"] = result.analysis_message or "Fit quality checks failed"
+    if acquisition_status != "completed":
+        payload["error"] = f"Acquisition is {acquisition_status}"
     return jsonable(payload)
