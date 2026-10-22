@@ -65,14 +65,15 @@ class CalibrationMonitor:
         """
         self._store = store
         self._poll_interval = poll_interval_s
-        self._alert_fn = alert_fn or (lambda q, k: print(f"[Monitor] STALE: {q}/{k}"))
+        self._alert_fn = alert_fn or (
+            lambda q, k: print(f"[Monitor] STALE: {q}/{k}")
+        )
         self._recalibrate_fn = recalibrate_fn
         self._auto_recalibrate = auto_recalibrate
         self._max_age_hours = max_age_hours
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._watched: dict[str, list[str]] = {}  # {qubit: [keys]}
-
 
     def watch(self, qubit: str, keys: list[str] | None = None):
         """Add *qubit* (and optionally specific *keys*) to the watch list.
@@ -106,15 +107,18 @@ class CalibrationMonitor:
             existing = self._watched.get(qubit, [])
             self._watched[qubit] = [k for k in existing if k not in keys]
 
-
     def start(self):
         """Start the background monitoring thread."""
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run, daemon=True, name="CalibMonitor")
+        self._thread = threading.Thread(
+            target=self._run, daemon=True, name="CalibMonitor"
+        )
         self._thread.start()
-        print(f"[CalibrationMonitor] started (poll every {self._poll_interval:.0f} s)")
+        print(
+            f"[CalibrationMonitor] started (poll every {self._poll_interval:.0f} s)"
+        )
 
     def stop(self, timeout: float = 5.0):
         """Signal the thread to stop and wait for it to exit.
@@ -141,7 +145,6 @@ class CalibrationMonitor:
         """
         return self._thread is not None and self._thread.is_alive()
 
-
     def _run(self):
         """Run the operation."""
         while not self._stop_event.wait(self._poll_interval):
@@ -154,11 +157,16 @@ class CalibrationMonitor:
             for key in dynamic_keys:
                 if self._store.is_stale(qubit, key, self._max_age_hours):
                     self._alert_fn(qubit, key)
-                    if self._auto_recalibrate and self._recalibrate_fn is not None:
+                    if (
+                        self._auto_recalibrate
+                        and self._recalibrate_fn is not None
+                    ):
                         try:
                             self._recalibrate_fn(qubit, key)
                         except Exception as exc:
-                            print(f"[CalibrationMonitor] recalibrate failed for {qubit}/{key}: {exc}")
+                            print(
+                                f"[CalibrationMonitor] recalibrate failed for {qubit}/{key}: {exc}"
+                            )
 
     def check_now(self) -> list[tuple[str, str]]:
         """Perform a synchronous check and return ``[(qubit, key), ...]`` for stale entries.

@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
+from IPython.display import clear_output, display, update_display
 from tqdm.auto import tqdm
-from IPython.display import display, clear_output, update_display
 
-from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData
 
 
@@ -29,12 +29,16 @@ class LoopbackProgram(BaseProgram):
         self.has_qb_pulse = False
         self.has_qb_pulse_ef = False
         try:
-            self.setup_qb_pulse(cfg, "ge", name="qb_pulse", gain_key="pi_gain_ge")
+            self.setup_qb_pulse(
+                cfg, "ge", name="qb_pulse", gain_key="pi_gain_ge"
+            )
             self.has_qb_pulse = True
         except Exception:
             pass
         try:
-            self.setup_qb_pulse(cfg, "ef", name="qb_pulse_ef", gain_key="pi_gain_ef")
+            self.setup_qb_pulse(
+                cfg, "ef", name="qb_pulse_ef", gain_key="pi_gain_ef"
+            )
             self.has_qb_pulse_ef = True
         except Exception:
             pass
@@ -97,7 +101,10 @@ class TOF(BaseExperiment):
             Result of the operation.
         """
         return LoopbackProgram(
-            self.soccfg, reps=1, final_delay=self.cfg["relax_delay"], cfg=self.cfg
+            self.soccfg,
+            reps=1,
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
 
     def _extract_sweep_axis(self, prog):
@@ -168,7 +175,9 @@ class TOF(BaseExperiment):
         trig_time = 0.0
         try:
             for i in tqdm(range(py_avg), desc="Software Average Count"):
-                self.iq_list = prog.acquire_decimated(self.soc, rounds=1, progress=False)
+                self.iq_list = prog.acquire_decimated(
+                    self.soc, rounds=1, progress=False
+                )
                 current_iq = self.iq_list[0].dot([1, 1j])
                 iq_sum = current_iq if i == 0 else iq_sum + current_iq
                 self.iqdata = iq_sum / (i + 1)
@@ -177,7 +186,9 @@ class TOF(BaseExperiment):
                 cmin, cmax = np.min(plot_data), np.max(plot_data)
                 span = max(cmax - cmin, 1e-9)
                 ax.set_ylim(cmin - 0.1 * span, cmax + 0.1 * span)
-                title.set_text(f"{self.TITLE_PREFIX} | Average: {i + 1} / {py_avg}")
+                title.set_text(
+                    f"{self.TITLE_PREFIX} | Average: {i + 1} / {py_avg}"
+                )
                 update_display(fig, display_id=plot_id)
         except KeyboardInterrupt:
             interrupted = True
@@ -189,7 +200,9 @@ class TOF(BaseExperiment):
             mean = np.mean(np.abs(self.iqdata))
             cross_idx = np.argmax(np.abs(self.iqdata) > threshold * mean)
             trig_time = float(self.t[cross_idx])
-            final_ax.axvline(trig_time, c="r", ls="--", label=f"TOF: {trig_time:.2f} μs")
+            final_ax.axvline(
+                trig_time, c="r", ls="--", label=f"TOF: {trig_time:.2f} μs"
+            )
             title_text = f"{self.TITLE_PREFIX}, trig = {trig_time:.2f} μs"
             if interrupted:
                 title_text += " (Interrupted)"
@@ -235,6 +248,8 @@ class TOF(BaseExperiment):
         plt.plot(self.t, np.abs(self.iq_list[0].dot([1, 1j])))
         plt.xlabel("Time (us)")
         mean = np.mean(np.abs(self.iq_list[0].dot([1, 1j])))
-        trig = self.t[np.argmax(np.abs(self.iq_list[0].dot([1, 1j])) > threshold * mean)]
+        trig = self.t[
+            np.argmax(np.abs(self.iq_list[0].dot([1, 1j])) > threshold * mean)
+        ]
         plt.axvline(trig, c="r", ls="--")
         plt.title(f"Time of Flight, trig = {round(float(trig), 2)} us")

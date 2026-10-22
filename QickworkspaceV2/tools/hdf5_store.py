@@ -23,7 +23,6 @@ from zoneinfo import ZoneInfo
 import h5py
 import numpy as np
 
-
 SCHEMA_NAME = "qickworkspace.experiment"
 SCHEMA_VERSION = "1.0"
 LOCAL_TIMEZONE = ZoneInfo("Asia/Taipei")
@@ -90,7 +89,9 @@ def generate_experiment_id(timestamp: Optional[datetime] = None) -> str:
         Result of the operation.
     """
     stamp = _as_utc(timestamp).strftime("%Y%m%dT%H%M%S%fZ")
-    random_part = _encode_crockford(int.from_bytes(secrets.token_bytes(8), "big"), 13)
+    random_part = _encode_crockford(
+        int.from_bytes(secrets.token_bytes(8), "big"), 13
+    )
     return f"{stamp}-{random_part}"
 
 
@@ -135,7 +136,9 @@ def _json_default(value: Any):
         return str(value)
     if isinstance(value, set):
         return sorted(value)
-    if hasattr(value, "value") and isinstance(value.value, (str, int, float, bool)):
+    if hasattr(value, "value") and isinstance(
+        value.value, (str, int, float, bool)
+    ):
         return value.value
     return repr(value)
 
@@ -172,7 +175,9 @@ def _json_dumps(value: Any) -> str:
     str
         Result of the operation.
     """
-    return json.dumps(value, ensure_ascii=False, default=_json_default, separators=(",", ":"))
+    return json.dumps(
+        value, ensure_ascii=False, default=_json_default, separators=(",", ":")
+    )
 
 
 def _json_loads(value: Any, default=None):
@@ -217,7 +222,9 @@ def _write_text(group: h5py.Group, name: str, value: Any) -> h5py.Dataset:
     h5py.Dataset
         Result of the operation.
     """
-    return group.create_dataset(name, data=str(value or ""), dtype=_STRING_DTYPE)
+    return group.create_dataset(
+        name, data=str(value or ""), dtype=_STRING_DTYPE
+    )
 
 
 def _read_text(group: h5py.Group, name: str, default: str = "") -> str:
@@ -256,9 +263,18 @@ def _dataset_options(array: np.ndarray) -> dict:
     dict
         Result of the operation.
     """
-    if array.ndim == 0 or array.size < 64 or array.dtype.kind in {"O", "U", "S"}:
+    if (
+        array.ndim == 0
+        or array.size < 64
+        or array.dtype.kind in {"O", "U", "S"}
+    ):
         return {}
-    return {"chunks": True, "compression": "gzip", "compression_opts": 4, "shuffle": True}
+    return {
+        "chunks": True,
+        "compression": "gzip",
+        "compression_opts": 4,
+        "shuffle": True,
+    }
 
 
 def _normalise_dataset_payload(value: Any):
@@ -275,12 +291,17 @@ def _normalise_dataset_payload(value: Any):
         Result of the operation.
     """
     if isinstance(value, dict) and "values" in value:
-        attrs = {key: value.get(key) for key in ("dims", "unit", "label", "description", "scale")}
+        attrs = {
+            key: value.get(key)
+            for key in ("dims", "unit", "label", "description", "scale")
+        }
         return value["values"], attrs
     return value, {}
 
 
-def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> None:
+def _write_tree(
+    group: h5py.Group, values: Any, dataset_name: str = "value"
+) -> None:
     """Write tree.
 
     Parameters
@@ -310,21 +331,44 @@ def _write_tree(group: h5py.Group, values: Any, dataset_name: str = "value") -> 
     array = np.asarray(values)
     if array.dtype.kind in {"O", "U", "S"}:
         if array.ndim == 0:
-            dataset = group.create_dataset(dataset_name, data=str(array.item()), dtype=_STRING_DTYPE)
-        elif all(isinstance(item, (str, bytes, np.str_)) for item in array.reshape(-1)):
-            flat = [item.decode() if isinstance(item, bytes) else str(item) for item in array.reshape(-1)]
-            dataset = group.create_dataset(dataset_name, data=np.asarray(flat, dtype=_STRING_DTYPE).reshape(array.shape))
+            dataset = group.create_dataset(
+                dataset_name, data=str(array.item()), dtype=_STRING_DTYPE
+            )
+        elif all(
+            isinstance(item, (str, bytes, np.str_))
+            for item in array.reshape(-1)
+        ):
+            flat = [
+                item.decode() if isinstance(item, bytes) else str(item)
+                for item in array.reshape(-1)
+            ]
+            dataset = group.create_dataset(
+                dataset_name,
+                data=np.asarray(flat, dtype=_STRING_DTYPE).reshape(
+                    array.shape
+                ),
+            )
         else:
-            dataset = group.create_dataset(dataset_name, data=_json_dumps(values), dtype=_STRING_DTYPE)
+            dataset = group.create_dataset(
+                dataset_name, data=_json_dumps(values), dtype=_STRING_DTYPE
+            )
             dataset.attrs["encoding"] = "json"
     else:
-        dataset = group.create_dataset(dataset_name, data=array, **_dataset_options(array))
+        dataset = group.create_dataset(
+            dataset_name, data=array, **_dataset_options(array)
+        )
     for key, value in attrs.items():
         if value not in (None, "", []):
-            dataset.attrs[key] = _json_dumps(value) if isinstance(value, (list, tuple, dict)) else value
+            dataset.attrs[key] = (
+                _json_dumps(value)
+                if isinstance(value, (list, tuple, dict))
+                else value
+            )
 
 
-def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False):
+def _read_tree(
+    node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False
+):
     """Return tree.
 
     Parameters
@@ -346,23 +390,34 @@ def _read_tree(node: h5py.Group | h5py.Dataset, *, preserve_attrs: bool = False)
         elif isinstance(value, bytes):
             value = value.decode("utf-8")
         elif isinstance(value, np.ndarray) and value.dtype.kind in {"O", "S"}:
-            value = np.asarray([
-                item.decode("utf-8") if isinstance(item, bytes) else str(item)
-                for item in value.reshape(-1)
-            ]).reshape(value.shape)
+            value = np.asarray(
+                [
+                    item.decode("utf-8")
+                    if isinstance(item, bytes)
+                    else str(item)
+                    for item in value.reshape(-1)
+                ]
+            ).reshape(value.shape)
         if preserve_attrs:
             attrs = {}
             for key in ("dims", "unit", "label", "description"):
                 if key in node.attrs:
                     raw = node.attrs[key]
-                    attrs[key] = _json_loads(raw, raw) if key == "dims" else raw
+                    attrs[key] = (
+                        _json_loads(raw, raw) if key == "dims" else raw
+                    )
             if attrs:
                 return {"values": value, **attrs}
         return value
-    return {key: _read_tree(child, preserve_attrs=preserve_attrs) for key, child in node.items()}
+    return {
+        key: _read_tree(child, preserve_attrs=preserve_attrs)
+        for key, child in node.items()
+    }
 
 
-def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list[str]]:
+def _collect_dataset_dims(
+    group: h5py.Group, prefix: str = ""
+) -> dict[str, list[str]]:
     """Return the collect dataset dims result.
 
     Parameters
@@ -388,7 +443,9 @@ def _collect_dataset_dims(group: h5py.Group, prefix: str = "") -> dict[str, list
     return dims
 
 
-def _decorate_tree_with_dims(values: Any, dims: dict[str, list[str]], prefix: str = ""):
+def _decorate_tree_with_dims(
+    values: Any, dims: dict[str, list[str]], prefix: str = ""
+):
     """Return the decorate tree with dims result.
 
     Parameters
@@ -483,15 +540,14 @@ def _tag_key(tag: object) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(tag).casefold())
 
 
-_CANONICAL_TAGS = {
-    _tag_key(tag): tag
-    for tag in _CANONICAL_TAG_NAMES
-}
-_CANONICAL_TAGS.update({
-    "allxy": "AllXY",
-    "dragcalibration": "Drag",
-    "rabi": "PowerRabi",
-})
+_CANONICAL_TAGS = {_tag_key(tag): tag for tag in _CANONICAL_TAG_NAMES}
+_CANONICAL_TAGS.update(
+    {
+        "allxy": "AllXY",
+        "dragcalibration": "Drag",
+        "rabi": "PowerRabi",
+    }
+)
 
 
 def _canonical_tag(tag: object, experiment_type: str = "") -> str:
@@ -544,7 +600,9 @@ def _qubits_from_result(result) -> list[str]:
     config = getattr(result, "config", {}) or {}
     raw = metadata.get("qubit_names") or metadata.get("qubits")
     if raw is None:
-        raw = metadata.get("qubit") or config.get("name") or config.get("qubit")
+        raw = (
+            metadata.get("qubit") or config.get("name") or config.get("qubit")
+        )
     if raw is None:
         return []
     if isinstance(raw, (str, int)):
@@ -567,7 +625,11 @@ def _dispatch_ids(result) -> tuple[str, str, str]:
     """
     experiment_type = str(getattr(result, "experiment_type", "") or "").lower()
     raw = getattr(result, "raw_iq", None)
-    ndim = np.asarray(raw).ndim if raw is not None and not isinstance(raw, dict) else 0
+    ndim = (
+        np.asarray(raw).ndim
+        if raw is not None and not isinstance(raw, dict)
+        else 0
+    )
     rules = (
         ("single", "single_shot", "single_shot", "single_shot_iq"),
         ("tomography", "tomography", "tomography", "density_matrix"),
@@ -576,9 +638,18 @@ def _dispatch_ids(result) -> tuple[str, str, str]:
         ("t1", "sweep_1d", "t1", "iq_fit_1d"),
         ("ramsey", "sweep_1d", "ramsey", "iq_fit_1d"),
         ("echo", "sweep_1d", "spin_echo", "iq_fit_1d"),
-        ("spec", "sweep_1d" if ndim <= 1 else "sweep_nd", "spectroscopy", "iq_fit_1d"),
+        (
+            "spec",
+            "sweep_1d" if ndim <= 1 else "sweep_nd",
+            "spectroscopy",
+            "iq_fit_1d",
+        ),
     )
-    inferred = ("sweep_nd" if ndim > 1 else "sweep_1d", "generic", "generic_iq")
+    inferred = (
+        "sweep_nd" if ndim > 1 else "sweep_1d",
+        "generic",
+        "generic_iq",
+    )
     for token, data_kind, analysis_id, plot_id in rules:
         if token in experiment_type:
             inferred = (data_kind, analysis_id, plot_id)
@@ -633,7 +704,9 @@ def _safe_filename_part(value: str, fallback: str) -> str:
     return cleaned or fallback
 
 
-def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> Path:
+def _auto_path(
+    root: Path, result, local_time: datetime, experiment_id: str
+) -> Path:
     """Return the auto path result.
 
     Parameters
@@ -652,10 +725,17 @@ def _auto_path(root: Path, result, local_time: datetime, experiment_id: str) -> 
     Path
         Result of the operation.
     """
-    experiment = _safe_filename_part(getattr(result, "experiment_type", ""), "experiment")
+    experiment = _safe_filename_part(
+        getattr(result, "experiment_type", ""), "experiment"
+    )
     qubits = _qubits_from_result(result)
     qubit = _safe_filename_part("-".join(qubits), "all")
-    folder = root / local_time.strftime("%Y") / local_time.strftime("%m") / local_time.strftime("%Y-%m-%d")
+    folder = (
+        root
+        / local_time.strftime("%Y")
+        / local_time.strftime("%m")
+        / local_time.strftime("%Y-%m-%d")
+    )
     short_id = experiment_id.rsplit("-", 1)[-1][-8:]
     filename = f"{local_time:%H%M%S_%f}_{experiment}_{qubit}_{short_id}.h5"
     return folder / filename
@@ -677,14 +757,16 @@ def _axis_entries(result) -> dict[str, Any]:
     entries = dict(getattr(result, "axes", {}) or {})
     if getattr(result, "x_axis", None) is not None and "x" not in entries:
         entries["x"] = {
-            "values": np.asarray(result.x_axis) * float(getattr(result, "x_scale", 1.0)),
+            "values": np.asarray(result.x_axis)
+            * float(getattr(result, "x_scale", 1.0)),
             "label": getattr(result, "x_name", ""),
             "unit": getattr(result, "x_unit", ""),
             "scale": float(getattr(result, "x_scale", 1.0)),
         }
     if getattr(result, "y_axis", None) is not None and "y" not in entries:
         entries["y"] = {
-            "values": np.asarray(result.y_axis) * float(getattr(result, "y_scale", 1.0)),
+            "values": np.asarray(result.y_axis)
+            * float(getattr(result, "y_scale", 1.0)),
             "label": getattr(result, "y_name", ""),
             "unit": getattr(result, "y_unit", ""),
             "scale": float(getattr(result, "y_scale", 1.0)),
@@ -706,6 +788,7 @@ def _provenance() -> dict:
         __version__ = "unknown"
     try:
         import qick
+
         qick_version = getattr(qick, "__version__", "unknown")
     except Exception:
         qick_version = None
@@ -717,7 +800,9 @@ def _provenance() -> dict:
     }
 
 
-def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: datetime) -> None:
+def _write_file(
+    path: Path, result, *, comment: str, tags: list[str], utc_time: datetime
+) -> None:
     """Write file.
 
     Parameters
@@ -736,32 +821,40 @@ def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: 
     local_time = utc_time.astimezone(LOCAL_TIMEZONE)
     data_kind, analysis_id, plot_id = _dispatch_ids(result)
     metadata = dict(getattr(result, "metadata", {}) or {})
-    session_id = str(getattr(result, "session_id", "") or metadata.get("session_id", ""))
+    session_id = str(
+        getattr(result, "session_id", "") or metadata.get("session_id", "")
+    )
     lineage = {
         "session_id": session_id or None,
         "parent_id": getattr(result, "parent_id", None),
         "children": getattr(result, "children", []) or [],
     }
     with h5py.File(path, "w") as h5:
-        h5.attrs.update({
-            "schema_name": SCHEMA_NAME,
-            "schema_version": SCHEMA_VERSION,
-            "write_complete": False,
-            "experiment_id": result.experiment_id,
-            "experiment_type": str(getattr(result, "experiment_type", "")),
-            "timestamp_utc": utc_time.isoformat(),
-            "timestamp_local": local_time.isoformat(),
-            "data_kind": data_kind,
-            "analysis_id": analysis_id,
-            "plot_id": plot_id,
-            "quality": _quality_value(result),
-            "interrupted": bool(getattr(result, "interrupted", False)),
-        })
+        h5.attrs.update(
+            {
+                "schema_name": SCHEMA_NAME,
+                "schema_version": SCHEMA_VERSION,
+                "write_complete": False,
+                "experiment_id": result.experiment_id,
+                "experiment_type": str(getattr(result, "experiment_type", "")),
+                "timestamp_utc": utc_time.isoformat(),
+                "timestamp_local": local_time.isoformat(),
+                "data_kind": data_kind,
+                "analysis_id": analysis_id,
+                "plot_id": plot_id,
+                "quality": _quality_value(result),
+                "interrupted": bool(getattr(result, "interrupted", False)),
+            }
+        )
 
         meta = h5.create_group("meta")
         _write_text(meta, "comment", comment)
         meta.create_dataset("tags", data=np.asarray(tags, dtype=_STRING_DTYPE))
-        _write_text(meta, "config_json", _json_dumps(getattr(result, "config", {}) or {}))
+        _write_text(
+            meta,
+            "config_json",
+            _json_dumps(getattr(result, "config", {}) or {}),
+        )
         _write_text(meta, "metadata_json", _json_dumps(metadata))
         _write_text(meta, "provenance_json", _json_dumps(_provenance()))
         _write_text(meta, "lineage_json", _json_dumps(lineage))
@@ -772,12 +865,20 @@ def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: 
             axis_group = axes.create_group(str(name).replace("/", "_"))
             array = np.asarray(values)
             if array.dtype.kind in {"O", "U", "S"}:
-                strings = [item.decode() if isinstance(item, bytes) else str(item) for item in array.reshape(-1)]
+                strings = [
+                    item.decode() if isinstance(item, bytes) else str(item)
+                    for item in array.reshape(-1)
+                ]
                 axis_group.create_dataset(
-                    "values", data=np.asarray(strings, dtype=_STRING_DTYPE).reshape(array.shape)
+                    "values",
+                    data=np.asarray(strings, dtype=_STRING_DTYPE).reshape(
+                        array.shape
+                    ),
                 )
             else:
-                axis_group.create_dataset("values", data=array, **_dataset_options(array))
+                axis_group.create_dataset(
+                    "values", data=array, **_dataset_options(array)
+                )
             for key in ("label", "unit", "description", "scale"):
                 value = attrs.get(key)
                 if value not in (None, ""):
@@ -793,14 +894,20 @@ def _write_file(path: Path, result, *, comment: str, tags: list[str], utc_time: 
             _write_tree(raw, {"iq": {"values": raw_iq, "dims": dims}})
         _write_tree(
             raw,
-            _decorate_tree_with_dims(getattr(result, "raw_data", {}) or {}, dataset_dims),
+            _decorate_tree_with_dims(
+                getattr(result, "raw_data", {}) or {}, dataset_dims
+            ),
         )
 
         analysis = h5.create_group("analysis")
         _write_tree(analysis, getattr(result, "analysis_data", {}) or {})
 
         results = h5.create_group("results")
-        _write_text(results, "fit_result_json", _json_dumps(getattr(result, "fit_result", {}) or {}))
+        _write_text(
+            results,
+            "fit_result_json",
+            _json_dumps(getattr(result, "fit_result", {}) or {}),
+        )
         if getattr(result, "fit_params", None) is not None:
             _write_tree(results, {"fit_params": result.fit_params})
         if getattr(result, "fit_errors", None) is not None:
@@ -866,7 +973,9 @@ def save_result(
     while _experiment_id_exists(id_catalog_root, result.experiment_id):
         result.experiment_id = generate_experiment_id(utc_time)
     result.timestamp = utc_time
-    result.comment = str(comment if comment != "" else getattr(result, "comment", ""))
+    result.comment = str(
+        comment if comment != "" else getattr(result, "comment", "")
+    )
     result.tags = _normalise_tags(
         tags if tags else getattr(result, "tags", []),
         getattr(result, "experiment_type", ""),
@@ -878,19 +987,29 @@ def save_result(
             final_path = final_path.with_suffix(".h5")
         catalog_root = root if data_root is not None else final_path.parent
         if final_path.exists():
-            raise FileExistsError(f"Refusing to overwrite existing experiment: {final_path}")
+            raise FileExistsError(
+                f"Refusing to overwrite existing experiment: {final_path}"
+            )
     else:
         catalog_root = root
         final_path = _auto_path(root, result, local_time, result.experiment_id)
         while final_path.exists():
             result.experiment_id = generate_experiment_id(utc_time)
-            final_path = _auto_path(root, result, local_time, result.experiment_id)
+            final_path = _auto_path(
+                root, result, local_time, result.experiment_id
+            )
 
     final_path.parent.mkdir(parents=True, exist_ok=True)
     partial_path = final_path.with_suffix(final_path.suffix + ".partial")
     if partial_path.exists():
         partial_path.unlink()
-    _write_file(partial_path, result, comment=result.comment, tags=result.tags, utc_time=utc_time)
+    _write_file(
+        partial_path,
+        result,
+        comment=result.comment,
+        tags=result.tags,
+        utc_time=utc_time,
+    )
     os.replace(partial_path, final_path)
     if catalog:
         _register_file(final_path, catalog_root)
@@ -937,7 +1056,10 @@ def _native_root(h5: h5py.File | h5py.Group):
         return h5
     for group_name in (EMBEDDED_GROUP, *LEGACY_EMBEDDED_GROUPS):
         candidate = h5.get(group_name)
-        if isinstance(candidate, h5py.Group) and candidate.attrs.get("schema_name") == SCHEMA_NAME:
+        if (
+            isinstance(candidate, h5py.Group)
+            and candidate.attrs.get("schema_name") == SCHEMA_NAME
+        ):
             return candidate
     return None
 
@@ -972,9 +1094,21 @@ def inspect_file(path: os.PathLike | str) -> dict:
             }
         attrs = _attrs_dict(root)
         meta_group = root.get("meta")
-        metadata = _json_loads(_read_text(meta_group, "metadata_json"), {}) if meta_group else {}
-        config = _json_loads(_read_text(meta_group, "config_json"), {}) if meta_group else {}
-        lineage = _json_loads(_read_text(meta_group, "lineage_json"), {}) if meta_group else {}
+        metadata = (
+            _json_loads(_read_text(meta_group, "metadata_json"), {})
+            if meta_group
+            else {}
+        )
+        config = (
+            _json_loads(_read_text(meta_group, "config_json"), {})
+            if meta_group
+            else {}
+        )
+        lineage = (
+            _json_loads(_read_text(meta_group, "lineage_json"), {})
+            if meta_group
+            else {}
+        )
         tags = []
         comment = ""
         if meta_group is not None:
@@ -1009,6 +1143,7 @@ def inspect_file(path: os.PathLike | str) -> dict:
             "qubits": [str(item) for item in qubits],
         }
 
+
 def load_result(path: os.PathLike | str):
     """Load standalone native v1, Labber-hybrid, or the previous local format.
 
@@ -1038,7 +1173,9 @@ def load_result(path: os.PathLike | str):
             raise ValueError(f"Experiment file is incomplete: {path}")
         experiment_id = str(root.attrs.get("experiment_id", ""))
         if not validate_experiment_id(experiment_id):
-            raise ValueError(f"Invalid experiment_id in {path}: {experiment_id!r}")
+            raise ValueError(
+                f"Invalid experiment_id in {path}: {experiment_id!r}"
+            )
 
         meta = root["meta"]
         config = _json_loads(_read_text(meta, "config_json"), {}) or {}
@@ -1046,7 +1183,9 @@ def load_result(path: os.PathLike | str):
         lineage = _json_loads(_read_text(meta, "lineage_json"), {}) or {}
         results = root["results"]
         summary = _json_loads(_read_text(results, "summary_json"), {}) or {}
-        fit_result = _json_loads(_read_text(results, "fit_result_json"), {}) or {}
+        fit_result = (
+            _json_loads(_read_text(results, "fit_result_json"), {}) or {}
+        )
         timestamp = datetime.fromisoformat(str(root.attrs["timestamp_utc"]))
         quality_raw = str(root.attrs.get("quality", "no_information"))
         try:
@@ -1058,7 +1197,9 @@ def load_result(path: os.PathLike | str):
         raw_dims = _collect_dataset_dims(root["raw"])
         if "iq" in raw_tree:
             raw_iq = raw_tree["iq"]
-            raw_data = {key: value for key, value in raw_tree.items() if key != "iq"}
+            raw_data = {
+                key: value for key, value in raw_tree.items() if key != "iq"
+            }
         else:
             raw_iq = raw_tree or None
             raw_data = {}
@@ -1068,10 +1209,14 @@ def load_result(path: os.PathLike | str):
         for name, group in root["axes"].items():
             values = group["values"][:]
             if values.dtype.kind in {"O", "S"}:
-                values = np.asarray([
-                    item.decode("utf-8") if isinstance(item, bytes) else str(item)
-                    for item in values.reshape(-1)
-                ]).reshape(values.shape)
+                values = np.asarray(
+                    [
+                        item.decode("utf-8")
+                        if isinstance(item, bytes)
+                        else str(item)
+                        for item in values.reshape(-1)
+                    ]
+                ).reshape(values.shape)
             payload = {"values": values}
             for key in ("label", "unit", "description", "scale"):
                 if key in group.attrs:
@@ -1098,8 +1243,12 @@ def load_result(path: os.PathLike | str):
             raw_iq=raw_iq,
             x_axis=x_axis,
             y_axis=y_axis,
-            fit_params=_read_tree(results["fit_params"]) if "fit_params" in results else None,
-            fit_errors=_read_tree(results["fit_errors"]) if "fit_errors" in results else None,
+            fit_params=_read_tree(results["fit_params"])
+            if "fit_params" in results
+            else None,
+            fit_errors=_read_tree(results["fit_errors"])
+            if "fit_errors" in results
+            else None,
             fit_result=fit_result,
             scalar_result=summary.get("scalar_result"),
             quality=quality,
@@ -1110,12 +1259,24 @@ def load_result(path: os.PathLike | str):
             children=lineage.get("children") or [],
             interrupted=bool(root.attrs.get("interrupted", False)),
             avg_count=int(summary.get("avg_count", 0)),
-            x_name=str(root["axes/x"].attrs.get("label", "")) if "x" in root["axes"] else "",
-            x_unit=str(root["axes/x"].attrs.get("unit", "")) if "x" in root["axes"] else "",
-            x_scale=float(root["axes/x"].attrs.get("scale", 1.0)) if "x" in root["axes"] else 1.0,
-            y_name=str(root["axes/y"].attrs.get("label", "")) if "y" in root["axes"] else "",
-            y_unit=str(root["axes/y"].attrs.get("unit", "")) if "y" in root["axes"] else "",
-            y_scale=float(root["axes/y"].attrs.get("scale", 1.0)) if "y" in root["axes"] else 1.0,
+            x_name=str(root["axes/x"].attrs.get("label", ""))
+            if "x" in root["axes"]
+            else "",
+            x_unit=str(root["axes/x"].attrs.get("unit", ""))
+            if "x" in root["axes"]
+            else "",
+            x_scale=float(root["axes/x"].attrs.get("scale", 1.0))
+            if "x" in root["axes"]
+            else 1.0,
+            y_name=str(root["axes/y"].attrs.get("label", ""))
+            if "y" in root["axes"]
+            else "",
+            y_unit=str(root["axes/y"].attrs.get("unit", ""))
+            if "y" in root["axes"]
+            else "",
+            y_scale=float(root["axes/y"].attrs.get("scale", 1.0))
+            if "y" in root["axes"]
+            else 1.0,
             axes=axes,
             raw_data=raw_data,
             analysis_data=analysis_data,
@@ -1127,6 +1288,7 @@ def load_result(path: os.PathLike | str):
             tags=tags,
             session_id=lineage.get("session_id"),
         )
+
 
 def _load_previous_format(h5: h5py.File):
     """Return previous format.
@@ -1189,10 +1351,14 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
                 errors.append("schema_name is not qickworkspace.experiment")
                 return ValidationReport(resolved, False, errors, warnings)
             if str(root.attrs.get("schema_version", "")) != SCHEMA_VERSION:
-                errors.append(f"unsupported schema_version {root.attrs.get('schema_version')!r}")
+                errors.append(
+                    f"unsupported schema_version {root.attrs.get('schema_version')!r}"
+                )
             if not bool(root.attrs.get("write_complete", False)):
                 errors.append("write_complete is false")
-            if not validate_experiment_id(str(root.attrs.get("experiment_id", ""))):
+            if not validate_experiment_id(
+                str(root.attrs.get("experiment_id", ""))
+            ):
                 errors.append("experiment_id is invalid")
             for group in ("meta", "axes", "raw", "analysis", "results"):
                 if group not in root:
@@ -1218,15 +1384,22 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
                     node : Any
                         Value for ``node``.
                     """
-                    if not isinstance(node, h5py.Dataset) or "dims" not in node.attrs:
+                    if (
+                        not isinstance(node, h5py.Dataset)
+                        or "dims" not in node.attrs
+                    ):
                         return
                     dims = list(_json_loads(node.attrs["dims"], []) or [])
                     if len(dims) != node.ndim:
-                        errors.append(f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset")
+                        errors.append(
+                            f"{group_name}/{name}: {len(dims)} dims for rank-{node.ndim} dataset"
+                        )
                         return
                     for index, dim in enumerate(dims):
                         if dim not in axis_lengths:
-                            errors.append(f"{group_name}/{name}: missing axis {dim!r}")
+                            errors.append(
+                                f"{group_name}/{name}: missing axis {dim!r}"
+                            )
                         elif node.shape[index] != axis_lengths[dim]:
                             errors.append(
                                 f"{group_name}/{name}: shape[{index}]={node.shape[index]} "
@@ -1237,6 +1410,7 @@ def validate_file(path: os.PathLike | str) -> ValidationReport:
     except Exception as exc:
         errors.append(str(exc))
     return ValidationReport(resolved, not errors, errors, warnings)
+
 
 def _catalog_path(root: Path) -> Path:
     """Return the catalog path result.
@@ -1308,7 +1482,11 @@ def _experiment_id_exists(root: Path, experiment_id: str) -> bool:
         try:
             with h5py.File(path, "r") as h5:
                 native_root = _native_root(h5)
-                if native_root is not None and str(native_root.attrs.get("experiment_id", "")) == experiment_id:
+                if (
+                    native_root is not None
+                    and str(native_root.attrs.get("experiment_id", ""))
+                    == experiment_id
+                ):
                     return True
         except OSError:
             continue
@@ -1348,9 +1526,15 @@ def _connect_catalog(root: Path) -> sqlite3.Connection:
         )
         """
     )
-    connection.execute("CREATE INDEX IF NOT EXISTS idx_experiments_time ON experiments(timestamp_utc)")
-    connection.execute("CREATE INDEX IF NOT EXISTS idx_experiments_type ON experiments(experiment_type)")
-    connection.execute("CREATE INDEX IF NOT EXISTS idx_experiments_session ON experiments(session_id)")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_experiments_time ON experiments(timestamp_utc)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_experiments_type ON experiments(experiment_type)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_experiments_session ON experiments(session_id)"
+    )
     return connection
 
 
@@ -1375,11 +1559,17 @@ def _register_file(path: Path, root: Path) -> None:
         relative = os.path.relpath(path.resolve(), root.resolve())
     lineage = info.get("lineage", {}) or {}
     row = (
-        info.get("experiment_id", ""), info.get("timestamp_utc", ""),
-        info.get("timestamp_local", ""), info.get("experiment_type", ""),
-        _json_dumps([str(q) for q in qubits]), _json_dumps(info.get("tags", [])),
-        info.get("quality", "no_information"), lineage.get("session_id"),
-        str(info.get("comment", ""))[:240], relative, info.get("schema_version", ""),
+        info.get("experiment_id", ""),
+        info.get("timestamp_utc", ""),
+        info.get("timestamp_local", ""),
+        info.get("experiment_type", ""),
+        _json_dumps([str(q) for q in qubits]),
+        _json_dumps(info.get("tags", [])),
+        info.get("quality", "no_information"),
+        lineage.get("session_id"),
+        str(info.get("comment", ""))[:240],
+        relative,
+        info.get("schema_version", ""),
     )
     with _connect_catalog(root) as connection:
         connection.execute(
@@ -1435,12 +1625,16 @@ def _date_boundary(value: Any, *, end: bool = False) -> Optional[str]:
     if isinstance(value, datetime):
         return _as_utc(value).isoformat()
     if isinstance(value, date):
-        local = datetime.combine(value, time.max if end else time.min, tzinfo=LOCAL_TIMEZONE)
+        local = datetime.combine(
+            value, time.max if end else time.min, tzinfo=LOCAL_TIMEZONE
+        )
         return local.astimezone(timezone.utc).isoformat()
     text = str(value)
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
         parsed_date = date.fromisoformat(text)
-        parsed = datetime.combine(parsed_date, time.max if end else time.min, tzinfo=LOCAL_TIMEZONE)
+        parsed = datetime.combine(
+            parsed_date, time.max if end else time.min, tzinfo=LOCAL_TIMEZONE
+        )
     else:
         parsed = datetime.fromisoformat(text)
     return _as_utc(parsed).isoformat()
@@ -1492,7 +1686,9 @@ def find_experiments(
     conditions = []
     params: list[Any] = []
     for column, value in (
-        ("experiment_type", experiment_type), ("quality", quality), ("session_id", session_id)
+        ("experiment_type", experiment_type),
+        ("quality", quality),
+        ("session_id", session_id),
     ):
         if value is not None:
             conditions.append(f"{column} = ?")
@@ -1512,11 +1708,15 @@ def find_experiments(
     with _connect_catalog(root) as connection:
         connection.row_factory = sqlite3.Row
         for row in connection.execute(query, params):
-            row_tags = tuple(_normalise_tags(
-                _json_loads(row["tags_json"], []) or [],
-                row["experiment_type"],
-            ))
-            row_qubits = tuple(str(q) for q in (_json_loads(row["qubits_json"], []) or []))
+            row_tags = tuple(
+                _normalise_tags(
+                    _json_loads(row["tags_json"], []) or [],
+                    row["experiment_type"],
+                )
+            )
+            row_qubits = tuple(
+                str(q) for q in (_json_loads(row["qubits_json"], []) or [])
+            )
             if qubit is not None and str(qubit) not in row_qubits:
                 continue
             if requested_tags and not requested_tags.issubset(row_tags):
@@ -1524,12 +1724,20 @@ def find_experiments(
             path = (root / row["relative_path"]).resolve()
             if not path.exists():
                 continue
-            references.append(ExperimentReference(
-                experiment_id=row["experiment_id"], timestamp_utc=row["timestamp_utc"],
-                timestamp_local=row["timestamp_local"], experiment_type=row["experiment_type"],
-                qubits=row_qubits, tags=row_tags, quality=row["quality"],
-                session_id=row["session_id"], comment_preview=row["comment_preview"], path=path,
-            ))
+            references.append(
+                ExperimentReference(
+                    experiment_id=row["experiment_id"],
+                    timestamp_utc=row["timestamp_utc"],
+                    timestamp_local=row["timestamp_local"],
+                    experiment_type=row["experiment_type"],
+                    qubits=row_qubits,
+                    tags=row_tags,
+                    quality=row["quality"],
+                    session_id=row["session_id"],
+                    comment_preview=row["comment_preview"],
+                    path=path,
+                )
+            )
             if limit is not None and len(references) >= int(limit):
                 break
     return references
@@ -1561,7 +1769,9 @@ def rebuild_catalog(data_root: os.PathLike | str) -> int:
     for path in candidates:
         try:
             info = inspect_file(path)
-            if info.get("schema_name") != SCHEMA_NAME or not info.get("write_complete"):
+            if info.get("schema_name") != SCHEMA_NAME or not info.get(
+                "write_complete"
+            ):
                 continue
             _register_file(path, root)
             count += 1
@@ -1606,7 +1816,8 @@ def convert_labber_file(
         import Labber
     except ImportError as exc:
         raise ImportError(
-            "Labber is only required for convert_labber_file(); install it in the Labber environment."
+            "Labber is only required for convert_labber_file(); "
+            "install it in the Labber environment."
         ) from exc
     from ..core.experiment_data import ExperimentData
 
@@ -1614,7 +1825,11 @@ def convert_labber_file(
     log_channels = log.getLogChannels()
     if not log_channels:
         raise ValueError(f"No Labber log channels found in {source}")
-    channel_name = log_channels[0]["name"] if isinstance(log_channels[0], dict) else str(log_channels[0])
+    channel_name = (
+        log_channels[0]["name"]
+        if isinstance(log_channels[0], dict)
+        else str(log_channels[0])
+    )
     raw = np.asarray(log.getData(channel_name))
     step_channels = log.getStepChannels() or []
     axes = {}
@@ -1632,7 +1847,11 @@ def convert_labber_file(
     result = ExperimentData(
         experiment_type=supplied.pop("experiment_type", Path(source).stem),
         raw_iq=raw,
-        metadata={"legacy_source": str(source), "legacy_unknown": True, **supplied},
+        metadata={
+            "legacy_source": str(source),
+            "legacy_unknown": True,
+            **supplied,
+        },
         axes=axes,
         data_kind="legacy_unknown",
         analysis_id="legacy_unknown",
@@ -1643,8 +1862,19 @@ def convert_labber_file(
 
 
 __all__ = [
-    "SCHEMA_NAME", "SCHEMA_VERSION", "EMBEDDED_GROUP", "LEGACY_EMBEDDED_GROUPS", "ExperimentReference", "ValidationReport",
-    "generate_experiment_id", "validate_experiment_id", "save_result", "load_result",
-    "inspect_file", "validate_file", "find_experiments", "rebuild_catalog",
+    "SCHEMA_NAME",
+    "SCHEMA_VERSION",
+    "EMBEDDED_GROUP",
+    "LEGACY_EMBEDDED_GROUPS",
+    "ExperimentReference",
+    "ValidationReport",
+    "generate_experiment_id",
+    "validate_experiment_id",
+    "save_result",
+    "load_result",
+    "inspect_file",
+    "validate_file",
+    "find_experiments",
+    "rebuild_catalog",
     "convert_labber_file",
 ]

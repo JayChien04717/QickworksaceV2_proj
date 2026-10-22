@@ -25,12 +25,19 @@ class RamseyEfProgram(BaseProgram):
         self.setup_qubit_gen(cfg, "ef")
         self.add_loop("waitloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_ge_pi", gain_key="pi_gain_ge")
-        self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse1", gain_key="pi2_gain_ef")
+        self.setup_qb_pulse(
+            cfg, "ef", name="qb_ef_pulse1", gain_key="pi2_gain_ef"
+        )
         ramsey_phase = (
-            cfg.get("qb_phase_ef", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
+            cfg.get("qb_phase_ef", 0)
+            + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
-            cfg, "ef", name="qb_ef_pulse2", gain_key="pi2_gain_ef", phase=ramsey_phase
+            cfg,
+            "ef",
+            name="qb_ef_pulse2",
+            gain_key="pi2_gain_ef",
+            phase=ramsey_phase,
         )
 
     def _body(self, cfg):
@@ -96,7 +103,9 @@ class RamseyEf(BaseExperiment):
             self.cfg["qb_freq_ef"] = self.cfg["qb_freq_ef"] - round(
                 (detune - self.cfg["virtual_detune"]), 2
             )
-            print(f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz")
+            print(
+                f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz"
+            )
             return round(self.cfg["qb_freq_ef"], 5)
         else:
             print("Detune < 5kHz")

@@ -1,4 +1,4 @@
-﻿"""
+"""
 system_cfg — experiment configuration template.
 
 This file keeps a sample ``config_list`` that users can copy and edit for a

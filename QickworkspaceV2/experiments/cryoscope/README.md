@@ -23,14 +23,16 @@ For a fully executed, step-by-step simulation with plots, open
 All experiments use the normal single-qubit keys plus:
 
 ```python
-cfg.update({
-    "flux_ch": 0,          # a Gen v6 channel is preferred
-    "nqz_flux": 1,
-    "flux_gain": 0.15,    # normalized QICK gain
-    "cryoscope_axis": "X",# run_xy() sets X and Y automatically
-    "cryoscope_pre_delay": 0.01,   # us, after the first pi/2
-    "cryoscope_post_delay": 0.01,  # us, before the analysis pi/2
-})
+cfg.update(
+    {
+        "flux_ch": 0,  # a Gen v6 channel is preferred
+        "nqz_flux": 1,
+        "flux_gain": 0.15,  # normalized QICK gain
+        "cryoscope_axis": "X",  # run_xy() sets X and Y automatically
+        "cryoscope_pre_delay": 0.01,  # us, after the first pi/2
+        "cryoscope_post_delay": 0.01,  # us, before the analysis pi/2
+    }
+)
 ```
 
 The Ramsey sequence is:
@@ -54,7 +56,7 @@ from QickworkspaceV2.experiments.cryoscope import (
 
 const_cfg = configure_const_sweep(
     cfg,
-    start_us=0.006,   # choose this from 3 / f_fabric
+    start_us=0.006,  # choose this from 3 / f_fabric
     stop_us=0.100,
     steps=101,
 )

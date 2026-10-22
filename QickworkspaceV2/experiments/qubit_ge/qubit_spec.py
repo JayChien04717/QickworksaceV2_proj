@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import LorentzianAnalysis
+from ...core.base_experiment import BaseExperiment, SweepAxis
+from ...core.base_program import BaseProgram
 
 
 class QubitSpecProgram(BaseProgram):
@@ -85,7 +85,6 @@ class QubitSpec(BaseExperiment):
         return str(dict_val)
 
 
-
 class QubitSpecFluxProgram(BaseProgram):
     """QICK program for qubit spec vs flux: adds flux pulse outer loop."""
 
@@ -102,8 +101,13 @@ class QubitSpecFluxProgram(BaseProgram):
         if "flux_ch" in cfg:
             self.declare_gen(ch=cfg["flux_ch"], nqz=1)
             self.add_pulse(
-                ch=cfg["flux_ch"], name="flux_pulse", style="const",
-                length=cfg["flux_length"], freq=0, phase=0, gain=cfg["flux_gain"],
+                ch=cfg["flux_ch"],
+                name="flux_pulse",
+                style="const",
+                length=cfg["flux_length"],
+                freq=0,
+                phase=0,
+                gain=cfg["flux_gain"],
             )
             self.add_loop("fluxloop", cfg["steps_flux"])
         self.add_loop("freqloop", cfg["steps"])

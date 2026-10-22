@@ -16,7 +16,9 @@ def run_batch(experiments, py_avg: int, *, stop_on_bad=False, **kwargs):
     results = {}
     items = [
         item
-        if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
+        if isinstance(item, tuple)
+        and len(item) == 2
+        and isinstance(item[0], str)
         else (None, item)
         for item in experiments
     ]
@@ -30,7 +32,9 @@ def run_batch(experiments, py_avg: int, *, stop_on_bad=False, **kwargs):
         result.session_id = batch_id
         results[name] = result
         if stop_on_bad and result.quality == QualityFlag.BAD:
-            print(f"  Stopping: {name} returned BAD ({result.quality_message})")
+            print(
+                f"  Stopping: {name} returned BAD ({result.quality_message})"
+            )
             break
         sleep(0.5)
     return results
@@ -40,7 +44,9 @@ def summarize_results(results) -> str:
     """Return and print a compact quality summary."""
     lines = []
     for name, result in results.items():
-        message = f" — {result.quality_message}" if result.quality_message else ""
+        message = (
+            f" — {result.quality_message}" if result.quality_message else ""
+        )
         lines.append(f"{name:<40s} [{result.quality.value.upper()}]{message}")
     summary = "\n".join(lines)
     print(summary)
@@ -58,7 +64,9 @@ def run_parallel(experiments, py_avg: int, *, max_workers=None, **kwargs):
     session_id = generate_experiment_id()
     items = [
         item
-        if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)
+        if isinstance(item, tuple)
+        and len(item) == 2
+        and isinstance(item[0], str)
         else (None, item)
         for item in experiments
     ]
@@ -66,7 +74,9 @@ def run_parallel(experiments, py_avg: int, *, max_workers=None, **kwargs):
     futures = {}
     with ThreadPoolExecutor(max_workers=max_workers or len(items)) as pool:
         for label, experiment in items:
-            name = label or experiment.EXPT_NAME or experiment.__class__.__name__
+            name = (
+                label or experiment.EXPT_NAME or experiment.__class__.__name__
+            )
             futures[pool.submit(experiment.run, py_avg, **kwargs)] = name
 
         for future in as_completed(futures):

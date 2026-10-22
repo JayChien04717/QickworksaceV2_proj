@@ -5,7 +5,8 @@ from .pipeline import AutoCalibrate
 
 __all__ = [
     "CalibrationStore",
-    "CalibrationGraph", "CalibrationNode",
+    "CalibrationGraph",
+    "CalibrationNode",
     "CalibrationMonitor",
     "AutoCalibrate",
 ]

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
+import numpy as np
 
 from .theme import COLORS, style_axes, style_figure
-
 
 _QUALITY_COLOR = {
     "good": COLORS["green"],
@@ -18,11 +17,14 @@ _QUALITY_COLOR = {
 
 
 _DATA_KW = dict(
-    marker="o", ms=4.2, markeredgewidth=0, alpha=0.78,
-    lw=1.15, color=COLORS["blue"],
+    marker="o",
+    ms=4.2,
+    markeredgewidth=0,
+    alpha=0.78,
+    lw=1.15,
+    color=COLORS["blue"],
 )
 _FIT_KW = dict(lw=2.35, color=COLORS["orange"], zorder=5)
-
 
 
 def plot_fit_result(
@@ -67,9 +69,9 @@ def plot_fit_result(
     """
     channels = {
         "Amplitude": np.abs(iq_data),
-        "Phase":     np.unwrap(np.angle(iq_data)),
-        "I":         iq_data.real,
-        "Q":         iq_data.imag,
+        "Phase": np.unwrap(np.angle(iq_data)),
+        "I": iq_data.real,
+        "Q": iq_data.imag,
     }
     channel_label = {
         "abs": "Amplitude",
@@ -89,7 +91,9 @@ def plot_fit_result(
     }
     channel_fit_curves = channel_fit_curves or {}
 
-    x_fit = np.linspace(xpts[0], xpts[-1], 600) if fit_params is not None else None
+    x_fit = (
+        np.linspace(xpts[0], xpts[-1], 600) if fit_params is not None else None
+    )
     fit_y = simfunc(x_fit, *fit_params) if fit_params is not None else None
 
     quality_key = str(quality).lower()
@@ -98,7 +102,8 @@ def plot_fit_result(
     fig = plt.figure(figsize=(12.5, 6.3), layout="constrained")
     style_figure(fig)
     gs = gridspec.GridSpec(
-        3, 2,
+        3,
+        2,
         figure=fig,
         width_ratios=[2.35, 1],
         height_ratios=[1, 1, 1],
@@ -124,7 +129,9 @@ def plot_fit_result(
             ax_main.axvline(**kw)
     ax_main.set_xlabel(x_label, fontsize=10.5, labelpad=8)
     main_unit = "rad" if channel_label == "Phase" else "ADC unit"
-    ax_main.set_ylabel(f"{channel_label} ({main_unit})", fontsize=10.5, labelpad=8)
+    ax_main.set_ylabel(
+        f"{channel_label} ({main_unit})", fontsize=10.5, labelpad=8
+    )
     style_axes(ax_main)
     legend = ax_main.legend(
         loc="lower left",
@@ -140,9 +147,14 @@ def plot_fit_result(
 
     if result_text:
         ax_main.text(
-            0.97, 0.95, result_text,
+            0.97,
+            0.95,
+            result_text,
             transform=ax_main.transAxes,
-            fontsize=9.2, va="top", ha="right", family="monospace",
+            fontsize=9.2,
+            va="top",
+            ha="right",
+            family="monospace",
             color=COLORS["ink"],
             linespacing=1.45,
             bbox=dict(
@@ -156,7 +168,9 @@ def plot_fit_result(
 
     badge_label = quality_key.upper().replace("_", " ")
     ax_main.text(
-        0.03, 0.95, f"●  {badge_label}",
+        0.03,
+        0.95,
+        f"●  {badge_label}",
         transform=ax_main.transAxes,
         fontsize=8.3,
         va="top",
@@ -172,8 +186,9 @@ def plot_fit_result(
         ),
     )
 
-    context_channels = [key for key in ("Amplitude", "I", "Q", "Phase")
-                        if key != channel_label][:3]
+    context_channels = [
+        key for key in ("Amplitude", "I", "Q", "Phase") if key != channel_label
+    ][:3]
     for row, key in enumerate(context_channels):
         ax = fig.add_subplot(gs[row, 1], sharex=ax_main)
         ax.plot(
@@ -197,7 +212,9 @@ def plot_fit_result(
         if extra_lines:
             for kw in extra_lines:
                 marker_kw = {k: v for k, v in kw.items() if k != "label"}
-                marker_kw["alpha"] = min(float(marker_kw.get("alpha", 1.0)), 0.45)
+                marker_kw["alpha"] = min(
+                    float(marker_kw.get("alpha", 1.0)), 0.45
+                )
                 ax.axvline(**marker_kw)
         ax.set_title(key, loc="left", fontsize=9.5, pad=5)
         ax.set_ylabel("rad" if key == "Phase" else "ADC", fontsize=8.5)

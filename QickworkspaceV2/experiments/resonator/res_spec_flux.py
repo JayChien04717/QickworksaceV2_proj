@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment, SweepAxis
+from ...core.base_program import BaseProgram
 
 
 class ResonatorSpecFluxProgram(BaseProgram):
@@ -25,8 +25,13 @@ class ResonatorSpecFluxProgram(BaseProgram):
         if "flux_ch" in cfg:
             self.declare_gen(ch=cfg["flux_ch"], nqz=1)
             self.add_pulse(
-                ch=cfg["flux_ch"], name="flux_pulse", style="const",
-                length=cfg["flux_length"], freq=0, phase=0, gain=cfg["flux_gain"],
+                ch=cfg["flux_ch"],
+                name="flux_pulse",
+                style="const",
+                length=cfg["flux_length"],
+                freq=0,
+                phase=0,
+                gain=cfg["flux_gain"],
             )
             self.add_loop("fluxloop", cfg["steps_flux"])
         self.add_loop("freqloop", cfg["steps"])
@@ -109,4 +114,6 @@ class ResonatorSpecFlux(BaseExperiment):
             self.Y_SAVE_UNIT = "V"
         elif self._yoko_mode == "current":
             self.Y_SAVE_UNIT = "A"
-        super().saveLabber(qb_idx, yoko_value=None, config_all=config_all, title=title)
+        super().saveLabber(
+            qb_idx, yoko_value=None, config_all=config_all, title=title
+        )

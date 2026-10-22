@@ -95,11 +95,20 @@ def decode_readouts(
         return np.stack(decoded)
     except ValueError as exc:
         shapes = [np.shape(values) for values in decoded]
-        raise ValueError(f"QICK readouts have inconsistent shapes: {shapes}") from exc
+        raise ValueError(
+            f"QICK readouts have inconsistent shapes: {shapes}"
+        ) from exc
 
 
-def acquire_values(prog, soc, *, rounds: int, progress: bool, threshold=None,
-                   scalar_readout=False):
+def acquire_values(
+    prog,
+    soc,
+    *,
+    rounds: int,
+    progress: bool,
+    threshold=None,
+    scalar_readout=False,
+):
     """Run ``prog.acquire`` and return values in the selected readout mode.
 
     Parameters

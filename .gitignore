@@ -12,3 +12,5 @@ qick/
 *.log
 .DS_Store
 .claude/
+.ruff_cache/
+QickworkspaceV2_backup_before_pep8.tar.gz

@@ -8,30 +8,29 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm.auto import tqdm
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment
-from ...core.acquisition import acquire_values
-from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import RBAnalysis
-from ...tools.fitting import fitrb, rb_func, rb_error, error_fit_err
-
+from ...core.acquisition import acquire_values
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
+from ...core.experiment_data import ExperimentData, QualityFlag
+from ...tools.fitting import error_fit_err, fitrb, rb_error, rb_func
 
 _GEN_TO_QICK = {
-    "I":    None,
-    "X":    "x180_{pfx}",
-    "Y":    "y180_{pfx}",
-    "X/2":  "x90_{pfx}",
+    "I": None,
+    "X": "x180_{pfx}",
+    "Y": "y180_{pfx}",
+    "X/2": "x90_{pfx}",
     "-X/2": "x90m_{pfx}",
-    "Y/2":  "y90_{pfx}",
+    "Y/2": "y90_{pfx}",
     "-Y/2": "y90m_{pfx}",
 }
 
 _INTERLEAVED_FILE_SUFFIX = {
-    "X":    "X",
-    "Y":    "Y",
-    "X/2":  "halfX",
+    "X": "X",
+    "Y": "Y",
+    "X/2": "halfX",
     "-X/2": "halfXm",
-    "Y/2":  "halfY",
+    "Y/2": "halfY",
     "-Y/2": "halfYm",
 }
 
@@ -55,8 +54,9 @@ def _safe_rb_file_suffix(label):
     return suffix
 
 
-def _rb_sample_matrix(raw, n_depths, n_samples, iq_process,
-                      threshold_discrimination=False):
+def _rb_sample_matrix(
+    raw, n_depths, n_samples, iq_process, threshold_discrimination=False
+):
     """Return one processed scalar for each (depth, randomized sample)."""
     values = np.asarray(raw)
     processed = np.real(values) if iq_process == "real" else np.abs(values)
@@ -193,7 +193,7 @@ class RandomizedBenchmarking(BaseExperiment):
         ValueError
             If the operation cannot be completed.
         """
-        from ...tools.rb_generator import single_qb_rb, INTERLEAVE_GATES
+        from ...tools.rb_generator import INTERLEAVE_GATES, single_qb_rb
 
         threshold = self._get_readout_threshold()
         threshold_discrimination = threshold is not None
@@ -209,7 +209,10 @@ class RandomizedBenchmarking(BaseExperiment):
         self._interleaved = interleaved_gate
         self._prefix = prefix
 
-        if interleaved_gate is not None and interleaved_gate not in INTERLEAVE_GATES:
+        if (
+            interleaved_gate is not None
+            and interleaved_gate not in INTERLEAVE_GATES
+        ):
             raise ValueError(
                 f"interleaved_gate '{interleaved_gate}' not in {list(INTERLEAVE_GATES.keys())}"
             )
@@ -274,7 +277,10 @@ class RandomizedBenchmarking(BaseExperiment):
 
         raw_iq = np.asarray(self.rb_result)
         avg = _rb_sample_matrix(
-            raw_iq, n_depths, number_sample, self._iq_process,
+            raw_iq,
+            n_depths,
+            number_sample,
+            self._iq_process,
             threshold_discrimination,
         ).mean(axis=1)
         metadata = {
@@ -288,12 +294,14 @@ class RandomizedBenchmarking(BaseExperiment):
             "randomized_depth_order": self.x[depth_indices].tolist(),
         }
         if threshold_discrimination:
-            metadata.update({
-                "threshold": threshold,
-                "threshold_discrimination": True,
-                "raw_threshold_population": "above_threshold",
-                "reported_population": "ground_survival",
-            })
+            metadata.update(
+                {
+                    "threshold": threshold,
+                    "threshold_discrimination": True,
+                    "raw_threshold_population": "above_threshold",
+                    "reported_population": "ground_survival",
+                }
+            )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=raw_iq,
@@ -301,7 +309,11 @@ class RandomizedBenchmarking(BaseExperiment):
             y_axis=avg,
             metadata=metadata,
             axes={
-                "depth": {"values": self.x.astype(float), "label": "Circuit depth", "unit": "# Cliffords"},
+                "depth": {
+                    "values": self.x.astype(float),
+                    "label": "Circuit depth",
+                    "unit": "# Cliffords",
+                },
                 "sample": {"values": np.arange(number_sample), "unit": "#"},
             },
             dataset_dims={"iq": ["depth", "sample"]},
@@ -320,8 +332,14 @@ class RandomizedBenchmarking(BaseExperiment):
         return result
 
     def plot(
-        self, label: str = "RB", color=None, ax=None, marker="o",
-        show_individual=False, *, plot_analysis=True,
+        self,
+        label: str = "RB",
+        color=None,
+        ax=None,
+        marker="o",
+        show_individual=False,
+        *,
+        plot_analysis=True,
     ):
         """Plot the operation.
 
@@ -358,37 +376,66 @@ class RandomizedBenchmarking(BaseExperiment):
         # (depth, randomized-sample) axes. Treat every value belonging to a
         # depth consistently for the mean, SEM, and individual traces.
         threshold_discrimination = getattr(
-            self, "_threshold_discrimination",
+            self,
+            "_threshold_discrimination",
             self._get_readout_threshold() is not None,
         )
         samples = _rb_sample_matrix(
-            raw, len(self.x), self._number_sample, self._iq_process,
+            raw,
+            len(self.x),
+            self._number_sample,
+            self._iq_process,
             threshold_discrimination,
         )
         avg = samples.mean(axis=1)
         pOpt, pCov = fitrb(self.x, avg)
         p_fit = pOpt[0]
-        p_fit_err = float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
+        p_fit_err = (
+            float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
+        )
         epc = rb_error(p_fit, d=2)
-        epc_err = float(np.sqrt(error_fit_err(pCov[0, 0], d=2))) if pCov is not None else 0.0
+        epc_err = (
+            float(np.sqrt(error_fit_err(pCov[0, 0], d=2)))
+            if pCov is not None
+            else 0.0
+        )
         print(f"\n--- {label} ---")
-        print(f"  p   = {p_fit*100:.6f} ± {p_fit_err*100:.6f} %")
-        print(f"  EPC = {epc*100:.6f} ± {epc_err*100:.6f} %")
+        print(f"  p   = {p_fit * 100:.6f} ± {p_fit_err * 100:.6f} %")
+        print(f"  EPC = {epc * 100:.6f} ± {epc_err * 100:.6f} %")
         if ax is None:
             _, ax = plt.subplots(figsize=(7, 5))
         c = color or "steelblue"
         if show_individual:
             for s in range(samples.shape[1]):
-                ax.scatter(self.x, samples[:, s], s=6, color="gray", alpha=0.25, linewidths=0, zorder=1)
+                ax.scatter(
+                    self.x,
+                    samples[:, s],
+                    s=6,
+                    color="gray",
+                    alpha=0.25,
+                    linewidths=0,
+                    zorder=1,
+                )
         xfit = np.linspace(self.x.min(), self.x.max(), 400)
         ax.plot(xfit, rb_func(xfit, *pOpt), color=c, linewidth=2.0, zorder=3)
         sem = samples.std(axis=1) / np.sqrt(samples.shape[1])
-        ax.errorbar(self.x, avg, yerr=sem,
-                    fmt="none", ecolor=c, capsize=3, zorder=4)
-        ax.scatter(self.x, avg, s=60, color=c, marker=marker,
-                   edgecolors="black", label=label, zorder=5)
+        ax.errorbar(
+            self.x, avg, yerr=sem, fmt="none", ecolor=c, capsize=3, zorder=4
+        )
+        ax.scatter(
+            self.x,
+            avg,
+            s=60,
+            color=c,
+            marker=marker,
+            edgecolors="black",
+            label=label,
+            zorder=5,
+        )
         result = getattr(self, "result", None)
-        if result is not None and all(id(figure) != id(ax.figure) for figure in result.figures):
+        if result is not None and all(
+            id(figure) != id(ax.figure) for figure in result.figures
+        ):
             result.figures.append(ax.figure)
         return epc, epc_err, p_fit, p_fit_err, pCov
 
@@ -413,7 +460,12 @@ class RandomizedBenchmarking(BaseExperiment):
         """
         if self.x is None or self.rb_result is None:
             raise RuntimeError("Call run() first.")
-        from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
+        from ...tools.system_tool import (
+            config_to_yaml,
+            get_next_filename_labber,
+            hdf5_generator,
+        )
+
         if title is not None:
             expt_name = f"s015_RB_{_safe_rb_file_suffix(title)}_{qb_idx}"
         elif self._interleaved is not None:
@@ -430,22 +482,37 @@ class RandomizedBenchmarking(BaseExperiment):
         )
         hdf5_generator(
             filepath=file_path,
-            x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
-            y_info={"name": "Sample Number", "unit": "", "values": np.arange(self._number_sample, dtype=float)},
+            x_info={
+                "name": "Circuit Depth",
+                "unit": "",
+                "values": self.x.astype(float),
+            },
+            y_info={
+                "name": "Sample Number",
+                "unit": "",
+                "values": np.arange(self._number_sample, dtype=float),
+            },
             z_info={
-                "name": "Signal", "unit": "ADC unit",
+                "name": "Signal",
+                "unit": "ADC unit",
                 "values": _rb_sample_matrix(
-                    self.rb_result, len(self.x), self._number_sample,
+                    self.rb_result,
+                    len(self.x),
+                    self._number_sample,
                     self._iq_process,
                     getattr(
-                        self, "_threshold_discrimination",
+                        self,
+                        "_threshold_discrimination",
                         self._get_readout_threshold() is not None,
                     ),
                 ).T,
             },
-            comment=str(dict_val), tag="RB",
+            comment=str(dict_val),
+            tag="RB",
             result=self.result,
-            figures=(list(self.result.figures) if self.result is not None else []),
+            figures=(
+                list(self.result.figures) if self.result is not None else []
+            ),
         )
         print(f"RB data saved to {file_path}")
 
@@ -495,7 +562,9 @@ def _gate_fidelity_err(p_ref, p_irb, var_p_ref, var_p_irb, d=2):
     c = (d - 1) / d
     depc_dpref = c * p_irb / p_ref**2
     depc_dpirb = -c / p_ref
-    return float(np.sqrt(depc_dpref**2 * var_p_ref + depc_dpirb**2 * var_p_irb))
+    return float(
+        np.sqrt(depc_dpref**2 * var_p_ref + depc_dpirb**2 * var_p_irb)
+    )
 
 
 class AutoRB:
@@ -553,7 +622,9 @@ class AutoRB:
             max_circuit_depth=max_circuit_depth,
             delta_clifford=delta_clifford,
             number_sample=number_sample,
-            seed=seed, prefix=prefix, iq_process=iq_process,
+            seed=seed,
+            prefix=prefix,
+            iq_process=iq_process,
         )
         gates_to_run = [None] + (interleaved_gates or [])
         for gate in tqdm(gates_to_run, desc="AutoRB"):
@@ -582,31 +653,45 @@ class AutoRB:
             return
 
         ref_epc, ref_epc_err, p_ref, p_ref_err, ref_cov = ref_rb.plot(
-            "Reference RB", color=colors[0], ax=ax, show_individual=show_individual,
+            "Reference RB",
+            color=colors[0],
+            ax=ax,
+            show_individual=show_individual,
             plot_analysis=plot_analysis,
         )
-        self.results["ref"] = dict(epc=ref_epc, epc_err=ref_epc_err, p=p_ref, p_err=p_ref_err)
+        self.results["ref"] = dict(
+            epc=ref_epc, epc_err=ref_epc_err, p=p_ref, p_err=p_ref_err
+        )
 
         for i, (label, rb) in enumerate(self._rb_objects.items()):
             if label == "ref":
                 continue
             epc, epc_err, p_irb, p_irb_err, irb_cov = rb.plot(
-                f"IRB ({label})", color=colors[(i + 1) % len(colors)],
-                ax=ax, show_individual=show_individual,
+                f"IRB ({label})",
+                color=colors[(i + 1) % len(colors)],
+                ax=ax,
+                show_individual=show_individual,
             )
             var_ref = ref_cov[0, 0] if ref_cov is not None else 0
             var_irb = irb_cov[0, 0] if irb_cov is not None else 0
             f_gate, epc_gate = _gate_fidelity(p_ref, p_irb)
             epc_gate_err = _gate_fidelity_err(p_ref, p_irb, var_ref, var_irb)
             self.results[label] = dict(
-                fidelity=f_gate, epc=epc_gate, epc_err=epc_gate_err,
-                p=p_irb, p_err=p_irb_err,
+                fidelity=f_gate,
+                epc=epc_gate,
+                epc_err=epc_gate_err,
+                p=p_irb,
+                p_err=p_irb_err,
             )
-            print(f"  Gate '{label}': F = {f_gate*100:.4f}%, EPC = {epc_gate*100:.4f} ± {epc_gate_err*100:.4f} %")
+            print(
+                f"  Gate '{label}': F = {f_gate * 100:.4f}%, "
+                f"EPC = {epc_gate * 100:.4f} ± {epc_gate_err * 100:.4f} %"
+            )
 
         ax.set_xlabel("Circuit Depth (# Cliffords)")
         if getattr(
-            ref_rb, "_threshold_discrimination",
+            ref_rb,
+            "_threshold_discrimination",
             ref_rb._get_readout_threshold() is not None,
         ):
             ax.set_ylabel("Ground-state survival probability")
@@ -630,11 +715,11 @@ class AutoRB:
         for key, val in self.results.items():
             if "fidelity" in val:
                 lines.append(
-                    f"  {key:<10s}  F={val['fidelity']*100:.4f}%  "
-                    f"EPC={val['epc']*100:.5f}%"
+                    f"  {key:<10s}  F={val['fidelity'] * 100:.4f}%  "
+                    f"EPC={val['epc'] * 100:.5f}%"
                 )
             else:
-                lines.append(f"  {key:<10s}  EPC={val['epc']*100:.5f}%")
+                lines.append(f"  {key:<10s}  EPC={val['epc'] * 100:.5f}%")
         return "\n".join(lines)
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None):
@@ -650,4 +735,9 @@ class AutoRB:
             Value for ``yoko_value``.
         """
         for label, rb in self._rb_objects.items():
-            rb.saveLabber(qb_idx, config_all=config_all, yoko_value=yoko_value, title=label)
+            rb.saveLabber(
+                qb_idx,
+                config_all=config_all,
+                yoko_value=yoko_value,
+                title=label,
+            )

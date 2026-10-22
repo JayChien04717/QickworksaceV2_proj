@@ -13,7 +13,6 @@ from ..core.base_experiment import BaseExperiment
 from ..core.base_program import resolve_gate
 from ..core.experiment_data import ExperimentData, QualityFlag
 
-
 ALLXY_SEQUENCE = [
     ("I", "I"),
     ("X", "X"),
@@ -106,7 +105,9 @@ class MuxAllXYProgram(AveragerProgramV2):
             ("y90m_ge", -90, "pi2_gain_ge"),
         ]
         for gate_name, phase, gain_key in gates:
-            self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
+            self._add_gate_pulse(
+                cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot]
+            )
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
         """Add gate pulse.
@@ -319,8 +320,29 @@ class MuxAllXY(BaseExperiment):
         if self.iqdata is not None:
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             ideal = np.array(
-                [0, 0, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-                 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1, 0],
+                [
+                    0,
+                    0,
+                    1,
+                    1,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    0.5,
+                    1,
+                    0,
+                ],
                 dtype=float,
             )
             for idx, name in enumerate(qubit_names):
@@ -336,7 +358,10 @@ class MuxAllXY(BaseExperiment):
         if plot and self.iqdata is not None:
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(9, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(9, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             x = np.arange(len(ALLXY_SEQUENCE))
             for ax, name, trace in zip(axes[:, 0], qubit_names, plot_data):
@@ -345,9 +370,13 @@ class MuxAllXY(BaseExperiment):
                 ax.grid(True, alpha=0.3)
             axes[-1, 0].set_xticks(x)
             axes[-1, 0].set_xticklabels(
-                [f"{a},{b}" for a, b in ALLXY_SEQUENCE], rotation=45, ha="right"
+                [f"{a},{b}" for a, b in ALLXY_SEQUENCE],
+                rotation=45,
+                ha="right",
             )
-            axes[0, 0].set_title(self.TITLE_PREFIX + (" (Interrupted)" if interrupted else ""))
+            axes[0, 0].set_title(
+                self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
+            )
             fig.tight_layout()
             figures.append(fig)
             plt.show()
@@ -356,11 +385,15 @@ class MuxAllXY(BaseExperiment):
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
             x_axis=np.arange(len(ALLXY_SEQUENCE), dtype=float),
-            y_axis=self._process_plot_data(self.iqdata, iq_process) if self.iqdata is not None else None,
+            y_axis=self._process_plot_data(self.iqdata, iq_process)
+            if self.iqdata is not None
+            else None,
             fit_result=fit_result,
             metadata={"qubit_names": qubit_names, "sequence": ALLXY_SEQUENCE},
             figures=figures,
-            quality=QualityFlag.GOOD if self.iqdata is not None else QualityFlag.BAD,
+            quality=QualityFlag.GOOD
+            if self.iqdata is not None
+            else QualityFlag.BAD,
             interrupted=interrupted,
             avg_count=py_avg,
         )

@@ -4,9 +4,9 @@ QubitEF/res_spec_ef — s009: Resonator spectroscopy (ef).
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.resonator import ResonatorSpecAnalysis
+from ...core.base_experiment import BaseExperiment, SweepAxis
+from ...core.base_program import BaseProgram
 
 
 class ResSpecEfProgram(BaseProgram):
@@ -23,7 +23,9 @@ class ResSpecEfProgram(BaseProgram):
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("freqloop", cfg["steps"])
-        self.setup_qb_pulse(cfg, "ge", name="qb_pi_pulse", gain_key="pi_gain_ge")
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pi_pulse", gain_key="pi_gain_ge"
+        )
 
     def _body(self, cfg):
         """Execute one iteration of the pulse sequence.

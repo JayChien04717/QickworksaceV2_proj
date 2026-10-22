@@ -1,11 +1,16 @@
+from typing import Literal, Tuple, Union
+
 import pyvisa
-from typing import Literal, Union, Tuple
 
 from .base import RFSourceInstrument
 
 ON_OFF_MAP = {
-    "on": "1", "1": "1", 1: "1",
-    "off": "0", "0": "0", 0: "0",
+    "on": "1",
+    "1": "1",
+    1: "1",
+    "off": "0",
+    "0": "0",
+    0: "0",
 }
 ON_OFF_MAP_INV = {"1": "on", "0": "off"}
 
@@ -188,12 +193,17 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         }
         for key, (min_query, max_query) in queries.items():
             try:
-                limits[key] = (float(self.query(min_query)), float(self.query(max_query)))
+                limits[key] = (
+                    float(self.query(min_query)),
+                    float(self.query(max_query)),
+                )
             except Exception:
                 pass
         return limits
 
-    def _validate_and_write(self, cmd_template: str, value: str, valid_set: set, name: str) -> None:
+    def _validate_and_write(
+        self, cmd_template: str, value: str, valid_set: set, name: str
+    ) -> None:
         """Validate and write.
 
         Parameters
@@ -214,10 +224,14 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         val_upper = str(value).upper()
         if val_upper not in valid_set:
-            raise ValueError(f"Invalid {name} value: {value}. Allowed: {valid_set}")
+            raise ValueError(
+                f"Invalid {name} value: {value}. Allowed: {valid_set}"
+            )
         self.write(cmd_template.format(val_upper))
 
-    def _map_and_write(self, cmd_template: str, value: Union[str, int, bool], name: str) -> None:
+    def _map_and_write(
+        self, cmd_template: str, value: Union[str, int, bool], name: str
+    ) -> None:
         """Return the map and write result.
 
         Parameters
@@ -238,7 +252,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
             mapped_val = ON_OFF_MAP[str(value).lower()]
             self.write(cmd_template.format(mapped_val))
         except KeyError:
-            raise ValueError(f"Invalid {name} value: {value}. Use 'on' or 'off'.")
+            raise ValueError(
+                f"Invalid {name} value: {value}. Use 'on' or 'off'."
+            )
 
     def _query_and_map(self, cmd: str) -> str:
         """Return and map.
@@ -278,7 +294,10 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("frequency")
         if not (min_v <= value <= max_v):
-            print(f"Warning: Frequency {value} Hz is outside driver's expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: Frequency {value} Hz is outside driver's expected "
+                f"range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:FREQ {value:.2f}")
 
     @property
@@ -303,7 +322,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("phase")
         if not (min_v <= value <= max_v):
-            print(f"Warning: Phase {value} deg is outside driver's expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: Phase {value} deg is outside driver's expected range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:PHAS {value:.2f}")
 
     @property
@@ -328,7 +349,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("power")
         if not (min_v <= value <= max_v):
-            print(f"Warning: Power {value} dBm is outside driver's expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: Power {value} dBm is outside driver's expected range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:POW {value:.2f}")
 
     @property
@@ -433,7 +456,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return self.query("SOUR:PULM:SOUR?")
 
     @pulsemod_source.setter
-    def pulsemod_source(self, value: Literal["INT", "EXT", "int", "ext"]) -> None:
+    def pulsemod_source(
+        self, value: Literal["INT", "EXT", "int", "ext"]
+    ) -> None:
         """Return the pulsemod source result.
 
         Parameters
@@ -441,7 +466,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['INT', 'EXT', 'int', 'ext']
             Value to apply.
         """
-        self._validate_and_write("SOUR:PULM:SOUR {}", value, PULSE_SOURCE_VALS, "pulsemod_source")
+        self._validate_and_write(
+            "SOUR:PULM:SOUR {}", value, PULSE_SOURCE_VALS, "pulsemod_source"
+        )
 
     @property
     def ref_osc_source(self) -> str:
@@ -455,7 +482,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return self.query("SOUR:ROSC:SOUR?")
 
     @ref_osc_source.setter
-    def ref_osc_source(self, value: Literal["INT", "EXT", "int", "ext"]) -> None:
+    def ref_osc_source(
+        self, value: Literal["INT", "EXT", "int", "ext"]
+    ) -> None:
         """Return the ref osc source result.
 
         Parameters
@@ -463,7 +492,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['INT', 'EXT', 'int', 'ext']
             Value to apply.
         """
-        self._validate_and_write("SOUR:ROSC:SOUR {}", value, REF_LO_SOURCE_VALS, "ref_osc_source")
+        self._validate_and_write(
+            "SOUR:ROSC:SOUR {}", value, REF_LO_SOURCE_VALS, "ref_osc_source"
+        )
 
     @property
     def LO_source(self) -> str:
@@ -485,7 +516,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['INT', 'EXT', 'int', 'ext']
             Value to apply.
         """
-        self._validate_and_write("SOUR:LOSC:SOUR {}", value, REF_LO_SOURCE_VALS, "LO_source")
+        self._validate_and_write(
+            "SOUR:LOSC:SOUR {}", value, REF_LO_SOURCE_VALS, "LO_source"
+        )
 
     @property
     def ref_LO_out(self) -> str:
@@ -499,7 +532,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return self.query("CONN:REFL:OUTP?")
 
     @ref_LO_out.setter
-    def ref_LO_out(self, value: Literal["REF", "LO", "OFF", "ref", "lo", "off"]) -> None:
+    def ref_LO_out(
+        self, value: Literal["REF", "LO", "OFF", "ref", "lo", "off"]
+    ) -> None:
         """Return the ref LO out result.
 
         Parameters
@@ -507,7 +542,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['REF', 'LO', 'OFF', 'ref', 'lo', 'off']
             Value to apply.
         """
-        self._validate_and_write("CONN:REFL:OUTP {}", value, REF_LO_OUT_VALS, "ref_LO_out")
+        self._validate_and_write(
+            "CONN:REFL:OUTP {}", value, REF_LO_OUT_VALS, "ref_LO_out"
+        )
 
     @property
     def ref_osc_output_freq(self) -> str:
@@ -521,7 +558,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return self.query("SOUR:ROSC:OUTP:FREQ?")
 
     @ref_osc_output_freq.setter
-    def ref_osc_output_freq(self, value: Literal["10MHz", "100MHz", "1000MHz"]) -> None:
+    def ref_osc_output_freq(
+        self, value: Literal["10MHz", "100MHz", "1000MHz"]
+    ) -> None:
         """Return the ref osc output freq result.
 
         Parameters
@@ -529,7 +568,12 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['10MHz', '100MHz', '1000MHz']
             Value to apply.
         """
-        self._validate_and_write("SOUR:ROSC:OUTP:FREQ {}", value, REF_FREQ_VALS, "ref_osc_output_freq")
+        self._validate_and_write(
+            "SOUR:ROSC:OUTP:FREQ {}",
+            value,
+            REF_FREQ_VALS,
+            "ref_osc_output_freq",
+        )
 
     @property
     def ref_osc_external_freq(self) -> str:
@@ -543,7 +587,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         return self.query("SOUR:ROSC:EXT:FREQ?")
 
     @ref_osc_external_freq.setter
-    def ref_osc_external_freq(self, value: Literal["10MHz", "100MHz", "1000MHz"]) -> None:
+    def ref_osc_external_freq(
+        self, value: Literal["10MHz", "100MHz", "1000MHz"]
+    ) -> None:
         """Return the ref osc external freq result.
 
         Parameters
@@ -551,7 +597,12 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : Literal['10MHz', '100MHz', '1000MHz']
             Value to apply.
         """
-        self._validate_and_write("SOUR:ROSC:EXT:FREQ {}", value, REF_FREQ_VALS, "ref_osc_external_freq")
+        self._validate_and_write(
+            "SOUR:ROSC:EXT:FREQ {}",
+            value,
+            REF_FREQ_VALS,
+            "ref_osc_external_freq",
+        )
 
     @property
     def IQ_impairments(self) -> str:
@@ -597,7 +648,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("i_offset")
         if not (min_v <= value <= max_v):
-            print(f"Warning: I offset {value}% is outside expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: I offset {value}% is outside expected range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:IQ:IMP:LEAK:I {value:.2f}")
 
     @property
@@ -622,7 +675,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("q_offset")
         if not (min_v <= value <= max_v):
-            print(f"Warning: Q offset {value}% is outside expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: Q offset {value}% is outside expected range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:IQ:IMP:LEAK:Q {value:.2f}")
 
     @property
@@ -647,7 +702,10 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("iq_gain_imbalance")
         if not (min_v <= value <= max_v):
-            print(f"Warning: IQ gain imbalance {value} dB is outside expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: IQ gain imbalance {value} dB is outside expected "
+                f"range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:IQ:IMP:IQR {value:.2f}")
 
     @property
@@ -672,7 +730,9 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("iq_angle")
         if not (min_v <= value <= max_v):
-            print(f"Warning: IQ angle {value} deg is outside expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: IQ angle {value} deg is outside expected range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:IQ:IMP:QUAD {value:.2f}")
 
     @property
@@ -695,7 +755,12 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         value : str
             Value to apply.
         """
-        self._validate_and_write("CONN:TRIG:OMOD {}", value, TRIG_MODE_VALS, "trigger_connector_mode")
+        self._validate_and_write(
+            "CONN:TRIG:OMOD {}",
+            value,
+            TRIG_MODE_VALS,
+            "trigger_connector_mode",
+        )
 
     @property
     def pulsemod_delay(self) -> float:
@@ -719,10 +784,14 @@ class RohdeSchwarzSGS100A(RFSourceInstrument):
         """
         min_v, max_v = self.get_limit("pulsemod_delay")
         if not (min_v <= value <= max_v):
-            print(f"Warning: Pulse modulation delay {value} s is outside expected range ({min_v}, {max_v})")
+            print(
+                f"Warning: Pulse modulation delay {value} s is outside expected "
+                f"range ({min_v}, {max_v})"
+            )
         self.write(f"SOUR:PULM:DEL {value:g}")
 
 
 class RohdeSchwarz_SGS100A(RohdeSchwarzSGS100A):
     """Alias for backwards compatibility."""
+
     pass

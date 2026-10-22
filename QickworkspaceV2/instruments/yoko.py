@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import pyvisa as visa
-import numpy as np
 import time
-from tqdm.auto import tqdm
 from typing import Literal, Union
 
-from .base import DCSourceInstrument
+import numpy as np
+import pyvisa as visa
+from tqdm.auto import tqdm
+
 from ..tools.units import auto_unit
+from .base import DCSourceInstrument
 
 
 class YOKOGS200(DCSourceInstrument):
@@ -47,7 +48,9 @@ class YOKOGS200(DCSourceInstrument):
             self.session.read_termination = "\n"
             self.session.write_termination = "\n"
         except visa.Error as ex:
-            raise ConnectionError(f"Couldn't connect to '{VISAaddress}'. Error: {ex}")
+            raise ConnectionError(
+                f"Couldn't connect to '{VISAaddress}'. Error: {ex}"
+            )
 
         self.voltage_ramp_step = 1e-4
         self.current_ramp_step = 1e-8
@@ -56,8 +59,12 @@ class YOKOGS200(DCSourceInstrument):
         self.ramp_progress_leave = False
 
         self._output_map = {
-            "on": "1", "1": "1", 1: "1",
-            "off": "0", "0": "0", 0: "0",
+            "on": "1",
+            "1": "1",
+            1: "1",
+            "off": "0",
+            "0": "0",
+            0: "0",
         }
         self._output_map_inv = {"1": "on", "0": "off"}
         self._mode_map = {"voltage": "VOLT", "current": "CURR"}
@@ -179,7 +186,9 @@ class YOKOGS200(DCSourceInstrument):
         val_str = str(value).lower()
         cmd_val = self._output_map.get(val_str)
         if cmd_val is None:
-            raise ValueError(f"Invalid output value: {value}. Use 'on', 'off', 1, or 0.")
+            raise ValueError(
+                f"Invalid output value: {value}. Use 'on', 'off', 1, or 0."
+            )
         self.session.write(f"OUTPut {cmd_val}")
 
     def on(self) -> None:
@@ -219,7 +228,9 @@ class YOKOGS200(DCSourceInstrument):
         val_str = str(value).lower()
         cmd_val = self._mode_map.get(val_str)
         if cmd_val is None:
-            raise ValueError(f"Invalid mode: {value}. Use 'voltage' or 'current'.")
+            raise ValueError(
+                f"Invalid mode: {value}. Use 'voltage' or 'current'."
+            )
         self.session.write(f"SOURce:FUNCtion {cmd_val}")
 
     @property
@@ -327,7 +338,9 @@ class YOKOGS200(DCSourceInstrument):
         for value in iterator:
             self.level = value
             if self.show_ramp_progress:
-                iterator.set_postfix_str(f"now={self._format_ramp_value(value, unit)}")
+                iterator.set_postfix_str(
+                    f"now={self._format_ramp_value(value, unit)}"
+                )
             time.sleep(self.ramp_interval)
 
     @staticmethod

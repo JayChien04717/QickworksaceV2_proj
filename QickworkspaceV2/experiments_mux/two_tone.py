@@ -274,21 +274,29 @@ class MuxTwoTone(BaseExperiment):
                 freq, method = self._fit_qubit_freq(
                     freq_axis[finite], trace[finite]
                 )
-                fit_result[f"{name}_qb_freq_ge_mhz"] = (round(float(freq), 6), None)
+                fit_result[f"{name}_qb_freq_ge_mhz"] = (
+                    round(float(freq), 6),
+                    None,
+                )
                 fit_method[name] = method
 
         figures = []
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             for ax, name, trace in zip(axes[:, 0], qubit_names, plot_data):
                 freq_axis = self.freq_axes[name]
                 ax.plot(freq_axis, trace, "o-", markersize=3)
                 fit_freq = fit_result.get(f"{name}_qb_freq_ge_mhz", (None,))[0]
                 if fit_freq is not None:
-                    ax.axvline(fit_freq, c="r", ls="--", label=f"{fit_freq:.4f} MHz")
+                    ax.axvline(
+                        fit_freq, c="r", ls="--", label=f"{fit_freq:.4f} MHz"
+                    )
                     ax.legend()
                 ax.set_ylabel(name)
                 ax.set_xlabel(self.X_LABEL)
@@ -300,7 +308,9 @@ class MuxTwoTone(BaseExperiment):
             plt.show()
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
-        model_fit_count = sum(method == "lorentzian" for method in fit_method.values())
+        model_fit_count = sum(
+            method == "lorentzian" for method in fit_method.values()
+        )
         quality, quality_message = fit_quality(
             has_data, model_fit_count, trace_count, "Mux two-tone"
         )
@@ -314,7 +324,9 @@ class MuxTwoTone(BaseExperiment):
                 "active_ro_chs": active_ro_chs,
                 "active_slots": active_slots,
                 "frequency_axes_mhz": {
-                    name: np.asarray(self.freq_axes[name], dtype=float).tolist()
+                    name: np.asarray(
+                        self.freq_axes[name], dtype=float
+                    ).tolist()
                     for name in qubit_names
                 },
                 "fit_method": fit_method,

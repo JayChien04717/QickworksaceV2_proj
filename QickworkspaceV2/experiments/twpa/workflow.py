@@ -6,19 +6,19 @@ Legacy TWPA classes remain in :mod:`.twpa` for notebook compatibility.
 
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import os
 from pathlib import Path
-import time
 from typing import Any, Mapping, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
-from ...core.base_experiment import BaseExperiment
 from ...core.acquisition import acquire_values
+from ...core.base_experiment import BaseExperiment
 from .twpa import TWPAFluxProgram
 
 
@@ -51,7 +51,9 @@ class TWPASweepPlan:
     ripple_limit_db: float = 5.0
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "flux_values", _axis(self.flux_values, "flux_values"))
+        object.__setattr__(
+            self, "flux_values", _axis(self.flux_values, "flux_values")
+        )
         object.__setattr__(
             self, "pump_freqs_hz", _axis(self.pump_freqs_hz, "pump_freqs_hz")
         )
@@ -60,10 +62,17 @@ class TWPASweepPlan:
             "pump_powers_dbm",
             _axis(self.pump_powers_dbm, "pump_powers_dbm"),
         )
-        if self.signal_steps < 2 or self.signal_stop_mhz <= self.signal_start_mhz:
-            raise ValueError("Signal sweep must contain at least two increasing points")
+        if (
+            self.signal_steps < 2
+            or self.signal_stop_mhz <= self.signal_start_mhz
+        ):
+            raise ValueError(
+                "Signal sweep must contain at least two increasing points"
+            )
         if self.py_avg < 1 or self.pump_settle_s < 0:
-            raise ValueError("py_avg must be positive and pump_settle_s non-negative")
+            raise ValueError(
+                "py_avg must be positive and pump_settle_s non-negative"
+            )
         if self.yoko_mode not in {"current", "voltage"}:
             raise ValueError("yoko_mode must be 'current' or 'voltage'")
         f_min = (
@@ -182,7 +191,10 @@ def _s21(dataset: xr.Dataset) -> xr.DataArray:
 
 
 def _matches(actual: xr.DataArray, expected: Sequence[float]) -> bool:
-    left, right = np.asarray(actual, dtype=float), np.asarray(expected, dtype=float)
+    left, right = (
+        np.asarray(actual, dtype=float),
+        np.asarray(expected, dtype=float),
+    )
     return left.shape == right.shape and np.allclose(
         left, right, rtol=1e-12, atol=1e-15
     )
@@ -291,11 +303,15 @@ class TWPACalibrator:
             },
         )
 
-    def _validate_reference(self, data: xr.Dataset, frequency: np.ndarray) -> None:
+    def _validate_reference(
+        self, data: xr.Dataset, frequency: np.ndarray
+    ) -> None:
         if not _matches(data["ifbl"], self.plan.flux_values):
             raise ValueError("Existing reference has a different flux axis")
         if not _matches(data["frequency"], frequency):
-            raise ValueError("Existing reference has a different frequency axis")
+            raise ValueError(
+                "Existing reference has a different frequency axis"
+            )
 
     def _validate_scan(self, data: xr.Dataset, frequency: np.ndarray) -> None:
         expected = {
@@ -315,7 +331,11 @@ class TWPACalibrator:
 
         output = Path(path)
         program, frequency = self._program()
-        data = _load(output) if output.exists() and not overwrite else self._reference_template(frequency)
+        data = (
+            _load(output)
+            if output.exists() and not overwrite
+            else self._reference_template(frequency)
+        )
         self._validate_reference(data, frequency)
         self.pump.off()
         try:
@@ -329,7 +349,9 @@ class TWPACalibrator:
                 data["completed"].values[flux_index] = 1
                 data.attrs["updated_utc"] = _now()
                 _save(data, output)
-                print(f"reference [{flux_index + 1}/{len(self.plan.flux_values)}] flux={flux:+.6g}")
+                print(
+                    f"reference [{flux_index + 1}/{len(self.plan.flux_values)}] flux={flux:+.6g}"
+                )
         finally:
             self.pump.off()
             if data["completed"].values.any():
@@ -351,7 +373,11 @@ class TWPACalibrator:
         self._validate_reference(reference, frequency)
         if not np.all(reference["completed"].values):
             raise RuntimeError("Pump-off reference is incomplete")
-        data = _load(output) if output.exists() and not overwrite else self._scan_template(frequency)
+        data = (
+            _load(output)
+            if output.exists() and not overwrite
+            else self._scan_template(frequency)
+        )
         self._validate_scan(data, frequency)
 
         if np.all(data["completed"].values):
@@ -364,7 +390,9 @@ class TWPACalibrator:
                 self.pump.power = float(power)
                 for flux_index, flux in enumerate(self.plan.flux_values):
                     self._set_flux(flux)
-                    for pump_index, pump_frequency in enumerate(self.plan.pump_freqs_hz):
+                    for pump_index, pump_frequency in enumerate(
+                        self.plan.pump_freqs_hz
+                    ):
                         index = (power_index, pump_index, flux_index)
                         if data["completed"].values[index]:
                             continue
@@ -376,7 +404,10 @@ class TWPACalibrator:
                         data["s21_imag"].values[index] = trace.imag
                         data["completed"].values[index] = 1
                         data.attrs["updated_utc"] = _now()
-                        done, total = int(data["completed"].sum()), data["completed"].size
+                        done, total = (
+                            int(data["completed"].sum()),
+                            data["completed"].size,
+                        )
                         print(
                             f"scan [{done}/{total}] power={power:+.1f} dBm "
                             f"pump={pump_frequency / 1e9:.6f} GHz flux={flux:+.6g}"
@@ -418,20 +449,33 @@ def analyze_twpa_run(
     gain = 20 * np.log10(
         xr.where(off_amplitude > 0, np.abs(_s21(scan)) / off_amplitude, np.nan)
     )
-    gain = gain.transpose("pump_power", "pump_freq", "ifbl", "frequency").rename("gain_db")
+    gain = gain.transpose(
+        "pump_power", "pump_freq", "ifbl", "frequency"
+    ).rename("gain_db")
     band = gain.where(
-        (gain.frequency >= target_f_min_hz) & (gain.frequency <= target_f_max_hz),
+        (gain.frequency >= target_f_min_hz)
+        & (gain.frequency <= target_f_max_hz),
         drop=True,
     )
     if band.sizes.get("frequency", 0) < 2:
-        raise ValueError("Target band contains fewer than two frequency points")
+        raise ValueError(
+            "Target band contains fewer than two frequency points"
+        )
 
     median = band.median("frequency", skipna=True).rename("median_gain_db")
-    p10 = band.quantile(0.10, "frequency", skipna=True).drop_vars("quantile").rename("p10_gain_db")
+    p10 = (
+        band.quantile(0.10, "frequency", skipna=True)
+        .drop_vars("quantile")
+        .rename("p10_gain_db")
+    )
     p05 = band.quantile(0.05, "frequency", skipna=True).drop_vars("quantile")
     p95 = band.quantile(0.95, "frequency", skipna=True).drop_vars("quantile")
     ripple = (p95 - p05).rename("ripple_db")
-    coverage = (band >= gain_threshold_db).mean("frequency").rename("coverage_fraction")
+    coverage = (
+        (band >= gain_threshold_db)
+        .mean("frequency")
+        .rename("coverage_fraction")
+    )
     raw_score = (
         40 * coverage
         + 25 * (median / gain_target_db).clip(min=0, max=1.5)
@@ -439,11 +483,15 @@ def analyze_twpa_run(
         + 15 * (1 - ripple / ripple_limit_db).clip(min=-1, max=1)
     ).rename("raw_score")
     windows = {
-        dim: 3 for dim in ("pump_freq", "ifbl") if raw_score.sizes.get(dim, 0) >= 3
+        dim: 3
+        for dim in ("pump_freq", "ifbl")
+        if raw_score.sizes.get(dim, 0) >= 3
     }
     robust_score = (
         raw_score.rolling(
-            windows, center=True, min_periods=int(np.prod(tuple(windows.values())))
+            windows,
+            center=True,
+            min_periods=int(np.prod(tuple(windows.values()))),
         ).mean()
         if windows
         else raw_score
@@ -481,15 +529,21 @@ def rank_twpa_candidates(
     selected: list[tuple[int, ...]] = []
     result: list[dict[str, float]] = []
     for flat_index in order:
-        index = tuple(int(i) for i in np.unravel_index(flat_index, score.shape))
+        index = tuple(
+            int(i) for i in np.unravel_index(flat_index, score.shape)
+        )
         if not np.isfinite(score.values[index]):
             continue
         if any(
-            max(abs(a - b) for a, b in zip(index, previous)) <= exclusion_radius_steps
+            max(abs(a - b) for a, b in zip(index, previous))
+            <= exclusion_radius_steps
             for previous in selected
         ):
             continue
-        candidate = {dim: float(score[dim].values[i]) for dim, i in zip(score.dims, index)}
+        candidate = {
+            dim: float(score[dim].values[i])
+            for dim, i in zip(score.dims, index)
+        }
         selector = {dim: candidate[dim] for dim in score.dims}
         for name in (
             "robust_score",
@@ -524,7 +578,9 @@ def plot_twpa_summary(
     curve = analysis.gain_db.sel(
         pump_power=power, pump_freq=pump_frequency, ifbl=flux
     )
-    figure, axes = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
+    figure, axes = plt.subplots(
+        1, 2, figsize=(12, 4.5), constrained_layout=True
+    )
     image = axes[0].imshow(
         score.transpose("ifbl", "pump_freq"),
         aspect="auto",
@@ -541,7 +597,9 @@ def plot_twpa_summary(
     axes[0].set(xlabel="Pump frequency (GHz)", ylabel="Flux bias (uA)")
     axes[0].set_title(f"Score at {power:+.1f} dBm source power")
     axes[1].plot(curve.frequency / 1e9, curve)
-    axes[1].axhline(analysis.attrs["gain_threshold_db"], color="red", linestyle="--")
+    axes[1].axhline(
+        analysis.attrs["gain_threshold_db"], color="red", linestyle="--"
+    )
     axes[1].axvspan(
         analysis.attrs["target_f_min_hz"] / 1e9,
         analysis.attrs["target_f_max_hz"] / 1e9,

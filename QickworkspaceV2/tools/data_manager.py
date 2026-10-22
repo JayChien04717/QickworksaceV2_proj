@@ -32,14 +32,16 @@ def list_data_files(root_dir: str) -> list[dict]:
         if path.suffix.lower() not in {".h5", ".hdf5"}:
             continue
         meta = _read_meta(path)
-        files.append({
-            "path": str(path),
-            "filename": path.name,
-            "timestamp": meta.get("timestamp", ""),
-            "experiment": meta.get("experiment_type", path.stem),
-            "qubit": _qubit_index(meta),
-            "tag": meta.get("metadata", {}).get("tag", ""),
-        })
+        files.append(
+            {
+                "path": str(path),
+                "filename": path.name,
+                "timestamp": meta.get("timestamp", ""),
+                "experiment": meta.get("experiment_type", path.stem),
+                "qubit": _qubit_index(meta),
+                "tag": meta.get("metadata", {}).get("tag", ""),
+            }
+        )
     files.sort(key=lambda item: item.get("timestamp") or "", reverse=True)
     return files
 
@@ -72,7 +74,11 @@ def load_data(filepath: str) -> dict:
 
         avgi = np.asarray(data_group["avgi"][:])
         avgq = np.asarray(data_group["avgq"][:])
-        mag = np.asarray(data_group["mag"][:]) if "mag" in data_group else np.abs(avgi + 1j * avgq)
+        mag = (
+            np.asarray(data_group["mag"][:])
+            if "mag" in data_group
+            else np.abs(avgi + 1j * avgq)
+        )
         phase = (
             np.asarray(data_group["phase"][:])
             if "phase" in data_group
@@ -80,7 +86,11 @@ def load_data(filepath: str) -> dict:
         )
 
         x = _axis_dict(h5, "x", fallback_size=avgi.shape[-1])
-        y = _axis_dict(h5, "y", fallback_size=avgi.shape[0]) if "y" in h5 else None
+        y = (
+            _axis_dict(h5, "y", fallback_size=avgi.shape[0])
+            if "y" in h5
+            else None
+        )
 
     cfg = meta.get("config", {}) or {}
     return {
@@ -183,10 +193,18 @@ def _load_native_data(filepath: str) -> dict:
     x_values = result.x_axis
     if x_values is None:
         x_values = np.arange(iq.shape[-1] if iq.ndim else iq.size, dtype=float)
-    x = {"name": result.x_name or "x", "unit": result.x_unit, "values": x_values}
+    x = {
+        "name": result.x_name or "x",
+        "unit": result.x_unit,
+        "values": x_values,
+    }
     y = None
     if result.y_axis is not None:
-        y = {"name": result.y_name or "y", "unit": result.y_unit, "values": result.y_axis}
+        y = {
+            "name": result.y_name or "y",
+            "unit": result.y_unit,
+            "values": result.y_axis,
+        }
     return {
         "path": filepath,
         "filename": os.path.basename(filepath),
@@ -254,7 +272,11 @@ def _qubit_index(meta: dict):
         Result of the operation.
     """
     cfg = meta.get("config", {}) or {}
-    raw = cfg.get("name") or cfg.get("qubit") or meta.get("metadata", {}).get("qubit")
+    raw = (
+        cfg.get("name")
+        or cfg.get("qubit")
+        or meta.get("metadata", {}).get("qubit")
+    )
     if isinstance(raw, int):
         return raw
     if isinstance(raw, str):

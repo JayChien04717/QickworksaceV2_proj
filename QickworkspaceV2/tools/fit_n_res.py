@@ -15,12 +15,20 @@ def _validated_trace(
     transmission = np.asarray(s21, dtype=complex)
 
     if frequency.ndim != 1 or transmission.ndim != 1:
-        raise ValueError("freq_hz and s21 must both be one-dimensional arrays.")
+        raise ValueError(
+            "freq_hz and s21 must both be one-dimensional arrays."
+        )
     if frequency.size != transmission.size:
-        raise ValueError("freq_hz and s21 must contain the same number of points.")
+        raise ValueError(
+            "freq_hz and s21 must contain the same number of points."
+        )
     if frequency.size < 7:
-        raise ValueError("At least seven samples are required to detect resonators.")
-    if not np.all(np.isfinite(frequency)) or not np.all(np.isfinite(transmission)):
+        raise ValueError(
+            "At least seven samples are required to detect resonators."
+        )
+    if not np.all(np.isfinite(frequency)) or not np.all(
+        np.isfinite(transmission)
+    ):
         raise ValueError("freq_hz and s21 must contain only finite values.")
     if not np.all(np.diff(frequency) > 0):
         raise ValueError("freq_hz must be strictly increasing.")
@@ -204,7 +212,9 @@ def detect_resonators(
     widths = widths_result[0]
     left_ips = widths_result[2]
     right_ips = widths_result[3]
-    scores = properties["prominences"] / np.maximum(widths, 1.0) ** width_penalty
+    scores = (
+        properties["prominences"] / np.maximum(widths, 1.0) ** width_penalty
+    )
     ranked_candidates = np.argsort(scores)[::-1]
     selected = peaks[ranked_candidates[:count]].tolist()
 
@@ -225,15 +235,22 @@ def detect_resonators(
         for candidate_position in ranked_candidates[:count]:
             candidate = peaks[candidate_position]
             left = max(0, int(np.floor(left_ips[candidate_position])))
-            right = min(magnitude.size - 1, int(np.ceil(right_ips[candidate_position])))
-            region_refs = phase_refs[(phase_refs >= left) & (phase_refs <= right)]
+            right = min(
+                magnitude.size - 1, int(np.ceil(right_ips[candidate_position]))
+            )
+            region_refs = phase_refs[
+                (phase_refs >= left) & (phase_refs <= right)
+            ]
 
             if region_refs.size:
                 anchor = region_refs[np.argmax(phase_derivative[region_refs])]
                 nearby_dips = peaks[
                     (peaks >= left)
                     & (peaks <= right)
-                    & (np.abs(frequency[peaks] - frequency[anchor]) <= phase_snap_hz)
+                    & (
+                        np.abs(frequency[peaks] - frequency[anchor])
+                        <= phase_snap_hz
+                    )
                 ]
                 refined.append(
                     int(nearby_dips[np.argmin(np.abs(nearby_dips - anchor))])
@@ -259,7 +276,8 @@ def detect_resonators(
     display_phase_refs = []
     for selected_index in selected_array:
         nearby = phase_refs[
-            np.abs(frequency[phase_refs] - frequency[selected_index]) <= 0.025e9
+            np.abs(frequency[phase_refs] - frequency[selected_index])
+            <= 0.025e9
         ]
         if nearby.size:
             display_phase_refs.append(
@@ -273,7 +291,9 @@ def detect_resonators(
             "left_ips": left_ips,
             "right_ips": right_ips,
             "scores": scores,
-            "phase_refs": np.asarray(sorted(set(display_phase_refs)), dtype=int),
+            "phase_refs": np.asarray(
+                sorted(set(display_phase_refs)), dtype=int
+            ),
             "all_phase_refs": phase_refs,
             "phase_corr": corrected_phase,
             "dphase": phase_derivative,
@@ -360,105 +380,8 @@ def fit_n_resonators(
     return fitted, details
 
 
-def plot_n_resonators(
-    freq_hz: np.ndarray,
-    s21: np.ndarray,
-    fitted_freqs_hz: np.ndarray,
-    *,
-    y_mode: str = "abs",
-    ax=None,
-    show: bool = True,
-    marker_kwargs: dict | None = None,
-):
-    """Plot an S21 trace and mark fitted resonator frequencies.
-
-    Parameters are expressed in hertz to match :func:`fit_n_resonators`; the
-    displayed x-axis is converted to megahertz for readability.
-
-    Returns
-    -------
-    fig, ax, resonator_freqs_hz
-        The Matplotlib figure and axes, followed by the sorted frequencies
-        shown on the plot in hertz.
-    """
-    import matplotlib.pyplot as plt
-
-    frequency, transmission = _validated_trace(freq_hz, s21)
-    fitted = np.asarray(fitted_freqs_hz, dtype=float)
-    if fitted.ndim != 1 or fitted.size == 0:
-        raise ValueError("fitted_freqs_hz must be a non-empty 1D array.")
-    if not np.all(np.isfinite(fitted)):
-        raise ValueError("fitted_freqs_hz must contain only finite values.")
-
-    y_mode = str(y_mode).lower()
-    if y_mode == "abs":
-        y_values = np.abs(transmission)
-        ylabel = "|S21| (ADC Units)"
-    elif y_mode == "db":
-        floor = np.finfo(float).tiny
-        y_values = 20 * np.log10(np.maximum(np.abs(transmission), floor))
-        ylabel = "|S21| (dB)"
-    elif y_mode == "phase":
-        y_values = np.unwrap(np.angle(transmission))
-        ylabel = "Phase (rad)"
-    else:
-        raise ValueError("y_mode must be one of 'abs', 'db', or 'phase'.")
-
-    frequency_mhz = frequency / 1e6
-    fitted = np.sort(fitted)
-    fitted_mhz = fitted / 1e6
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 5))
-    else:
-        fig = ax.figure
-
-    ax.plot(frequency_mhz, y_values, color="C0", label="S21")
-    marker_style = {
-        "color": "C3",
-        "linestyle": "--",
-        "linewidth": 1.2,
-        "alpha": 0.8,
-    }
-    if marker_kwargs is not None:
-        marker_style.update(marker_kwargs)
-
-    for index, (resonator_hz, resonator_mhz) in enumerate(
-        zip(fitted, fitted_mhz), start=1
-    ):
-        ax.axvline(resonator_mhz, **marker_style)
-        nearest = int(np.argmin(np.abs(frequency - resonator_hz)))
-        ax.scatter(
-            [resonator_mhz],
-            [y_values[nearest]],
-            color=marker_style.get("color", "C3"),
-            s=28,
-            zorder=3,
-        )
-        ax.annotate(
-            f"R{index}\n{resonator_mhz:.4f} MHz",
-            xy=(resonator_mhz, y_values[nearest]),
-            xytext=(5, 8),
-            textcoords="offset points",
-            fontsize=8,
-            color=marker_style.get("color", "C3"),
-        )
-
-    ax.set_title(f"Multi-Resonator One-Tone Fit ({fitted.size} resonators)")
-    ax.set_xlabel("Frequency (MHz)")
-    ax.set_ylabel(ylabel)
-    ax.grid(True, alpha=0.25)
-    ax.legend(loc="best")
-    fig.tight_layout()
-
-    if show:
-        plt.show()
-
-    return fig, ax, fitted
-
-
 __all__ = [
     "detect_resonators",
     "fit_n_resonators",
     "phase_reference_candidates",
-    "plot_n_resonators",
 ]

@@ -212,7 +212,11 @@ class MuxSingleShotGE(BaseExperiment):
         Any
             Result of the operation.
         """
-        data = np.full((n_trace, 2, iq_list[0].shape[1]), np.nan + 1j * np.nan, dtype=complex)
+        data = np.full(
+            (n_trace, 2, iq_list[0].shape[1]),
+            np.nan + 1j * np.nan,
+            dtype=complex,
+        )
         for idx in range(n_trace):
             arr = np.asarray(iq_list[idx])
             data[idx, 0, :] = arr[0, :, 0] + 1j * arr[0, :, 1]
@@ -326,15 +330,26 @@ class MuxSingleShotGE(BaseExperiment):
         analysis = {}
         if self.iqdata is not None and np.isfinite(self.iqdata).any():
             for idx, name in enumerate(qubit_names):
-                stats = self._analyze_ge(self.iqdata[idx, 0], self.iqdata[idx, 1])
+                stats = self._analyze_ge(
+                    self.iqdata[idx, 0], self.iqdata[idx, 1]
+                )
                 analysis[name] = {
                     key: val
                     for key, val in stats.items()
                     if key not in {"g_i", "e_i"}
                 }
-                fit_result[f"{name}_fidelity"] = (round(stats["fidelity"], 6), None)
-                fit_result[f"{name}_threshold"] = (round(stats["threshold"], 6), None)
-                fit_result[f"{name}_rotation_deg"] = (round(stats["theta_deg"], 6), None)
+                fit_result[f"{name}_fidelity"] = (
+                    round(stats["fidelity"], 6),
+                    None,
+                )
+                fit_result[f"{name}_threshold"] = (
+                    round(stats["threshold"], 6),
+                    None,
+                )
+                fit_result[f"{name}_rotation_deg"] = (
+                    round(stats["theta_deg"], 6),
+                    None,
+                )
                 fit_result[f"{name}_snr"] = (round(stats["snr"], 6), None)
 
         self.data = {}
@@ -350,23 +365,56 @@ class MuxSingleShotGE(BaseExperiment):
         figures = []
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             for idx, name in enumerate(qubit_names):
-                stats = self._analyze_ge(self.iqdata[idx, 0], self.iqdata[idx, 1])
+                stats = self._analyze_ge(
+                    self.iqdata[idx, 0], self.iqdata[idx, 1]
+                )
                 fig, axes = plt.subplots(1, 2, figsize=(9, 4))
-                axes[0].scatter(self.iqdata[idx, 0].real, self.iqdata[idx, 0].imag, s=6, alpha=0.45, label="g")
-                axes[0].scatter(self.iqdata[idx, 1].real, self.iqdata[idx, 1].imag, s=6, alpha=0.45, label="e")
+                axes[0].scatter(
+                    self.iqdata[idx, 0].real,
+                    self.iqdata[idx, 0].imag,
+                    s=6,
+                    alpha=0.45,
+                    label="g",
+                )
+                axes[0].scatter(
+                    self.iqdata[idx, 1].real,
+                    self.iqdata[idx, 1].imag,
+                    s=6,
+                    alpha=0.45,
+                    label="e",
+                )
                 axes[0].set_xlabel("I")
                 axes[0].set_ylabel("Q")
                 axes[0].axis("equal")
                 axes[0].legend()
 
                 bins = int(cfg.get("bins", 120))
-                axes[1].hist(stats["g_i"], bins=bins, alpha=0.55, density=True, label="g")
-                axes[1].hist(stats["e_i"], bins=bins, alpha=0.55, density=True, label="e")
-                axes[1].axvline(stats["threshold"], color="k", linestyle="--", label="threshold")
+                axes[1].hist(
+                    stats["g_i"],
+                    bins=bins,
+                    alpha=0.55,
+                    density=True,
+                    label="g",
+                )
+                axes[1].hist(
+                    stats["e_i"],
+                    bins=bins,
+                    alpha=0.55,
+                    density=True,
+                    label="e",
+                )
+                axes[1].axvline(
+                    stats["threshold"],
+                    color="k",
+                    linestyle="--",
+                    label="threshold",
+                )
                 axes[1].set_xlabel("Rotated I")
                 axes[1].set_ylabel("Density")
                 axes[1].legend()
-                fig.suptitle(f"{name} | F = {stats['fidelity']:.4f}, SNR = {stats['snr']:.3f}")
+                fig.suptitle(
+                    f"{name} | F = {stats['fidelity']:.4f}, SNR = {stats['snr']:.3f}"
+                )
                 fig.tight_layout()
                 figures.append(fig)
                 plt.show()
@@ -393,19 +441,39 @@ class MuxSingleShotGE(BaseExperiment):
             dataset_dims={"iq": ["qubit", "state", "shot"]},
             analysis_data={
                 "fidelity": {
-                    "values": np.asarray([analysis.get(name, {}).get("fidelity", np.nan) for name in qubit_names]),
+                    "values": np.asarray(
+                        [
+                            analysis.get(name, {}).get("fidelity", np.nan)
+                            for name in qubit_names
+                        ]
+                    ),
                     "dims": ["qubit"],
                 },
                 "threshold": {
-                    "values": np.asarray([analysis.get(name, {}).get("threshold", np.nan) for name in qubit_names]),
+                    "values": np.asarray(
+                        [
+                            analysis.get(name, {}).get("threshold", np.nan)
+                            for name in qubit_names
+                        ]
+                    ),
                     "dims": ["qubit"],
                 },
                 "rotation_deg": {
-                    "values": np.asarray([analysis.get(name, {}).get("theta_deg", np.nan) for name in qubit_names]),
+                    "values": np.asarray(
+                        [
+                            analysis.get(name, {}).get("theta_deg", np.nan)
+                            for name in qubit_names
+                        ]
+                    ),
                     "dims": ["qubit"],
                 },
                 "snr": {
-                    "values": np.asarray([analysis.get(name, {}).get("snr", np.nan) for name in qubit_names]),
+                    "values": np.asarray(
+                        [
+                            analysis.get(name, {}).get("snr", np.nan)
+                            for name in qubit_names
+                        ]
+                    ),
                     "dims": ["qubit"],
                 },
             },
@@ -414,7 +482,9 @@ class MuxSingleShotGE(BaseExperiment):
             plot_id="single_shot_iq",
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux single-shot ge acquired." if has_data else "No data acquired.",
+            quality_message="Mux single-shot ge acquired."
+            if has_data
+            else "No data acquired.",
             interrupted=interrupted,
             avg_count=1,
         )
@@ -505,10 +575,16 @@ class MuxSingleShotGEOpt(BaseExperiment):
         if freq_offset is not None:
             point_cfg["res_freqs"] = list(cfg["res_freqs"])
             for slot in active_slots:
-                point_cfg["res_freqs"][slot] = float(cfg["res_freqs"][slot]) + float(freq_offset)
-            active_freqs = [point_cfg["res_freqs"][slot] for slot in active_slots]
+                point_cfg["res_freqs"][slot] = float(
+                    cfg["res_freqs"][slot]
+                ) + float(freq_offset)
+            active_freqs = [
+                point_cfg["res_freqs"][slot] for slot in active_slots
+            ]
             if active_freqs:
-                point_cfg["mixer_freq"] = int(round(float(np.mean(active_freqs))))
+                point_cfg["mixer_freq"] = int(
+                    round(float(np.mean(active_freqs)))
+                )
 
         return point_cfg
 
@@ -630,7 +706,9 @@ class MuxSingleShotGEOpt(BaseExperiment):
         interrupted = False
         points_done = 0
         total_points = (
-            len(self.length_axis) * len(self.gain_axis) * len(self.freq_offsets)
+            len(self.length_axis)
+            * len(self.gain_axis)
+            * len(self.freq_offsets)
         )
         try:
             with tqdm(total=total_points, desc="SingleShot optimize") as pbar:
@@ -657,11 +735,15 @@ class MuxSingleShotGEOpt(BaseExperiment):
                                 cfg=point_cfg,
                             )
                             self._last_prog = prog
-                            iq_list = prog.acquire(self.soc, rounds=1, progress=False)
+                            iq_list = prog.acquire(
+                                self.soc, rounds=1, progress=False
+                            )
                             point_iq = MuxSingleShotGE._extract_iq(
                                 iq_list, trace_count
                             )
-                            self.iqdata[:, l_idx, g_idx, f_idx, :, :] = point_iq
+                            self.iqdata[:, l_idx, g_idx, f_idx, :, :] = (
+                                point_iq
+                            )
 
                             for q_idx in range(trace_count):
                                 stats = MuxSingleShotGE._analyze_ge(
@@ -697,8 +779,12 @@ class MuxSingleShotGEOpt(BaseExperiment):
             best_gain = float(self.gain_axis[g_idx])
             best_freq_offset = float(self.freq_offsets[f_idx])
             best_fid = float(fid_arr[best_idx])
-            best_threshold = float(self.metric_arrays["threshold"][q_idx][best_idx])
-            best_rotation = float(self.metric_arrays["rotation_deg"][q_idx][best_idx])
+            best_threshold = float(
+                self.metric_arrays["threshold"][q_idx][best_idx]
+            )
+            best_rotation = float(
+                self.metric_arrays["rotation_deg"][q_idx][best_idx]
+            )
             best_snr = float(self.metric_arrays["snr"][q_idx][best_idx])
             center_if = float(cfg["res_freqs"][active_slots[q_idx]])
             lo_ext = float(cfg.get("LO_ext") or 0.0)
@@ -717,9 +803,15 @@ class MuxSingleShotGEOpt(BaseExperiment):
             fit_result[f"{name}_best_fidelity"] = (round(best_fid, 6), None)
             fit_result[f"{name}_best_length"] = (round(best_length, 6), None)
             fit_result[f"{name}_best_gain"] = (round(best_gain, 6), None)
-            fit_result[f"{name}_best_res_freq_mhz"] = (round(best_freq_mhz, 6), None)
+            fit_result[f"{name}_best_res_freq_mhz"] = (
+                round(best_freq_mhz, 6),
+                None,
+            )
             fit_result[f"{name}_threshold"] = (round(best_threshold, 6), None)
-            fit_result[f"{name}_rotation_deg"] = (round(best_rotation, 6), None)
+            fit_result[f"{name}_rotation_deg"] = (
+                round(best_rotation, 6),
+                None,
+            )
             fit_result[f"{name}_snr"] = (round(best_snr, 6), None)
 
         self.best = best
@@ -739,7 +831,9 @@ class MuxSingleShotGEOpt(BaseExperiment):
                     x_label, x_axis, x_dim = varying[-1]
                     y_label, y_axis, y_dim = varying[-2]
                     reduce_axes = tuple(
-                        dim for _, _, dim in axes_info if dim not in {x_dim, y_dim}
+                        dim
+                        for _, _, dim in axes_info
+                        if dim not in {x_dim, y_dim}
                     )
                     heatmap = (
                         np.nanmax(fid_arr, axis=reduce_axes)
@@ -778,7 +872,10 @@ class MuxSingleShotGEOpt(BaseExperiment):
                 figures.append(fig)
                 plt.show()
 
-        has_data = self.metric_arrays is not None and np.isfinite(self.metric_arrays["fidelity"]).any()
+        has_data = (
+            self.metric_arrays is not None
+            and np.isfinite(self.metric_arrays["fidelity"]).any()
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq=self.iqdata,
@@ -800,12 +897,22 @@ class MuxSingleShotGEOpt(BaseExperiment):
                 "qubit": {"values": qubit_names},
                 "length": {"values": self.length_axis, "unit": "us"},
                 "gain": {"values": self.gain_axis, "unit": "DAC unit"},
-                "frequency_offset": {"values": self.freq_offsets, "unit": "MHz"},
+                "frequency_offset": {
+                    "values": self.freq_offsets,
+                    "unit": "MHz",
+                },
                 "state": {"values": ["g", "e"]},
                 "shot": {"values": np.arange(int(shots)), "unit": "#"},
             },
             dataset_dims={
-                "iq": ["qubit", "length", "gain", "frequency_offset", "state", "shot"]
+                "iq": [
+                    "qubit",
+                    "length",
+                    "gain",
+                    "frequency_offset",
+                    "state",
+                    "shot",
+                ]
             },
             analysis_data={
                 name: {

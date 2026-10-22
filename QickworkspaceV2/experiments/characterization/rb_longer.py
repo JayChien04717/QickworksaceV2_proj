@@ -19,13 +19,12 @@ from __future__ import annotations
 from numbers import Integral
 
 import numpy as np
+from qick.asm_v2 import AsmInst, AsmV2, Macro
 from tqdm.auto import tqdm
 
-from qick.asm_v2 import AsmInst, AsmV2, Macro
-
 from ...analysis.rb import RBAnalysis
-from ...core.base_program import BaseProgram
 from ...core.acquisition import acquire_values
+from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...tools.rb_generator import (
     INTERLEAVE_GATES,
@@ -36,7 +35,6 @@ from ...tools.rb_generator import (
 )
 from .rb import RandomizedBenchmarking
 
-
 CLIFFORD_COUNT = 24
 MAX_TPROC_LOOP_COUNT = 2**23
 INVERSE_TABLE_OFFSET = CLIFFORD_COUNT * CLIFFORD_COUNT
@@ -44,6 +42,7 @@ LONG_RB_DMEM_WORDS = INVERSE_TABLE_OFFSET + CLIFFORD_COUNT
 
 
 # Small, regular lookup tables shared by Python and the tProc
+
 
 def _build_clifford_tables() -> tuple[np.ndarray, np.ndarray]:
     """Build tables for ``new_state = C_gate @ C_state`` and inversion.
@@ -66,7 +65,9 @@ def _build_clifford_tables() -> tuple[np.ndarray, np.ndarray]:
     return multiplication, inverses
 
 
-CLIFFORD_MULTIPLICATION_TABLE, CLIFFORD_INVERSE_TABLE = _build_clifford_tables()
+CLIFFORD_MULTIPLICATION_TABLE, CLIFFORD_INVERSE_TABLE = (
+    _build_clifford_tables()
+)
 
 
 def _interleaved_clifford_index(label: str | None) -> int | None:
@@ -197,12 +198,15 @@ def verify_long_rb_sequence(
     for clifford_index in _iter_clifford_indices(seed, depth):
         state = int(CLIFFORD_MULTIPLICATION_TABLE[clifford_index, state])
         if interleaved_index is not None:
-            state = int(CLIFFORD_MULTIPLICATION_TABLE[interleaved_index, state])
+            state = int(
+                CLIFFORD_MULTIPLICATION_TABLE[interleaved_index, state]
+            )
     recovery = int(CLIFFORD_INVERSE_TABLE[state])
     return int(CLIFFORD_MULTIPLICATION_TABLE[recovery, state]) == 0
 
 
 # The only low-level helper we need from the tProc assembler
+
 
 class _RegAlu(Macro):
     """Write ``dst = lhs OP rhs`` using a full tProc-v2 ALU operation."""
@@ -247,6 +251,7 @@ class _RegAlu(Macro):
 
 
 # Hardware program
+
 
 class LongerRBProgram(BaseProgram):
     """Constant-memory RB program using an on-tProc deterministic PRNG."""
@@ -452,7 +457,9 @@ class LongerRBProgram(BaseProgram):
             Experiment configuration mapping.
         """
         dispatch = AsmV2()
-        self._emit_dispatch_tree(dispatch, tuple(range(CLIFFORD_COUNT)), "RB_D")
+        self._emit_dispatch_tree(
+            dispatch, tuple(range(CLIFFORD_COUNT)), "RB_D"
+        )
 
         prefix = cfg.get("prefix", "ge")
         channel = cfg["qb_ch"]
@@ -465,7 +472,8 @@ class LongerRBProgram(BaseProgram):
             "-Y/2": f"y90m_{prefix}",
         }
         primitive_slot = max(
-            float(self.pulses[name].get_length()) for name in pulse_names.values()
+            float(self.pulses[name].get_length())
+            for name in pulse_names.values()
         ) + float(cfg.get("rb_gate_gap", 0.01))
         for index, decomposition in enumerate(clifford_decompositions):
             dispatch.label(f"RB_CLIFFORD_{index}")
@@ -518,6 +526,7 @@ class LongerRBProgram(BaseProgram):
 
 
 # Notebook-facing experiment
+
 
 class RandomizedBenchmarkingLonger(RandomizedBenchmarking):
     """Single-qubit RB/IRB whose tProc memory use is independent of depth.
@@ -612,7 +621,9 @@ class RandomizedBenchmarkingLonger(RandomizedBenchmarking):
                 if not verify_long_rb_sequence(
                     circuit_seed, depth, interleaved_gate
                 ):
-                    raise RuntimeError("internal RB recovery-table validation failed")
+                    raise RuntimeError(
+                        "internal RB recovery-table validation failed"
+                    )
 
                 program_cfg = dict(self.cfg)
                 program_cfg.update(

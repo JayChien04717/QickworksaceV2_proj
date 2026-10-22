@@ -1,11 +1,6 @@
-import numpy as np
 import warnings
 
-from .utils import (
-    guess_edelay_from_gradient,
-    smooth_gradient,
-    complex_fit,
-)
+import numpy as np
 
 from .resonators import (
     ResonatorParams,
@@ -17,9 +12,14 @@ from .resonators import (
     resonator_dict,
     transmission,
 )
+from .utils import (
+    complex_fit,
+    guess_edelay_from_gradient,
+    smooth_gradient,
+)
+
 
 def get_abcd(freq, signal, rec_depth=0):
-
     """Return abcd.
 
     Parameters
@@ -44,11 +44,12 @@ def get_abcd(freq, signal, rec_depth=0):
     signal_grad = smooth_gradient(signal)
 
     for _ in range(rec_depth + 1):
-
         xx = (x_design * np.abs(signal_grad)) @ x_design.T
         xdyx = (signal * x_design * np.abs(signal_grad)) @ x_design.T
         xdycx = (np.conj(signal) * x_design * np.abs(signal_grad)) @ x_design.T
-        xdy2x = (np.abs(signal) ** 2 * x_design * np.abs(signal_grad)) @ x_design.T
+        xdy2x = (
+            np.abs(signal) ** 2 * x_design * np.abs(signal_grad)
+        ) @ x_design.T
 
         up_right = np.linalg.inv(xx) @ xdyx
         bottom_left = np.linalg.inv(xdy2x) @ xdycx
@@ -71,7 +72,6 @@ def get_abcd(freq, signal, rec_depth=0):
 
 
 def abcd2params(abcd, geometry):
-
     """Return the abcd2params result.
 
     Parameters
@@ -89,7 +89,6 @@ def abcd2params(abcd, geometry):
     a, b, c, d = abcd
 
     if resonator_dict[geometry] == reflection:
-
         f_0 = -0.5 * np.real(a / b + c / d)
         a_in = b / d
 
@@ -100,7 +99,6 @@ def abcd2params(abcd, geometry):
         return f_0, kappa, kappa_c_real, np.real(a_in), np.imag(a_in)
 
     if resonator_dict[geometry] == reflection_mismatched:
-
         f_0 = -np.real(c / d)
         a_in = b / d
 
@@ -110,12 +108,11 @@ def abcd2params(abcd, geometry):
 
         kappa = kappa_i + kappa_c_real
 
-        phi_0 = np.angle(kappa_c_real - 1j*kappa_c_imag)
+        phi_0 = np.angle(kappa_c_real - 1j * kappa_c_imag)
 
         return f_0, kappa, kappa_c_real, phi_0, np.real(a_in), np.imag(a_in)
 
     elif resonator_dict[geometry] == transmission:
-
         signal_f_0_before = (a - b * np.real(c / d)) / (c - d * np.real(c / d))
         a, b = a - c * b / d, 0
         signal_f_0_after = (a - b * np.real(c / d)) / (c - d * np.real(c / d))
@@ -128,7 +125,6 @@ def abcd2params(abcd, geometry):
         return f_0, kappa, np.real(a_in), np.imag(a_in)
 
     elif resonator_dict[geometry] == hanger:
-
         kappa_c_r = np.real(1j * (c / d - a / b))
         kappa_i_r = -np.imag(a / b + c / d)
         f_0 = -0.5 * np.real(a / b + c / d)
@@ -142,23 +138,21 @@ def abcd2params(abcd, geometry):
         return f_0, kappa, kappa_c_real, np.real(a_in), np.imag(a_in)
 
     elif resonator_dict[geometry] == hanger_mismatched:
-
         f_0 = -np.real(c / d)
         a_in = b / d
 
-        kappa_c_imag = 2*np.real(a / b - c / d)
-        kappa_c_real = 2*np.real(1j * (c / d - a / b))
+        kappa_c_imag = 2 * np.real(a / b - c / d)
+        kappa_c_real = 2 * np.real(1j * (c / d - a / b))
         kappa_i = -2 * np.imag(c / d) - kappa_c_real
 
         kappa = kappa_i + kappa_c_real
 
-        phi_0 = np.angle(kappa_c_real - 1j*kappa_c_imag)
+        phi_0 = np.angle(kappa_c_real - 1j * kappa_c_imag)
 
         return f_0, kappa, kappa_c_real, phi_0, np.real(a_in), np.imag(a_in)
 
 
 def meta_fit_edelay(freq, signal, rec_depth=0):
-
     """Return the meta fit edelay result.
 
     Parameters
@@ -185,7 +179,6 @@ def meta_fit_edelay(freq, signal, rec_depth=0):
     l2_error_array = np.zeros_like(edelay_array)
 
     for i, ed in enumerate(edelay_array):
-
         s = signal * np.exp(-2j * np.pi * freq * ed)
         _, abcd_fit = quick_fit(freq, s, rec_depth)
 
@@ -234,7 +227,11 @@ def fit_signal(
         Result of the operation.
     """
     if api_warning:
-        warnings.warn("fit_signal() is deprecated, please use analyze() instead, and analyze().plot() to display data.", UserWarning)
+        warnings.warn(
+            "fit_signal() is deprecated, please use analyze() instead, "
+            "and analyze().plot() to display data.",
+            UserWarning,
+        )
 
     if fit_edelay:
         edelay = meta_fit_edelay(freq, signal, rec_depth)
@@ -262,13 +259,22 @@ def fit_signal(
 
     if final_ls_opti:
         params, _ = complex_fit(fit_func, freq, signal, params)
-    
+
     resonator_params = ResonatorParams(params, geometry, freq, signal)
 
-    if resonator_params.phi_0 is not None and  np.abs(resonator_params.phi_0) > 0.25:
-        warnings.warn("Extracted phi_0 greater than 0.25, this might indicate a big impedance mismatch, values of kappa_i and kappa_c might be affected, you can try to set: allow_mismatch=False", UserWarning)
+    if (
+        resonator_params.phi_0 is not None
+        and np.abs(resonator_params.phi_0) > 0.25
+    ):
+        warnings.warn(
+            "Extracted phi_0 greater than 0.25, this might indicate a big "
+            "impedance mismatch, values of kappa_i and kappa_c might be "
+            "affected, you can try to set: allow_mismatch=False",
+            UserWarning,
+        )
 
     return fit_func, ResonatorParams(params, geometry, freq, signal)
+
 
 def analyze(
     freq,
@@ -315,4 +321,5 @@ def analyze(
         final_ls_opti,
         allow_mismatch,
         rec_depth,
-        api_warning = False)[1]
+        api_warning=False,
+    )[1]

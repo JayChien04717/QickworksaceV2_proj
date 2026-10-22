@@ -1,5 +1,6 @@
-import numpy as np
 import random
+
+import numpy as np
 
 
 def rx(theta):
@@ -15,8 +16,12 @@ def rx(theta):
     Any
         Result of the operation.
     """
-    return np.array([[np.cos(theta/2), -1j*np.sin(theta/2)],
-                     [-1j*np.sin(theta/2), np.cos(theta/2)]])
+    return np.array(
+        [
+            [np.cos(theta / 2), -1j * np.sin(theta / 2)],
+            [-1j * np.sin(theta / 2), np.cos(theta / 2)],
+        ]
+    )
 
 
 def ry(theta):
@@ -32,26 +37,30 @@ def ry(theta):
     Any
         Result of the operation.
     """
-    return np.array([[np.cos(theta/2), -np.sin(theta/2)],
-                     [np.sin(theta/2), np.cos(theta/2)]])
+    return np.array(
+        [
+            [np.cos(theta / 2), -np.sin(theta / 2)],
+            [np.sin(theta / 2), np.cos(theta / 2)],
+        ]
+    )
 
 
 IDENTITY = np.eye(2, dtype=complex)
-X_half  = rx( np.pi/2)
-mX_half = rx(-np.pi/2)
-Y_half  = ry( np.pi/2)
-mY_half = ry(-np.pi/2)
+X_half = rx(np.pi / 2)
+mX_half = rx(-np.pi / 2)
+Y_half = ry(np.pi / 2)
+mY_half = ry(-np.pi / 2)
 X = X_half @ X_half
 Y = Y_half @ Y_half
 
 gate_map = {
-    "I":    IDENTITY,
-    "X/2":  X_half,
+    "I": IDENTITY,
+    "X/2": X_half,
     "-X/2": mX_half,
-    "Y/2":  Y_half,
+    "Y/2": Y_half,
     "-Y/2": mY_half,
-    "X":    X,
-    "Y":    Y,
+    "X": X,
+    "Y": Y,
 }
 
 clifford_decompositions = [
@@ -107,12 +116,11 @@ def _matrix_distance(A, B):
     Any
         Result of the operation.
     """
-    return min(np.linalg.norm(A - B, 'fro'),
-               np.linalg.norm(A + B, 'fro'))
+    return min(np.linalg.norm(A - B, 'fro'), np.linalg.norm(A + B, 'fro'))
 
 
 for i in range(24):
-    for j in range(i+1, 24):
+    for j in range(i + 1, 24):
         d = _matrix_distance(clifford_matrices[i], clifford_matrices[j])
         assert d > 1e-6, f"Duplicate Cliffords at index {i} and {j}"
 
@@ -156,14 +164,16 @@ def find_clifford_index(U):
 
 
 INTERLEAVE_GATES = {
-    "X":   (gate_map["X"],   ["X"]),
-    "Y":   (gate_map["Y"],   ["Y"]),
+    "X": (gate_map["X"], ["X"]),
+    "Y": (gate_map["Y"], ["Y"]),
     "X/2": (gate_map["X/2"], ["X/2"]),
     "Y/2": (gate_map["Y/2"], ["Y/2"]),
 }
 
 
-def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
+def single_qb_rb(
+    n_clifford, n_sample, interleave=None, seed=None, debug=False
+):
     """Generate n_sample RB (or IRB) sequences of length n_clifford.
 
     Parameters
@@ -198,10 +208,10 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
                 f"Unsupported interleave gate {interleave!r}. "
                 f"Choose from: {list(INTERLEAVE_GATES.keys())}"
             )
-        interleave_mat    = INTERLEAVE_GATES[interleave][0]
+        interleave_mat = INTERLEAVE_GATES[interleave][0]
         interleave_pulses = INTERLEAVE_GATES[interleave][1]
     else:
-        interleave_mat    = None
+        interleave_mat = None
         interleave_pulses = None
 
     results = []
@@ -224,7 +234,11 @@ def single_qb_rb(n_clifford, n_sample, interleave=None, seed=None, debug=False):
         inv_idx = inverse_table[acc_idx]
 
         rb_pulse_list = []
-        ilv_iter = iter(interleave_pulse_log) if interleave_pulses is not None else None
+        ilv_iter = (
+            iter(interleave_pulse_log)
+            if interleave_pulses is not None
+            else None
+        )
 
         for k, idx in enumerate(sequence_indices):
             rb_pulse_list.extend(clifford_decompositions[idx])

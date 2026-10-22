@@ -39,11 +39,19 @@ step_type_enum = h5py.special_dtype(
     enum=(np.int16, {"Fixed # of pts": 1, "Fixed step": 0})
 )
 interp_enum = h5py.special_dtype(
-    enum=(np.int16, {"Linear": 0, "Log": 1, "Log, #/decade": 2, "Lorentzian": 3})
+    enum=(
+        np.int16,
+        {"Linear": 0, "Log": 1, "Log, #/decade": 2, "Lorentzian": 3},
+    )
 )
-step_unit_enum = h5py.special_dtype(enum=(np.int16, {"Instrument": 0, "Physical": 1}))
+step_unit_enum = h5py.special_dtype(
+    enum=(np.int16, {"Instrument": 0, "Physical": 1})
+)
 after_last_enum = h5py.special_dtype(
-    enum=(np.int16, {"Goto first point": 0, "Goto value...": 2, "Stay at final": 1})
+    enum=(
+        np.int16,
+        {"Goto first point": 0, "Goto value...": 2, "Stay at final": 1},
+    )
 )
 sweep_mode_enum = h5py.special_dtype(
     enum=(np.int16, {"Between points": 1, "Continuous": 2, "Off": 0})
@@ -74,7 +82,11 @@ def _get_database_folder():
 
 
 def _create_log_path(
-    sLogName, dateObj=None, logger_mode=False, bConfigFile=False, bCreatePath=True
+    sLogName,
+    dateObj=None,
+    logger_mode=False,
+    bConfigFile=False,
+    bCreatePath=True,
 ):
     """Create log path.
 
@@ -210,7 +222,9 @@ class LogFile(object):
     def _log_group_names(h5):
         names = [""]
         numbered = [name for name in h5 if name.startswith("Log_")]
-        names.extend(sorted(numbered, key=lambda name: int(name.split("_", 1)[1])))
+        names.extend(
+            sorted(numbered, key=lambda name: int(name.split("_", 1)[1]))
+        )
         return names
 
     def _select_log_group(self, h5, log=-1):
@@ -233,7 +247,9 @@ class LogFile(object):
             try:
                 return channels[int(channel)]["name"]
             except IndexError as exc:
-                raise ValueError(f"{kind.title()} channel index {channel} not found.") from exc
+                raise ValueError(
+                    f"{kind.title()} channel index {channel} not found."
+                ) from exc
         name = _to_str(channel)
         if name not in {item["name"] for item in channels}:
             raise ValueError(f"{kind.title()} channel {name!r} not found.")
@@ -260,7 +276,8 @@ class LogFile(object):
         with h5py.File(self.file_name, "r+") as f:
             if set_all:
                 groups = [
-                    f if name == "" else f[name] for name in self._log_group_names(f)
+                    f if name == "" else f[name]
+                    for name in self._log_group_names(f)
                 ]
             else:
                 groups = [self._select_log_group(f, log)]
@@ -277,7 +294,9 @@ class LogFile(object):
         """
         with h5py.File(self.file_name, "r") as f:
             grp = self._select_log_group(f, log)
-            return _to_str(grp.attrs.get("comment", f.attrs.get("comment", b"")))
+            return _to_str(
+                grp.attrs.get("comment", f.attrs.get("comment", b""))
+            )
 
     def setProject(self, project):
         """Return the setProject result.
@@ -318,7 +337,9 @@ class LogFile(object):
         """
         with h5py.File(self.file_name, "r+") as f:
             if "Tags" in f:
-                f["Tags"].attrs["User"] = np.array([_to_bytes(user)], dtype=object)
+                f["Tags"].attrs["User"] = np.array(
+                    [_to_bytes(user)], dtype=object
+                )
 
     def getUser(self):
         """Return the getUser result.
@@ -451,24 +472,6 @@ class LogFile(object):
                         )
             return channels
 
-    def getAxis(self):
-        """Return all sweep axes in Labber step-channel order.
-
-        Returns
-        -------
-        list of dict
-            Each dictionary contains ``axis_name`` and ``axis_values``.  The
-            values are returned as independent NumPy arrays so callers can
-            modify them without changing the channel metadata.
-        """
-        return [
-            {
-                "axis_name": channel["name"],
-                "axis_values": np.array(channel["values"], copy=True),
-            }
-            for channel in self.getStepChannels()
-        ]
-
     def getLogChannels(self):
         """Return the getLogChannels result.
 
@@ -502,9 +505,14 @@ class LogFile(object):
                                     for r in f["Data/Channel names"]
                                 ]
                                 name_infos = [
-                                    info for name_str, info in infos if name_str == name
+                                    info
+                                    for name_str, info in infos
+                                    if name_str == name
                                 ]
-                                if "Real" in name_infos or "Imaginary" in name_infos:
+                                if (
+                                    "Real" in name_infos
+                                    or "Imaginary" in name_infos
+                                ):
                                     is_complex = True
 
                         channels.append(
@@ -522,13 +530,10 @@ class LogFile(object):
             return channels
 
     def getData(self, name=None, entry=None, inner=None, log=-1):
-        """Retrieve channel data using the public Labber ``LogFile`` API.
-
-        ``name`` is optional, matching Labber: omitting it selects the first
-        log channel.  Vector traces are returned at their stored maximum
-        length, with shorter entries padded by the HDF5 dataset fill value.
-        """
-        channel_name = self._channel_name(self.getLogChannels(), name, kind="log")
+        """Retrieve channel data using the public Labber ``LogFile`` API."""
+        channel_name = self._channel_name(
+            self.getLogChannels(), name, kind="log"
+        )
         with h5py.File(self.file_name, "r") as f:
             grp = self._select_log_group(f, log)
             values = None
@@ -538,27 +543,44 @@ class LogFile(object):
                     (_to_str(row["name"]), _to_str(row["info"]))
                     for row in grp["Data/Channel names"]
                 ]
-                indices = [idx for idx, item in enumerate(chns) if item[0] == channel_name]
+                indices = [
+                    idx
+                    for idx, item in enumerate(chns)
+                    if item[0] == channel_name
+                ]
                 if len(indices) == 1:
                     values = grp["Data/Data"][:, indices[0], :].T
                 elif len(indices) == 2:
-                    real_idx = next(idx for idx in indices if chns[idx][1] == "Real")
-                    imag_idx = next(idx for idx in indices if chns[idx][1] == "Imaginary")
+                    real_idx = next(
+                        idx for idx in indices if chns[idx][1] == "Real"
+                    )
+                    imag_idx = next(
+                        idx for idx in indices if chns[idx][1] == "Imaginary"
+                    )
                     ds = grp["Data/Data"]
                     values = ds[:, real_idx, :].T + 1j * ds[:, imag_idx, :].T
 
-            if values is None and "Traces" in grp and channel_name in grp["Traces"]:
+            if (
+                values is None
+                and "Traces" in grp
+                and channel_name in grp["Traces"]
+            ):
                 ds = grp[f"Traces/{channel_name}"]
+                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
                 is_complex = bool(ds.attrs.get("complex", False))
                 if is_complex:
-                    values = ds[:, 0, :].T + 1j * ds[:, 1, :].T
+                    values = (
+                        ds[:trace_len, 0, :].T + 1j * ds[:trace_len, 1, :].T
+                    )
                 elif ds.shape[1] == 1:
-                    values = ds[:, 0, :].T
+                    values = ds[:trace_len, 0, :].T
                 else:
-                    values = ds[:, 1, :].T
+                    values = ds[:trace_len, 1, :].T
 
             if values is None:
-                raise ValueError(f"Channel {channel_name} not found in log file.")
+                raise ValueError(
+                    f"Channel {channel_name} not found in log file."
+                )
             if entry is not None:
                 values = values[entry]
             if inner is not None:
@@ -574,9 +596,7 @@ class LogFile(object):
             grp = self._select_log_group(f, -1)
             if "Traces" in grp and channel_name in grp["Traces"]:
                 ds = grp[f"Traces/{channel_name}"]
-                n_values = np.asarray(grp[f"Traces/{channel_name}_N"])
-                n_index = entry if len(n_values) > 1 else 0
-                trace_len = int(n_values[n_index])
+                trace_len = int(grp[f"Traces/{channel_name}_N"][0])
                 is_complex = bool(ds.attrs.get("complex", False))
                 components = ds.shape[1]
                 has_custom_x = (components == 2 and not is_complex) or (
@@ -584,7 +604,10 @@ class LogFile(object):
                 )
 
                 if is_complex:
-                    y = ds[:trace_len, 0, entry] + 1j * ds[:trace_len, 1, entry]
+                    y = (
+                        ds[:trace_len, 0, entry]
+                        + 1j * ds[:trace_len, 1, entry]
+                    )
                 elif components == 1:
                     y = ds[:trace_len, 0, entry]
                 else:
@@ -595,25 +618,26 @@ class LogFile(object):
                     x = ds[:trace_len, x_component, entry]
                 else:
                     t0dt_path = f"Traces/{channel_name}_t0dt"
-                    if t0dt_path in grp:
-                        t0dt = grp[t0dt_path]
-                        t0dt_index = entry if len(t0dt) > 1 else 0
-                        t0, dt = t0dt[t0dt_index]
-                    else:
-                        t0, dt = 0.0, 1.0
+                    t0, dt = (
+                        grp[t0dt_path][0] if t0dt_path in grp else (0.0, 1.0)
+                    )
                     x = t0 + np.arange(trace_len) * dt
                 return x, y
 
         y = np.asarray(self.getData(channel_name, entry=entry, log=-1))
         steps = self.getStepChannels()
         step_name = self._channel_name(steps, x_channel, kind="step")
-        step_index = next(idx for idx, item in enumerate(steps) if item["name"] == step_name)
+        step_index = next(
+            idx for idx, item in enumerate(steps) if item["name"] == step_name
+        )
         step_values = np.asarray(steps[step_index]["values"])
         if step_index == 0:
             x = step_values
         else:
             outer_dims = [len(item["values"]) for item in steps[1:]]
-            flat_entry = entry if entry >= 0 else int(np.prod(outer_dims)) + entry
+            flat_entry = (
+                entry if entry >= 0 else int(np.prod(outer_dims)) + entry
+            )
             multi_index = np.unravel_index(flat_entry, outer_dims)
             x = np.full(y.shape, step_values[multi_index[step_index - 1]])
         return x, y
@@ -707,14 +731,12 @@ class LogFile(object):
                             is_vector = True
                             if np.iscomplexobj(val["y"]):
                                 is_complex = True
-                        elif isinstance(val, (list, np.ndarray)) and not isinstance(
-                            val, (str, bytes)
-                        ):
+                        elif isinstance(
+                            val, (list, np.ndarray)
+                        ) and not isinstance(val, (str, bytes)):
                             pass
 
-                    inst_grp_path = (
-                        "Instrument config/Generic - GPIB: , Log channels at localhost"
-                    )
+                    inst_grp_path = "Instrument config/Generic - GPIB: , Log channels at localhost"
                     if inst_grp_path in grp:
                         inst_grp = grp[inst_grp_path]
                         if f"___{name}___x_name" in inst_grp.attrs:
@@ -736,13 +758,17 @@ class LogFile(object):
                 data_grp = grp.create_group("Data")
                 data_grp.attrs["Completed"] = False
                 data_grp.attrs["Step dimensions"] = step_dims
-                data_grp.attrs["Step index"] = np.arange(len(step_dims), dtype=int)
+                data_grp.attrs["Step index"] = np.arange(
+                    len(step_dims), dtype=int
+                )
                 data_grp.attrs["Fixed step index"] = np.array([], dtype=int)
                 data_grp.attrs["Fixed step values"] = np.array([], dtype=float)
                 if len(step_dims) > 1:
                     data_grp.attrs["Entries, last trace"] = dim1
 
-                dtype_chn_names = np.dtype([("name", vlen_bytes), ("info", vlen_bytes)])
+                dtype_chn_names = np.dtype(
+                    [("name", vlen_bytes), ("info", vlen_bytes)]
+                )
                 chn_names_arr = np.array(
                     [(_to_bytes(n), _to_bytes(i)) for n, i in scalar_chns],
                     dtype=dtype_chn_names,
@@ -759,7 +785,11 @@ class LogFile(object):
                 )
 
                 data_grp.create_dataset(
-                    "Time stamp", shape=(0,), maxshape=(M,), chunks=(M,), dtype="f8"
+                    "Time stamp",
+                    shape=(0,),
+                    maxshape=(M,),
+                    chunks=(M,),
+                    dtype="f8",
                 )
 
             data_grp = grp["Data"]
@@ -770,7 +800,8 @@ class LogFile(object):
             ds_time.resize((col + 1,))
 
             curr_timestamp = time.time()
-            # Yes! creation_time is a float timestamp, and Time stamp is the elapsed time since creation_time!
+            # Yes! creation_time is a float timestamp, and Time stamp is the
+            # elapsed time since creation_time!
             creation_time = f.attrs.get("creation_time", curr_timestamp)
             elapsed_time = curr_timestamp - creation_time
             ds_time[col] = elapsed_time
@@ -801,12 +832,16 @@ class LogFile(object):
                         values = np.array([1.0])
                     elif range_type == 1:
                         values = np.linspace(
-                            step_item["start"], step_item["stop"], step_item["n_pts"]
+                            step_item["start"],
+                            step_item["stop"],
+                            step_item["n_pts"],
                         )
                     elif range_type == 0:
                         values = np.array([step_item["single"]])
 
-                ch_idx = [i for i, (n, info) in enumerate(chns) if n == name][0]
+                ch_idx = [i for i, (n, info) in enumerate(chns) if n == name][
+                    0
+                ]
                 if idx == 0:
                     ds_data[:, ch_idx, col] = values
                 else:
@@ -821,7 +856,9 @@ class LogFile(object):
                     if info == "":
                         val_arr = np.asarray(val)
                         if val_arr.ndim == 0:
-                            ds_data[:, chns.index((name, "")), col] = float(val)
+                            ds_data[:, chns.index((name, "")), col] = float(
+                                val
+                            )
                         else:
                             ds_data[:, chns.index((name, "")), col] = val_arr
                     elif info == "Real":
@@ -884,21 +921,12 @@ class LogFile(object):
                             maxshape=(None, C, M),
                             chunks=(trace_len, C, max(1, M)),
                             dtype="f8",
-                            fillvalue=np.nan,
                         )
                         traces_grp.create_dataset(
-                            name + "_N",
-                            shape=(0,),
-                            maxshape=(M,),
-                            chunks=(max(1, M),),
-                            dtype="i4",
+                            name + "_N", shape=(1,), dtype="i4"
                         )
                         traces_grp.create_dataset(
-                            name + "_t0dt",
-                            shape=(0, 2),
-                            maxshape=(M, 2),
-                            chunks=(max(1, M), 2),
-                            dtype="f8",
+                            name + "_t0dt", shape=(1, 2), dtype="f8"
                         )
 
                         ds_trace = traces_grp[name]
@@ -907,7 +935,9 @@ class LogFile(object):
                         x_name = _to_str(
                             inst_grp.attrs.get(f"___{name}___x_name", b"Index")
                         )
-                        x_unit = _to_str(inst_grp.attrs.get(f"___{name}___x_unit", b""))
+                        x_unit = _to_str(
+                            inst_grp.attrs.get(f"___{name}___x_unit", b"")
+                        )
                         ds_trace.attrs["x, name"] = _to_bytes(x_name)
                         ds_trace.attrs["x, unit"] = _to_bytes(x_unit)
 
@@ -920,8 +950,6 @@ class LogFile(object):
                         ds_trace.resize((trace_len, C, ds_trace.shape[2]))
 
                     ds_trace.resize((ds_trace.shape[0], C, col + 1))
-                    ds_N.resize((col + 1,))
-                    ds_t0dt.resize((col + 1, 2))
 
                     if not is_complex and x_data is None:
                         ds_trace[:trace_len, 0, col] = y_data
@@ -936,13 +964,13 @@ class LogFile(object):
                         ds_trace[:trace_len, 1, col] = np.imag(y_data)
                         ds_trace[:trace_len, 2, col] = x_data
 
-                    ds_N[col] = trace_len
+                    ds_N[0] = trace_len
                     if x_data is not None:
-                        ds_t0dt[col, 0] = 0.0
-                        ds_t0dt[col, 1] = 0.0
+                        ds_t0dt[0, 0] = 0.0
+                        ds_t0dt[0, 1] = 0.0
                     else:
-                        ds_t0dt[col, 0] = t0
-                        ds_t0dt[col, 1] = dt
+                        ds_t0dt[0, 0] = t0
+                        ds_t0dt[0, 1] = dt
 
             if "Traces" in grp:
                 traces_grp = grp["Traces"]
@@ -963,7 +991,9 @@ class LogFile(object):
                     grp["Data"].attrs["Completed"] = True
 
                 time_stamps = (
-                    ds_time[:] if "Data" in grp else grp["Traces/Time stamp"][:]
+                    ds_time[:]
+                    if "Data" in grp
+                    else grp["Traces/Time stamp"][:]
                 )
                 if len(time_stamps) > 0:
                     time_sweep = np.diff(np.r_[0.0, time_stamps])
@@ -971,7 +1001,9 @@ class LogFile(object):
                     f.attrs["time_per_point"] = float(median_dt / dim1)
 
 
-def createLogFile_ForData(name, log_channels, step_channels=[], use_database=True):
+def createLogFile_ForData(
+    name, log_channels, step_channels=[], use_database=True
+):
     """Create LogFile ForData.
 
     Parameters
@@ -1212,11 +1244,15 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
                 )
             )
 
-        f.create_dataset("Channels", data=np.array(chn_data, dtype=dtype_channels))
+        f.create_dataset(
+            "Channels", data=np.array(chn_data, dtype=dtype_channels)
+        )
 
         dtype_log_list = np.dtype([("channel_name", vlen_bytes)])
         log_list_data = [(_to_bytes(ch["name"]),) for ch in log_channels]
-        f.create_dataset("Log list", data=np.array(log_list_data, dtype=dtype_log_list))
+        f.create_dataset(
+            "Log list", data=np.array(log_list_data, dtype=dtype_log_list)
+        )
 
         dtype_step_list = np.dtype(
             [
@@ -1278,10 +1314,14 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
             start = vals[0]
             stop = vals[-1]
             span = abs(stop - start)
-            opt_grp.attrs["Initial step size"] = float(0.2 * span) if span > 0 else 1.0
+            opt_grp.attrs["Initial step size"] = (
+                float(0.2 * span) if span > 0 else 1.0
+            )
             opt_grp.attrs["Max value"] = float(max(start, stop))
             opt_grp.attrs["Min value"] = float(min(start, stop))
-            opt_grp.attrs["Precision"] = float(1e-4 * span) if span > 0 else 1e-4
+            opt_grp.attrs["Precision"] = (
+                float(1e-4 * span) if span > 0 else 1e-4
+            )
             opt_grp.attrs["Start value"] = float(start)
 
             dtype_rel = np.dtype(
@@ -1293,7 +1333,9 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
             )
             single_step_grp.create_dataset(
                 "Relation parameters",
-                data=np.array([(b"x", b"Step values", False)], dtype=dtype_rel),
+                data=np.array(
+                    [(b"x", b"Step values", False)], dtype=dtype_rel
+                ),
             )
 
             dtype_items = np.dtype(
@@ -1312,7 +1354,19 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
                 ]
             )
             if len(vals) > 1 and name != _STEP_NAME_API:
-                item_data = (1, 1, start, start, stop, 0.0, 0.0, 0.0, len(vals), 0, 0.0)
+                item_data = (
+                    1,
+                    1,
+                    start,
+                    start,
+                    stop,
+                    0.0,
+                    0.0,
+                    0.0,
+                    len(vals),
+                    0,
+                    0.0,
+                )
             else:
                 item_data = (
                     0,
@@ -1341,7 +1395,8 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
             is_complex = ch.get("complex", False)
             if is_vector:
                 x_name = ch.get(
-                    "x_name", "Time" if "x_unit" in ch or "x_name" in ch else "Index"
+                    "x_name",
+                    "Time" if "x_unit" in ch or "x_name" in ch else "Index",
                 )
                 x_unit = ch.get(
                     "x_unit", "s" if "x_unit" in ch or "x_name" in ch else ""
@@ -1355,6 +1410,7 @@ def createLogFile_ForData(name, log_channels, step_channels=[], use_database=Tru
                 log_inst_cfg.attrs[name] = 0.0j if is_complex else 0.0
 
     return LogFile(resolved_path)
+
 
 EMBEDDED_GROUP = "metagroup"
 PARTIAL_GROUP = "metagroup__partial"
@@ -1403,7 +1459,9 @@ def _preview_png(result) -> bytes:
         elif str(getattr(result, "data_kind", "")).startswith("single_shot"):
             clouds = squeezed.reshape((-1, squeezed.shape[-1]))
             for index, cloud in enumerate(clouds[:8]):
-                ax.scatter(cloud.real, cloud.imag, s=5, alpha=0.35, label=str(index))
+                ax.scatter(
+                    cloud.real, cloud.imag, s=5, alpha=0.35, label=str(index)
+                )
             ax.set(xlabel="I", ylabel="Q")
             ax.legend(title="state/grid", frameon=False)
         else:
@@ -1413,13 +1471,17 @@ def _preview_png(result) -> bytes:
             if image.ndim == 1:
                 ax.plot(image)
             else:
-                plotted = ax.imshow(image, origin="lower", aspect="auto", cmap="viridis")
+                plotted = ax.imshow(
+                    image, origin="lower", aspect="auto", cmap="viridis"
+                )
                 fig.colorbar(plotted, ax=ax, label="|IQ|")
         ax.set_title(title, loc="left")
         ax.grid(alpha=0.18)
 
     buffer = BytesIO()
-    fig.savefig(buffer, format="png", dpi=130, metadata={"Software": "QickworkspaceV2"})
+    fig.savefig(
+        buffer, format="png", dpi=130, metadata={"Software": "QickworkspaceV2"}
+    )
     return buffer.getvalue()
 
 
@@ -1476,7 +1538,9 @@ def _write_native_group(
     local_time = utc_time.astimezone(native.LOCAL_TIMEZONE)
     data_kind, analysis_id, plot_id = native._dispatch_ids(result)
     metadata = dict(getattr(result, "metadata", {}) or {})
-    session_id = str(getattr(result, "session_id", "") or metadata.get("session_id", ""))
+    session_id = str(
+        getattr(result, "session_id", "") or metadata.get("session_id", "")
+    )
     lineage = {
         "session_id": session_id or None,
         "parent_id": getattr(result, "parent_id", None),
@@ -1502,10 +1566,18 @@ def _write_native_group(
 
     meta = root.create_group("meta")
     native._write_text(meta, "comment", comment)
-    meta.create_dataset("tags", data=np.asarray(tags, dtype=native._STRING_DTYPE))
-    native._write_text(meta, "config_json", native._json_dumps(getattr(result, "config", {}) or {}))
+    meta.create_dataset(
+        "tags", data=np.asarray(tags, dtype=native._STRING_DTYPE)
+    )
+    native._write_text(
+        meta,
+        "config_json",
+        native._json_dumps(getattr(result, "config", {}) or {}),
+    )
     native._write_text(meta, "metadata_json", native._json_dumps(metadata))
-    native._write_text(meta, "provenance_json", native._json_dumps(native._provenance()))
+    native._write_text(
+        meta, "provenance_json", native._json_dumps(native._provenance())
+    )
     native._write_text(meta, "lineage_json", native._json_dumps(lineage))
 
     axes = root.create_group("axes")
@@ -1514,12 +1586,20 @@ def _write_native_group(
         axis = axes.create_group(str(name).replace("/", "_"))
         array = np.asarray(values)
         if array.dtype.kind in {"O", "U", "S"}:
-            strings = [item.decode() if isinstance(item, bytes) else str(item) for item in array.reshape(-1)]
+            strings = [
+                item.decode() if isinstance(item, bytes) else str(item)
+                for item in array.reshape(-1)
+            ]
             axis.create_dataset(
-                "values", data=np.asarray(strings, dtype=native._STRING_DTYPE).reshape(array.shape)
+                "values",
+                data=np.asarray(strings, dtype=native._STRING_DTYPE).reshape(
+                    array.shape
+                ),
             )
         else:
-            axis.create_dataset("values", data=array, **native._dataset_options(array))
+            axis.create_dataset(
+                "values", data=array, **native._dataset_options(array)
+            )
         for key in ("label", "unit", "description", "scale"):
             value = attrs.get(key)
             if value not in (None, ""):
@@ -1529,19 +1609,29 @@ def _write_native_group(
     raw_iq = getattr(result, "raw_iq", None)
     dims = getattr(result, "dataset_dims", {}) or {}
     if isinstance(raw_iq, dict):
-        native._write_tree(raw_group, native._decorate_tree_with_dims(raw_iq, dims))
+        native._write_tree(
+            raw_group, native._decorate_tree_with_dims(raw_iq, dims)
+        )
     elif raw_iq is not None:
-        native._write_tree(raw_group, {"iq": {"values": raw_iq, "dims": dims.get("iq", [])}})
+        native._write_tree(
+            raw_group, {"iq": {"values": raw_iq, "dims": dims.get("iq", [])}}
+        )
     native._write_tree(
         raw_group,
-        native._decorate_tree_with_dims(getattr(result, "raw_data", {}) or {}, dims),
+        native._decorate_tree_with_dims(
+            getattr(result, "raw_data", {}) or {}, dims
+        ),
     )
 
     analysis = root.create_group("analysis")
     native._write_tree(analysis, getattr(result, "analysis_data", {}) or {})
 
     results = root.create_group("results")
-    native._write_text(results, "fit_result_json", native._json_dumps(getattr(result, "fit_result", {}) or {}))
+    native._write_text(
+        results,
+        "fit_result_json",
+        native._json_dumps(getattr(result, "fit_result", {}) or {}),
+    )
     if getattr(result, "fit_params", None) is not None:
         native._write_tree(results, {"fit_params": result.fit_params})
     if getattr(result, "fit_errors", None) is not None:
@@ -1567,14 +1657,22 @@ def _write_native_group(
             payloads.setdefault("preview.png", payloads["analysis.png"])
         for name, payload in payloads.items():
             safe_name = str(name).replace("/", "_")
-            data = payload.getvalue() if hasattr(payload, "getvalue") else bytes(payload)
+            data = (
+                payload.getvalue()
+                if hasattr(payload, "getvalue")
+                else bytes(payload)
+            )
             dataset = plots.create_dataset(
                 safe_name,
                 data=np.frombuffer(data, dtype=np.uint8),
                 compression="gzip",
                 compression_opts=4,
             )
-            dataset.attrs["mime_type"] = "image/svg+xml" if safe_name.lower().endswith(".svg") else "image/png"
+            dataset.attrs["mime_type"] = (
+                "image/svg+xml"
+                if safe_name.lower().endswith(".svg")
+                else "image/png"
+            )
 
     root.attrs.modify("write_complete", True)
 
@@ -1633,7 +1731,9 @@ def embed_result_in_labber(
     if not native.validate_experiment_id(getattr(result, "experiment_id", "")):
         result.experiment_id = native.generate_experiment_id(utc_time)
     result.timestamp = utc_time
-    result.comment = str(comment if comment != "" else getattr(result, "comment", ""))
+    result.comment = str(
+        comment if comment != "" else getattr(result, "comment", "")
+    )
     result.tags = native._normalise_tags(
         tags if tags else getattr(result, "tags", []),
         getattr(result, "experiment_type", ""),
@@ -1641,7 +1741,9 @@ def embed_result_in_labber(
 
     with h5py.File(path, "r+") as h5:
         if EMBEDDED_GROUP in h5:
-            raise FileExistsError(f"/{EMBEDDED_GROUP} already exists in {path}")
+            raise FileExistsError(
+                f"/{EMBEDDED_GROUP} already exists in {path}"
+            )
         if PARTIAL_GROUP in h5:
             del h5[PARTIAL_GROUP]
         partial = h5.create_group(PARTIAL_GROUP)
@@ -1665,7 +1767,11 @@ def embed_result_in_labber(
             raise
 
     if catalog:
-        root = Path(data_root).expanduser().resolve() if data_root is not None else path.parent
+        root = (
+            Path(data_root).expanduser().resolve()
+            if data_root is not None
+            else path.parent
+        )
         native._register_file(path, root)
     return path
 
@@ -1700,7 +1806,9 @@ class LabberHDF5Saver:
 
     VALID_FILENAME_MODES = {"random", "sequential"}
 
-    def __init__(self, filename_mode="random", embed_native=True, save_plots=True):
+    def __init__(
+        self, filename_mode="random", embed_native=True, save_plots=True
+    ):
         """Initialize the LabberHDF5Saver instance.
 
         Parameters
@@ -1743,26 +1851,35 @@ class LabberHDF5Saver:
         FileExistsError
             If the operation cannot be completed.
         """
-        from pathlib import Path
         import re
+        from pathlib import Path
 
         path = Path(filepath).expanduser().resolve()
         if path.suffix.lower() != ".hdf5":
             path = path.with_suffix(".hdf5")
         if self.filename_mode == "sequential":
             if path.exists():
-                raise FileExistsError(f"Refusing to overwrite existing Labber file: {path}")
+                raise FileExistsError(
+                    f"Refusing to overwrite existing Labber file: {path}"
+                )
             return path
 
         from . import hdf5_store as native
-        experiment_id = getattr(result, "experiment_id", "") if result is not None else ""
+
+        experiment_id = (
+            getattr(result, "experiment_id", "") if result is not None else ""
+        )
         if not native.validate_experiment_id(experiment_id):
-            experiment_id = native.generate_experiment_id(getattr(result, "timestamp", None))
+            experiment_id = native.generate_experiment_id(
+                getattr(result, "timestamp", None)
+            )
         # get_next_filename_labber historically adds _001; random mode replaces it.
         stem = re.sub(r"_\d{3}$", "", path.stem)
         candidate = path.with_name(f"{stem}_{experiment_id}.hdf5")
         while candidate.exists():
-            experiment_id = native.generate_experiment_id(getattr(result, "timestamp", None))
+            experiment_id = native.generate_experiment_id(
+                getattr(result, "timestamp", None)
+            )
             candidate = path.with_name(f"{stem}_{experiment_id}.hdf5")
         if result is not None:
             result.experiment_id = experiment_id
@@ -1817,7 +1934,10 @@ class LabberHDF5Saver:
         channel = dict(z_info)
         channel.update({"complex": True, "vector": False})
         log = createLogFile_ForData(
-            str(final_path), [channel], list(filter(None, [x_info, y_info])), use_database=False
+            str(final_path),
+            [channel],
+            list(filter(None, [x_info, y_info])),
+            use_database=False,
         )
         if y_info:
             for trace in zdata:
@@ -1831,7 +1951,9 @@ class LabberHDF5Saver:
 
         if self.embed_native and result is not None:
             embedded_tags = list(getattr(result, "tags", []) or [])
-            supplied_tags = [tag] if isinstance(tag, (str, bytes)) else list(tag or [])
+            supplied_tags = (
+                [tag] if isinstance(tag, (str, bytes)) else list(tag or [])
+            )
             for item in supplied_tags:
                 if item not in embedded_tags:
                     embedded_tags.append(item)

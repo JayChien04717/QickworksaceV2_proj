@@ -4,10 +4,9 @@ QubitGE/rabi — s004: Time Rabi + s005: Power Rabi + s005b: Power Rabi with res
 
 from __future__ import annotations
 
-from ...core.base_program import BaseProgram
-from ...core.base_experiment import BaseExperiment, SweepAxis
 from ...analysis.qubit import PowerRabiAnalysis, TimeRabiAnalysis
-
+from ...core.base_experiment import BaseExperiment, SweepAxis
+from ...core.base_program import BaseProgram
 
 
 class TimeRabiProgram(BaseProgram):
@@ -60,8 +59,6 @@ class TimeRabi(BaseExperiment):
     X_AXIS = SweepAxis.pulse("qb_pulse", "length")
 
 
-
-
 class PowerRabiProgram(BaseProgram):
     """QICK program for power Rabi: sweeps qubit drive gain."""
 
@@ -110,8 +107,6 @@ class PowerRabi(BaseExperiment):
     Analysis = PowerRabiAnalysis
     PROGRAM = PowerRabiProgram
     X_AXIS = SweepAxis.pulse("qb_pulse", "gain")
-
-
 
 
 class PowerRabiResetProgram(BaseProgram):

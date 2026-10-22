@@ -163,7 +163,9 @@ class MuxPunchout(BaseExperiment):
             Result of the operation.
         """
         point_cfg = dict(cfg)
-        point_cfg["res_freqs"] = [float(freq) + freq_offset for freq in cfg["res_freqs"]]
+        point_cfg["res_freqs"] = [
+            float(freq) + freq_offset for freq in cfg["res_freqs"]
+        ]
         point_cfg["res_gains"] = list(cfg["res_gains"])
         for slot in active_slots:
             point_cfg["res_gains"][slot] = float(gain)
@@ -211,14 +213,22 @@ class MuxPunchout(BaseExperiment):
 
         half_span = abs(float(span)) / 2.0
         self.freq_offsets = self._configured_axis(
-            cfg, "freq_offsets", np.linspace(-half_span, half_span, int(f_steps))
+            cfg,
+            "freq_offsets",
+            np.linspace(-half_span, half_span, int(f_steps)),
         )
         if gains is None:
-            gains = cfg["gain_axis"] if "gain_axis" in cfg else np.linspace(0.0, 1.0, 21)
+            gains = (
+                cfg["gain_axis"]
+                if "gain_axis" in cfg
+                else np.linspace(0.0, 1.0, 21)
+            )
         self.gain_axis = np.asarray(gains, dtype=float)
 
         lo_ext = cfg.get("LO_ext") or 0
-        centers_if = np.asarray([cfg["res_freqs"][slot] for slot in active_slots])
+        centers_if = np.asarray(
+            [cfg["res_freqs"][slot] for slot in active_slots]
+        )
         centers_abs = centers_if + float(lo_ext)
         self.freq_axes = {
             name: (center + self.freq_offsets).tolist()
@@ -235,8 +245,12 @@ class MuxPunchout(BaseExperiment):
 
         try:
             for g_idx, gain in enumerate(tqdm(self.gain_axis, desc="Gain")):
-                for f_idx, offset in enumerate(tqdm(self.freq_offsets, desc="Frequency", leave=False)):
-                    point_cfg = self._point_cfg(cfg, active_slots, float(offset), float(gain))
+                for f_idx, offset in enumerate(
+                    tqdm(self.freq_offsets, desc="Frequency", leave=False)
+                ):
+                    point_cfg = self._point_cfg(
+                        cfg, active_slots, float(offset), float(gain)
+                    )
                     prog = MuxPunchoutProgram(
                         self.soccfg,
                         reps=point_cfg["reps"],
@@ -244,8 +258,12 @@ class MuxPunchout(BaseExperiment):
                         cfg=point_cfg,
                     )
                     self._last_prog = prog
-                    iq_list = prog.acquire(self.soc, rounds=py_avg, progress=False)
-                    self.iqdata[:, g_idx, f_idx] = self._point_iq(iq_list, trace_count)
+                    iq_list = prog.acquire(
+                        self.soc, rounds=py_avg, progress=False
+                    )
+                    self.iqdata[:, g_idx, f_idx] = self._point_iq(
+                        iq_list, trace_count
+                    )
                     points_done += 1
         except KeyboardInterrupt:
             interrupted = True
@@ -253,18 +271,29 @@ class MuxPunchout(BaseExperiment):
         figures = []
         plot_data = self._process_plot_data(self.iqdata, iq_process)
         display_data = (
-            self._normalize_per_power(plot_data) if normalize_per_power else plot_data
+            self._normalize_per_power(plot_data)
+            if normalize_per_power
+            else plot_data
         )
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 3 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 3 * trace_count)),
+                squeeze=False,
             )
-            for ax, name, center, trace in zip(axes[:, 0], qubit_names, centers_abs, display_data):
+            for ax, name, center, trace in zip(
+                axes[:, 0], qubit_names, centers_abs, display_data
+            ):
                 x = center + self.freq_offsets
                 mesh = ax.pcolormesh(x, self.gain_axis, trace, shading="auto")
                 ax.set_ylabel(f"{name} gain")
                 ax.set_xlabel(self.X_LABEL)
-                cbar_label = f"{iq_process} normalized per power" if normalize_per_power else iq_process
+                cbar_label = (
+                    f"{iq_process} normalized per power"
+                    if normalize_per_power
+                    else iq_process
+                )
                 fig.colorbar(mesh, ax=ax, label=cbar_label)
             axes[0, 0].set_title(
                 self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
@@ -279,7 +308,9 @@ class MuxPunchout(BaseExperiment):
             raw_iq=self.iqdata,
             x_axis=self.freq_offsets,
             y_axis=self.gain_axis,
-            fit_result={"status": ("punchout_acquired", None)} if has_data else {},
+            fit_result={"status": ("punchout_acquired", None)}
+            if has_data
+            else {},
             metadata={
                 "qubit_names": qubit_names,
                 "active_ro_chs": active_ro_chs,
@@ -293,7 +324,9 @@ class MuxPunchout(BaseExperiment):
             },
             figures=figures,
             quality=QualityFlag.GOOD if has_data else QualityFlag.BAD,
-            quality_message="Mux punchout acquired." if has_data else "No data acquired.",
+            quality_message="Mux punchout acquired."
+            if has_data
+            else "No data acquired.",
             x_name=self.X_SAVE_NAME,
             x_unit=self.X_SAVE_UNIT,
             x_scale=self.X_SAVE_SCALE,

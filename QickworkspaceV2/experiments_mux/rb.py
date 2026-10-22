@@ -82,7 +82,9 @@ class MuxRBProgram(AveragerProgramV2):
             ("y90m_ge", -90, "pi2_gain_ge"),
         ]
         for gate_name, phase, gain_key in gates:
-            self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
+            self._add_gate_pulse(
+                cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot]
+            )
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
         """Add gate pulse.
@@ -302,8 +304,13 @@ class MuxRandomizedBenchmarking(BaseExperiment):
         """
         from ..tools.rb_generator import INTERLEAVE_GATES, single_qb_rb
 
-        if interleaved_gate is not None and interleaved_gate not in INTERLEAVE_GATES:
-            raise ValueError(f"interleaved_gate must be one of {list(INTERLEAVE_GATES.keys())}")
+        if (
+            interleaved_gate is not None
+            and interleaved_gate not in INTERLEAVE_GATES
+        ):
+            raise ValueError(
+                f"interleaved_gate must be one of {list(INTERLEAVE_GATES.keys())}"
+            )
 
         cfg = dict(self.cfg)
         qubit_names = list(cfg["qubit_names"])
@@ -323,14 +330,18 @@ class MuxRandomizedBenchmarking(BaseExperiment):
         if randomize_depth_order:
             rng.shuffle(depth_indices)
 
-        accum = np.zeros((trace_count, len(self.x), number_sample), dtype=complex)
+        accum = np.zeros(
+            (trace_count, len(self.x), number_sample), dtype=complex
+        )
         interrupted = False
 
         try:
             for avg_i in tqdm(range(py_avg), desc="Mux RB average"):
                 for d_idx in tqdm(depth_indices, desc="Depth", leave=False):
                     depth = int(self.x[d_idx])
-                    for sample_idx in tqdm(range(number_sample), desc="Samples", leave=False):
+                    for sample_idx in tqdm(
+                        range(number_sample), desc="Samples", leave=False
+                    ):
                         seq = single_qb_rb(
                             n_clifford=depth,
                             n_sample=1,
@@ -346,8 +357,12 @@ class MuxRandomizedBenchmarking(BaseExperiment):
                             final_delay=run_cfg["relax_delay"],
                             cfg=run_cfg,
                         )
-                        iq_list = prog.acquire(self.soc, rounds=1, progress=False)
-                        accum[:, d_idx, sample_idx] += self._extract_iq(iq_list, trace_count)
+                        iq_list = prog.acquire(
+                            self.soc, rounds=1, progress=False
+                        )
+                        accum[:, d_idx, sample_idx] += self._extract_iq(
+                            iq_list, trace_count
+                        )
         except KeyboardInterrupt:
             interrupted = True
 
@@ -361,7 +376,11 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             try:
                 popt, pcov, _ = fitrb(self.x, avg)
                 p_fit = float(popt[0])
-                p_err = float(np.sqrt(np.diag(pcov))[0]) if pcov is not None else None
+                p_err = (
+                    float(np.sqrt(np.diag(pcov))[0])
+                    if pcov is not None
+                    else None
+                )
                 epc = rb_error(p_fit, d=2)
                 epc_err = (
                     float(np.sqrt(error_fit_err(pcov[0, 0], d=2)))
@@ -370,7 +389,10 @@ class MuxRandomizedBenchmarking(BaseExperiment):
                 )
                 fit_result[f"{name}_p"] = (round(p_fit, 8), p_err)
                 fit_result[f"{name}_epc"] = (round(float(epc), 8), epc_err)
-                fit_result[f"{name}_fidelity"] = (round(float(1 - epc), 8), epc_err)
+                fit_result[f"{name}_fidelity"] = (
+                    round(float(1 - epc), 8),
+                    epc_err,
+                )
                 fit_params[name] = np.asarray(popt, dtype=float).tolist()
             except Exception:
                 continue
@@ -378,16 +400,26 @@ class MuxRandomizedBenchmarking(BaseExperiment):
         figures = []
         if plot:
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.8 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.8 * trace_count)),
+                squeeze=False,
             )
             for idx, (ax, name) in enumerate(zip(axes[:, 0], qubit_names)):
                 vals = plot_data[idx]
                 avg = vals.mean(axis=1)
                 err = vals.std(axis=1) / np.sqrt(max(vals.shape[1], 1))
-                ax.errorbar(self.x, avg, yerr=err, fmt="o", capsize=3, label=name)
+                ax.errorbar(
+                    self.x, avg, yerr=err, fmt="o", capsize=3, label=name
+                )
                 if name in fit_params:
                     xfit = np.linspace(self.x.min(), self.x.max(), 400)
-                    ax.plot(xfit, rb_func(xfit, *fit_params[name]), "-", label="fit")
+                    ax.plot(
+                        xfit,
+                        rb_func(xfit, *fit_params[name]),
+                        "-",
+                        label="fit",
+                    )
                 epc = fit_result.get(f"{name}_epc", (None,))[0]
                 if epc is not None:
                     ax.set_title(f"{name} | EPC = {epc:.6g}")
@@ -397,8 +429,14 @@ class MuxRandomizedBenchmarking(BaseExperiment):
                 ax.set_ylabel("Signal")
                 ax.grid(True, alpha=0.3)
                 ax.legend()
-            title = self.TITLE_PREFIX if interleaved_gate is None else f"{self.TITLE_PREFIX} IRB {interleaved_gate}"
-            axes[0, 0].figure.suptitle(title + (" (Interrupted)" if interrupted else ""))
+            title = (
+                self.TITLE_PREFIX
+                if interleaved_gate is None
+                else f"{self.TITLE_PREFIX} IRB {interleaved_gate}"
+            )
+            axes[0, 0].figure.suptitle(
+                title + (" (Interrupted)" if interrupted else "")
+            )
             fig.tight_layout()
             figures.append(fig)
             plt.show()
@@ -420,14 +458,21 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             },
             axes={
                 "qubit": {"values": qubit_names},
-                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "depth": {
+                    "values": self.x.astype(float),
+                    "unit": "# Cliffords",
+                },
                 "sample": {"values": np.arange(number_sample), "unit": "#"},
             },
             dataset_dims={"iq": ["qubit", "depth", "sample"]},
             analysis_data={
-                "mean_signal": {"values": plot_data.mean(axis=2), "dims": ["qubit", "depth"]},
+                "mean_signal": {
+                    "values": plot_data.mean(axis=2),
+                    "dims": ["qubit", "depth"],
+                },
                 "standard_error": {
-                    "values": plot_data.std(axis=2) / np.sqrt(max(number_sample, 1)),
+                    "values": plot_data.std(axis=2)
+                    / np.sqrt(max(number_sample, 1)),
                     "dims": ["qubit", "depth"],
                 },
             },
@@ -435,7 +480,9 @@ class MuxRandomizedBenchmarking(BaseExperiment):
             analysis_id="rb",
             plot_id="rb_decay",
             figures=figures,
-            quality=QualityFlag.GOOD if self.rb_result is not None else QualityFlag.BAD,
+            quality=QualityFlag.GOOD
+            if self.rb_result is not None
+            else QualityFlag.BAD,
             interrupted=interrupted,
             avg_count=py_avg,
         )

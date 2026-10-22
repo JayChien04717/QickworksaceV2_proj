@@ -31,35 +31,194 @@ class ExperimentSpec:
 
 
 EXPERIMENT_SPECS: tuple[ExperimentSpec, ...] = (
-    ExperimentSpec("tof", "Time of Flight", "Setup", "QickworkspaceV2.experiments.setup.TOF", "s001_time_of_flight.TOF"),
-    ExperimentSpec("res_spec_ge", "Res Spec GE", "Resonator", "QickworkspaceV2.experiments.resonator.ResonatorSpec", "s002_res_spec_ge.ResonatorSpec"),
-    ExperimentSpec("res_punchout", "Res Punchout", "Resonator", "QickworkspaceV2.experiments.resonator.Punchout", "s002b_res_punchout_ge.Punchout"),
-    ExperimentSpec("res_spec_flux", "Res Spec Flux", "Resonator", "QickworkspaceV2.experiments.resonator.ResonatorSpecFlux", "s002c_res_spec_ge_flux.ResonatorSpecFlux"),
-    ExperimentSpec("qubit_spec_ge", "Qubit Spec", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.QubitSpec", "s003_qubit_spec_ge.QubitSpec"),
-    ExperimentSpec("qubit_flux_spec_ge", "Qubit Flux Spec", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.QubitSpecFlux", "s003a_qubit_flux_spec_ge.QubitSpecFlux"),
-    ExperimentSpec("time_rabi_ge", "Time Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.TimeRabi", "s004_time_rabi_ge.TimeRabi"),
-    ExperimentSpec("power_rabi_ge", "Power Rabi", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.PowerRabi", "s005_power_rabi_ge.PowerRabi"),
-    ExperimentSpec("power_rabi_active_reset_ge", "Power Rabi Active Reset", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.ActiveResetRabi", "s005c_power_rabi_active_reset_ge.ActiveResetRabi", supports_liveplot=False),
-    ExperimentSpec("drag", "DRAG", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.DragCalibration", "s005a_drag.DragCalibration", supports_liveplot=False),
-    ExperimentSpec("aae", "AAE", "Qubit GE", "QickworkspaceV2.experiments.qubit_ge.aae.PowerRabiChevron", "s005a_AAE.PowerRabiChevron", supports_liveplot=False),
-    ExperimentSpec("ramsey_ge", "Ramsey", "Coherence", "QickworkspaceV2.experiments.coherence.Ramsey", "s006_Ramsey_ge.Ramsey"),
-    ExperimentSpec("spin_echo_ge", "Spin Echo", "Coherence", "QickworkspaceV2.experiments.coherence.SpinEcho", "s007_SpinEcho_ge.SpinEcho"),
-    ExperimentSpec("t1_ge", "T1", "Coherence", "QickworkspaceV2.experiments.coherence.T1", "s008_T1_ge.T1"),
-    ExperimentSpec("res_spec_ef", "Res Spec EF", "Qubit EF", "QickworkspaceV2.experiments.qubit_ef.ResonatorSpec_ef", "s009_res_spec_ef.ResonatorSpec_ef"),
-    ExperimentSpec("qubit_spec_ef", "Qubit Spec EF", "Qubit EF", "QickworkspaceV2.experiments.qubit_ef.qubit_ef.QubitSpecEf", "s010_qubit_spec_ef.QubitSpec_ef"),
-    ExperimentSpec("power_rabi_ef", "Power Rabi EF", "Qubit EF", "QickworkspaceV2.experiments.qubit_ef.rabi_ef.PowerRabiEf", "s011_power_rabi_ef.PowerRabi_ef"),
-    ExperimentSpec("ramsey_ef", "Ramsey EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.RamseyEf", "s012_Ramsey_ef.Ramsey_ef"),
-    ExperimentSpec("t1_ef", "T1 EF", "Qubit EF", "QickworkspaceV2.experiments.coherence.T1Ef", "s013_T1_ef.T1_ef"),
-    ExperimentSpec("allxy", "AllXY", "Advanced", "QickworkspaceV2.experiments.characterization.AllXY", "s014_AllXY.AllXY", supports_liveplot=False),
-    ExperimentSpec("qubit_temp", "Qubit Temp", "Advanced", "QickworkspaceV2.experiments.qubit_ef.rabi_ef.QubitTemp", "s013_qubit_temp.QubitTemperatureEf"),
-    ExperimentSpec("ac_stark", "AC Stark", "Advanced", "QickworkspaceV2.experiments.coherence.ACStark", "s006_ac_stark.AcStarkCalib"),
-    ExperimentSpec("rb", "Single Qubit RB", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarking", "s015_Single_qubit_RB.RandomizedBenchmarking", supports_liveplot=False),
-    ExperimentSpec("rb_asm", "RB ASM", "RB", "QickworkspaceV2.experiments.characterization.RandomizedBenchmarkingAsm", "s015_RB_asm.RandomizedBenchmarkingAsm", supports_liveplot=False),
-    ExperimentSpec("tomography", "State Tomography", "Tomography", "QickworkspaceV2.experiments.characterization.Tomography", "s016_state_tomography.Tomography", supports_liveplot=False),
+    ExperimentSpec(
+        "tof",
+        "Time of Flight",
+        "Setup",
+        "QickworkspaceV2.experiments.setup.TOF",
+        "s001_time_of_flight.TOF",
+    ),
+    ExperimentSpec(
+        "res_spec_ge",
+        "Res Spec GE",
+        "Resonator",
+        "QickworkspaceV2.experiments.resonator.ResonatorSpec",
+        "s002_res_spec_ge.ResonatorSpec",
+    ),
+    ExperimentSpec(
+        "res_punchout",
+        "Res Punchout",
+        "Resonator",
+        "QickworkspaceV2.experiments.resonator.Punchout",
+        "s002b_res_punchout_ge.Punchout",
+    ),
+    ExperimentSpec(
+        "res_spec_flux",
+        "Res Spec Flux",
+        "Resonator",
+        "QickworkspaceV2.experiments.resonator.ResonatorSpecFlux",
+        "s002c_res_spec_ge_flux.ResonatorSpecFlux",
+    ),
+    ExperimentSpec(
+        "qubit_spec_ge",
+        "Qubit Spec",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.QubitSpec",
+        "s003_qubit_spec_ge.QubitSpec",
+    ),
+    ExperimentSpec(
+        "qubit_flux_spec_ge",
+        "Qubit Flux Spec",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.QubitSpecFlux",
+        "s003a_qubit_flux_spec_ge.QubitSpecFlux",
+    ),
+    ExperimentSpec(
+        "time_rabi_ge",
+        "Time Rabi",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.TimeRabi",
+        "s004_time_rabi_ge.TimeRabi",
+    ),
+    ExperimentSpec(
+        "power_rabi_ge",
+        "Power Rabi",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.PowerRabi",
+        "s005_power_rabi_ge.PowerRabi",
+    ),
+    ExperimentSpec(
+        "power_rabi_active_reset_ge",
+        "Power Rabi Active Reset",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.ActiveResetRabi",
+        "s005c_power_rabi_active_reset_ge.ActiveResetRabi",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "drag",
+        "DRAG",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.DragCalibration",
+        "s005a_drag.DragCalibration",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "aae",
+        "AAE",
+        "Qubit GE",
+        "QickworkspaceV2.experiments.qubit_ge.aae.PowerRabiChevron",
+        "s005a_AAE.PowerRabiChevron",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "ramsey_ge",
+        "Ramsey",
+        "Coherence",
+        "QickworkspaceV2.experiments.coherence.Ramsey",
+        "s006_Ramsey_ge.Ramsey",
+    ),
+    ExperimentSpec(
+        "spin_echo_ge",
+        "Spin Echo",
+        "Coherence",
+        "QickworkspaceV2.experiments.coherence.SpinEcho",
+        "s007_SpinEcho_ge.SpinEcho",
+    ),
+    ExperimentSpec(
+        "t1_ge",
+        "T1",
+        "Coherence",
+        "QickworkspaceV2.experiments.coherence.T1",
+        "s008_T1_ge.T1",
+    ),
+    ExperimentSpec(
+        "res_spec_ef",
+        "Res Spec EF",
+        "Qubit EF",
+        "QickworkspaceV2.experiments.qubit_ef.ResonatorSpec_ef",
+        "s009_res_spec_ef.ResonatorSpec_ef",
+    ),
+    ExperimentSpec(
+        "qubit_spec_ef",
+        "Qubit Spec EF",
+        "Qubit EF",
+        "QickworkspaceV2.experiments.qubit_ef.qubit_ef.QubitSpecEf",
+        "s010_qubit_spec_ef.QubitSpec_ef",
+    ),
+    ExperimentSpec(
+        "power_rabi_ef",
+        "Power Rabi EF",
+        "Qubit EF",
+        "QickworkspaceV2.experiments.qubit_ef.rabi_ef.PowerRabiEf",
+        "s011_power_rabi_ef.PowerRabi_ef",
+    ),
+    ExperimentSpec(
+        "ramsey_ef",
+        "Ramsey EF",
+        "Qubit EF",
+        "QickworkspaceV2.experiments.coherence.RamseyEf",
+        "s012_Ramsey_ef.Ramsey_ef",
+    ),
+    ExperimentSpec(
+        "t1_ef",
+        "T1 EF",
+        "Qubit EF",
+        "QickworkspaceV2.experiments.coherence.T1Ef",
+        "s013_T1_ef.T1_ef",
+    ),
+    ExperimentSpec(
+        "allxy",
+        "AllXY",
+        "Advanced",
+        "QickworkspaceV2.experiments.characterization.AllXY",
+        "s014_AllXY.AllXY",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "qubit_temp",
+        "Qubit Temp",
+        "Advanced",
+        "QickworkspaceV2.experiments.qubit_ef.rabi_ef.QubitTemp",
+        "s013_qubit_temp.QubitTemperatureEf",
+    ),
+    ExperimentSpec(
+        "ac_stark",
+        "AC Stark",
+        "Advanced",
+        "QickworkspaceV2.experiments.coherence.ACStark",
+        "s006_ac_stark.AcStarkCalib",
+    ),
+    ExperimentSpec(
+        "rb",
+        "Single Qubit RB",
+        "RB",
+        "QickworkspaceV2.experiments.characterization.RandomizedBenchmarking",
+        "s015_Single_qubit_RB.RandomizedBenchmarking",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "rb_asm",
+        "RB ASM",
+        "RB",
+        "QickworkspaceV2.experiments.characterization.RandomizedBenchmarkingAsm",
+        "s015_RB_asm.RandomizedBenchmarkingAsm",
+        supports_liveplot=False,
+    ),
+    ExperimentSpec(
+        "tomography",
+        "State Tomography",
+        "Tomography",
+        "QickworkspaceV2.experiments.characterization.Tomography",
+        "s016_state_tomography.Tomography",
+        supports_liveplot=False,
+    ),
 )
 
 _BY_ID = {spec.id: spec for spec in EXPERIMENT_SPECS}
-_BY_LEGACY = {spec.legacy_id: spec for spec in EXPERIMENT_SPECS if spec.legacy_id}
+_BY_LEGACY = {
+    spec.legacy_id: spec for spec in EXPERIMENT_SPECS if spec.legacy_id
+}
 _BY_CLASS_PATH = {spec.class_path: spec for spec in EXPERIMENT_SPECS}
 
 
@@ -74,7 +233,10 @@ def experiment_schema() -> dict[str, Any]:
     categories: dict[str, list[dict[str, Any]]] = {}
     for spec in EXPERIMENT_SPECS:
         categories.setdefault(spec.category, []).append(asdict(spec))
-    return {"categories": categories, "experiments": [asdict(spec) for spec in EXPERIMENT_SPECS]}
+    return {
+        "categories": categories,
+        "experiments": [asdict(spec) for spec in EXPERIMENT_SPECS],
+    }
 
 
 def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
@@ -95,10 +257,16 @@ def resolve_experiment_spec(identifier: str) -> ExperimentSpec:
     ValueError
         If the operation cannot be completed.
     """
-    spec = _BY_ID.get(identifier) or _BY_LEGACY.get(identifier) or _BY_CLASS_PATH.get(identifier)
+    spec = (
+        _BY_ID.get(identifier)
+        or _BY_LEGACY.get(identifier)
+        or _BY_CLASS_PATH.get(identifier)
+    )
     if spec is None:
         valid = sorted(_BY_ID)
-        raise ValueError(f"Unknown experiment {identifier!r}. Valid ids: {valid}")
+        raise ValueError(
+            f"Unknown experiment {identifier!r}. Valid ids: {valid}"
+        )
     return spec
 
 
@@ -193,7 +361,11 @@ def fit_updates_from_result(result) -> dict[str, Any]:
         "linewidth_MHz": "kappa",
         "kappa_MHz": "kappa",
     }
-    mapping["f0_MHz"] = "res_freq_ge" if "res" in experiment_type and "qubit" not in experiment_type else "qb_freq_ge"
+    mapping["f0_MHz"] = (
+        "res_freq_ge"
+        if "res" in experiment_type and "qubit" not in experiment_type
+        else "qb_freq_ge"
+    )
 
     updates = {}
     for result_key, config_key in mapping.items():

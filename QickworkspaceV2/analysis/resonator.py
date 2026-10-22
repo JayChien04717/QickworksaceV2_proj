@@ -59,11 +59,18 @@ class ResonatorSpecAnalysis(BaseAnalysis):
                 "kappa_MHz": (round(kappa * 1e-6, 4), None),
             }
             data.scalar_result = f0 / 1e6  # MHz
-            data.metadata.update({"fit_model": f"abcd:{solve_type}", "fit_channel": "abs"})
-            data.analysis_data.update({
-                "fit_input": {"values": np.asarray(iq), "dims": ["x"]},
-                "fit_curve": {"values": np.asarray(fit(freqs * 1e6)), "dims": ["x"]},
-            })
+            data.metadata.update(
+                {"fit_model": f"abcd:{solve_type}", "fit_channel": "abs"}
+            )
+            data.analysis_data.update(
+                {
+                    "fit_input": {"values": np.asarray(iq), "dims": ["x"]},
+                    "fit_curve": {
+                        "values": np.asarray(fit(freqs * 1e6)),
+                        "dims": ["x"],
+                    },
+                }
+            )
 
         except Exception as exc:
             self._lorentzian_fallback(data, freqs, iq, exc)
@@ -176,12 +183,22 @@ class ResonatorSpecAnalysis(BaseAnalysis):
             from ..tools.fitting import lorfunc
 
             fit_curve = lorfunc(freqs, *popt)
-            data.metadata.update({"fit_model": "lorentzian", "fit_channel": "abs"})
-            data.analysis_data.update({
-                "fit_input": {"values": np.abs(iq), "dims": ["x"]},
-                "fit_curve": {"values": np.asarray(fit_curve), "dims": ["x"]},
-                "residual": {"values": np.abs(iq) - fit_curve, "dims": ["x"]},
-            })
+            data.metadata.update(
+                {"fit_model": "lorentzian", "fit_channel": "abs"}
+            )
+            data.analysis_data.update(
+                {
+                    "fit_input": {"values": np.abs(iq), "dims": ["x"]},
+                    "fit_curve": {
+                        "values": np.asarray(fit_curve),
+                        "dims": ["x"],
+                    },
+                    "residual": {
+                        "values": np.abs(iq) - fit_curve,
+                        "dims": ["x"],
+                    },
+                }
+            )
             data.quality_message = (
                 f"circle fit failed ({original_exc}); used Lorentzian"
             )
@@ -233,6 +250,7 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         data.metadata["chi_method"] = "empirical_smoothed_magnitude_minimum"
         data.scalar_result = shift / 2.0
         data.quality = QualityFlag.GOOD
+
     def plot(self, data: ExperimentData) -> None:
         """Plot the operation.
 
@@ -251,11 +269,17 @@ class DispersiveShiftAnalysis(BaseAnalysis):
         chi = data.get_param("chi_MHz")
 
         snr_entry = data.analysis_data.get("readout_snr")
-        snr = snr_entry.get("values") if isinstance(snr_entry, dict) else snr_entry
+        snr = (
+            snr_entry.get("values")
+            if isinstance(snr_entry, dict)
+            else snr_entry
+        )
         has_snr = snr is not None and np.size(snr) == np.size(data.x_axis)
         fig, axes = plt.subplots(
-            2 if has_snr else 1, 1,
-            figsize=(9, 8 if has_snr else 5), sharex=has_snr,
+            2 if has_snr else 1,
+            1,
+            figsize=(9, 8 if has_snr else 5),
+            sharex=has_snr,
         )
         axes = np.atleast_1d(axes)
         ax = axes[0]
@@ -281,16 +305,23 @@ class DispersiveShiftAnalysis(BaseAnalysis):
             snr_ax = axes[1]
             snr_ax.plot(data.x_axis, snr, ".-", color="C2")
             snr_ax.axvline(
-                best_frequency, color="red", linestyle="--",
+                best_frequency,
+                color="red",
+                linestyle="--",
                 label=f"best = {best_frequency:.6f} MHz",
             )
             snr_ax.scatter(
-                [best_frequency], [snr[best_index]],
-                marker="*", s=120, color="red", zorder=3,
+                [best_frequency],
+                [snr[best_index]],
+                marker="*",
+                s=120,
+                color="red",
+                zorder=3,
             )
             snr_ax.set(
                 title=f"Readout-frequency SNR | max = {snr[best_index]:.3f}",
-                xlabel="Frequency (MHz)", ylabel="SNR",
+                xlabel="Frequency (MHz)",
+                ylabel="SNR",
             )
             snr_ax.legend()
             snr_ax.grid(alpha=0.25)
@@ -343,7 +374,9 @@ class LorentzianAnalysis(BaseAnalysis):
         from ..tools.fitting import fitlor, lorfunc
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitlor, lorfunc)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitlor, lorfunc
+            )
             err = np.sqrt(np.diag(pcov))
             data.fit_params = np.array(popt)
             data.fit_errors = err
@@ -369,6 +402,7 @@ class LorentzianAnalysis(BaseAnalysis):
             Input data to process.
         """
         from ..tools.fitting import lorfunc
+
         if data.fit_params is None:
             self._show_fit(
                 data,
@@ -376,7 +410,8 @@ class LorentzianAnalysis(BaseAnalysis):
                 None,
                 xlabel="Frequency (MHz)",
                 title="Qubit Spectroscopy | Fit unavailable",
-                result_text=data.quality_message or "Lorentzian fit unavailable",
+                result_text=data.quality_message
+                or "Lorentzian fit unavailable",
             )
             return
         f0 = data.fit_result.get("f0_MHz", (None,))[0]
@@ -392,7 +427,9 @@ class LorentzianAnalysis(BaseAnalysis):
         if linewidth is not None:
             lines.append(f"linewidth = {linewidth:.3f} MHz")
         self._show_fit(
-            data, lorfunc, data.fit_params,
+            data,
+            lorfunc,
+            data.fit_params,
             xlabel="Frequency (MHz)",
             title=title,
             result_text="\n".join(lines),

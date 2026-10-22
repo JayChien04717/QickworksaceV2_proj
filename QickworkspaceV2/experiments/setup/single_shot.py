@@ -10,14 +10,17 @@ from tqdm.auto import tqdm
 
 from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
-from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
+from ...tools.system_tool import (
+    config_to_yaml,
+    get_next_filename_labber,
+    hdf5_generator,
+)
 from .singleshot_utils import (
+    fast_histogram_metrics,
     general_hist,
     hist,
-    fast_histogram_metrics,
     plot_hist,
 )
-
 
 
 class SingleShotProgram_gef(BaseProgram):
@@ -39,9 +42,13 @@ class SingleShotProgram_gef(BaseProgram):
         if cfg.get("shot_f", False) and cfg["qb_ch_ef"] != cfg["qb_ch"]:
             self.setup_qubit_gen(cfg, 'ef')
         self.add_loop("shotloop", cfg["shots"])
-        self.setup_qb_pulse(cfg, 'ge', name="qb_ge_pulse", gain_key="pi_gain_ge")
+        self.setup_qb_pulse(
+            cfg, 'ge', name="qb_ge_pulse", gain_key="pi_gain_ge"
+        )
         if cfg.get("shot_f", False):
-            self.setup_qb_pulse(cfg, 'ef', name="qb_ef_pulse", gain_key="pi_gain_ef")
+            self.setup_qb_pulse(
+                cfg, 'ef', name="qb_ef_pulse", gain_key="pi_gain_ef"
+            )
 
     def _body(self, cfg):
         """Execute one iteration of the pulse sequence.
@@ -90,8 +97,11 @@ class SingleShot_gef:
             If the operation cannot be completed.
         """
         from ...core.base_experiment import BaseExperiment
+
         if BaseExperiment._soc is None:
-            raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
+            raise RuntimeError(
+                "Call BaseExperiment.setup(soc, soccfg, data_path) first."
+            )
         self.soc = BaseExperiment._soc
         self.soccfg = BaseExperiment._soccfg
         self.cfg = config
@@ -114,7 +124,10 @@ class SingleShot_gef:
         self.cfg["shots"] = SHOTS
         self.cfg["shot_f"] = shot_f
         prog = SingleShotProgram_gef(
-            self.soccfg, reps=1, final_delay=self.cfg["relax_delay"], cfg=self.cfg
+            self.soccfg,
+            reps=1,
+            final_delay=self.cfg["relax_delay"],
+            cfg=self.cfg,
         )
         iq_list = prog.acquire(self.soc, rounds=1, progress=True)
         Ig = iq_list[0][0, :, 0]
@@ -124,7 +137,14 @@ class SingleShot_gef:
         if shot_f:
             If = iq_list[0][2, :, 0]
             Qf = iq_list[0][2, :, 1]
-            self.data = {"Ig": Ig, "Qg": Qg, "Ie": Ie, "Qe": Qe, "If": If, "Qf": Qf}
+            self.data = {
+                "Ig": Ig,
+                "Qg": Qg,
+                "Ie": Ie,
+                "Qe": Qe,
+                "If": If,
+                "Qf": Qf,
+            }
         else:
             self.data = {"Ig": Ig, "Qg": Qg, "Ie": Ie, "Qe": Qe}
         states = ["g", "e", "f"] if shot_f else ["g", "e"]
@@ -132,12 +152,22 @@ class SingleShot_gef:
         if shot_f:
             iq_by_state.append(If + 1j * Qf)
         self.result = ExperimentData(
-            experiment_type="s000_singleshot_gef" if shot_f else "s000_singleshot_ge",
+            experiment_type="s000_singleshot_gef"
+            if shot_f
+            else "s000_singleshot_ge",
             raw_iq=np.stack(iq_by_state, axis=0),
-            metadata={"qubit": self.cfg.get("name"), "states": states, "shots": int(SHOTS)},
+            metadata={
+                "qubit": self.cfg.get("name"),
+                "states": states,
+                "shots": int(SHOTS),
+            },
             axes={
                 "state": {"values": states, "label": "Prepared state"},
-                "shot": {"values": np.arange(SHOTS), "label": "Shot", "unit": "#"},
+                "shot": {
+                    "values": np.arange(SHOTS),
+                    "label": "Shot",
+                    "unit": "#",
+                },
             },
             dataset_dims={"iq": ["state", "shot"]},
             data_kind="single_shot",
@@ -180,28 +210,43 @@ class SingleShot_gef:
             thresholds = np.asarray(analyzed[1], dtype=float)
             rotation_deg = float(analyzed[2])
             confusion = np.asarray(analyzed[3], dtype=float)
-            self.result.fit_result.update({
-                "fidelity": (fidelity, None),
-                "rotation_deg": (rotation_deg, None),
-                "threshold": (float(thresholds[0]), None) if thresholds.size else (None, None),
-            })
-            self.result.analysis_data.update({
-                "thresholds": {"values": thresholds, "dims": ["threshold"]},
-                "confusion_matrix_pct": {
-                    "values": confusion,
-                    "dims": ["prepared_state", "declared_state"],
-                },
-            })
+            self.result.fit_result.update(
+                {
+                    "fidelity": (fidelity, None),
+                    "rotation_deg": (rotation_deg, None),
+                    "threshold": (float(thresholds[0]), None)
+                    if thresholds.size
+                    else (None, None),
+                }
+            )
+            self.result.analysis_data.update(
+                {
+                    "thresholds": {
+                        "values": thresholds,
+                        "dims": ["threshold"],
+                    },
+                    "confusion_matrix_pct": {
+                        "values": confusion,
+                        "dims": ["prepared_state", "declared_state"],
+                    },
+                }
+            )
             states = self.result.metadata.get("states", ["g", "e"])
-            self.result.axes.update({
-                "threshold": {"values": np.arange(thresholds.size)},
-                "prepared_state": {"values": states},
-                "declared_state": {"values": states},
-            })
-            self.result.quality = QualityFlag.GOOD if fidelity >= 0.85 else QualityFlag.WARNING
+            self.result.axes.update(
+                {
+                    "threshold": {"values": np.arange(thresholds.size)},
+                    "prepared_state": {"values": states},
+                    "declared_state": {"values": states},
+                }
+            )
+            self.result.quality = (
+                QualityFlag.GOOD if fidelity >= 0.85 else QualityFlag.WARNING
+            )
         return analyzed
 
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, filename_mode="random"):
+    def saveLabber(
+        self, qb_idx, yoko_value=None, config_all=None, filename_mode="random"
+    ):
         """Save Labber.
 
         Parameters
@@ -221,8 +266,11 @@ class SingleShot_gef:
             Result of the operation.
         """
         from ...core.base_experiment import BaseExperiment
+
         has_f = "If" in self.data
-        expt_name = ("s000_singleshot_gef" if has_f else "s000_singleshot_ge") + f"_{qb_idx}"
+        expt_name = (
+            "s000_singleshot_gef" if has_f else "s000_singleshot_ge"
+        ) + f"_{qb_idx}"
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         print("Current data file: " + file_path)
@@ -231,22 +279,29 @@ class SingleShot_gef:
             if config_all is not None
             else config_to_yaml(self.cfg)
         )
-        shotdata = np.array([
-            self.data["Ig"] + 1j * self.data["Qg"],
-            self.data["Ie"] + 1j * self.data["Qe"],
-        ] + ([self.data["If"] + 1j * self.data["Qf"]] if has_f else []))
+        shotdata = np.array(
+            [
+                self.data["Ig"] + 1j * self.data["Qg"],
+                self.data["Ie"] + 1j * self.data["Qe"],
+            ]
+            + ([self.data["If"] + 1j * self.data["Qf"]] if has_f else [])
+        )
         states = [0, 1, 2] if has_f else [0, 1]
         saved_path = hdf5_generator(
             filepath=file_path,
-            x_info={"name": "# shot", "unit": "#", "values": np.arange(self.cfg["shots"])},
+            x_info={
+                "name": "# shot",
+                "unit": "#",
+                "values": np.arange(self.cfg["shots"]),
+            },
             y_info={"name": "State", "unit": "", "values": states},
             z_info={"name": "Signal", "unit": "ADC unit", "values": shotdata},
-            comment=f"{dict_val}", tag="SingleShot",
+            comment=f"{dict_val}",
+            tag="SingleShot",
             result=self.result,
             filename_mode=filename_mode,
         )
         return str(saved_path)
-
 
 
 class SingleShot_ge_opt:
@@ -259,8 +314,11 @@ class SingleShot_ge_opt:
 
     def __init__(self, config):
         from ...core.base_experiment import BaseExperiment
+
         if BaseExperiment._soc is None:
-            raise RuntimeError("Call BaseExperiment.setup(soc, soccfg, data_path) first.")
+            raise RuntimeError(
+                "Call BaseExperiment.setup(soc, soccfg, data_path) first."
+            )
         self.soc = BaseExperiment._soc
         self.soccfg = BaseExperiment._soccfg
         self.cfg = config
@@ -272,19 +330,27 @@ class SingleShot_ge_opt:
         elif np.isscalar(values):
             values = [values]
         result = np.asarray(values, dtype=float)
-        if result.ndim != 1 or result.size == 0 or not np.all(np.isfinite(result)):
+        if (
+            result.ndim != 1
+            or result.size == 0
+            or not np.all(np.isfinite(result))
+        ):
             raise ValueError(f"{name} must be a non-empty finite 1-D sweep")
         return result
 
     def run(self, SHOTS, sweep_para: dict, shot_f=False):
         """Acquire a length x gain grid for prepared g and e states."""
         if shot_f:
-            raise ValueError("The minimal optimizer is ge-only; use SingleShot_gef for f-state analysis.")
+            raise ValueError(
+                "The minimal optimizer is ge-only; use SingleShot_gef for f-state analysis."
+            )
         if int(SHOTS) < 1:
             raise ValueError("SHOTS must be positive")
         extra = set(sweep_para) - {"length", "gain"}
         if extra:
-            raise ValueError("Only 'length' and 'gain' are swept; frequency stays fixed.")
+            raise ValueError(
+                "Only 'length' and 'gain' are swept; frequency stays fixed."
+            )
 
         self.length_sweep = self._axis(
             sweep_para.get("length"), self.cfg["ro_length"], "length"
@@ -308,16 +374,22 @@ class SingleShot_ge_opt:
             for li, length in enumerate(self.length_sweep)
             for gi, gain in enumerate(self.gain_sweep)
         )
-        for li, gi, length, gain in tqdm(points, total=total, desc="Length x gain"):
-            self.cfg.update({
-                "steps": self.shots,
-                "ro_length": float(length),
-                "res_gain_ge": float(gain),
-                "res_freq_ge": self.fixed_frequency,
-            })
+        for li, gi, length, gain in tqdm(
+            points, total=total, desc="Length x gain"
+        ):
+            self.cfg.update(
+                {
+                    "steps": self.shots,
+                    "ro_length": float(length),
+                    "res_gain_ge": float(gain),
+                    "res_freq_ge": self.fixed_frequency,
+                }
+            )
             program = SingleShotOptProgram(
-                self.soccfg, reps=1,
-                final_delay=self.cfg["relax_delay"], cfg=self.cfg,
+                self.soccfg,
+                reps=1,
+                final_delay=self.cfg["relax_delay"],
+                cfg=self.cfg,
             )
             iq = program.acquire(self.soc, rounds=1, progress=False)[0]
             self.I_g_array[li, gi] = iq[0, :, 0]
@@ -326,8 +398,10 @@ class SingleShot_ge_opt:
             self.Q_e_array[li, gi] = iq[1, :, 1]
 
         self.data = {
-            "Ig": self.I_g_array, "Qg": self.Q_g_array,
-            "Ie": self.I_e_array, "Qe": self.Q_e_array,
+            "Ig": self.I_g_array,
+            "Qg": self.Q_g_array,
+            "Ie": self.I_e_array,
+            "Qe": self.Q_e_array,
         }
         return self.data
 
@@ -338,19 +412,29 @@ class SingleShot_ge_opt:
 
         shape = (len(self.length_sweep), len(self.gain_sweep))
         names = (
-            "fidelity", "e_to_g", "g_to_e", "e_core", "g_core",
-            "e_tail", "g_tail", "score", "threshold", "rotation_deg",
+            "fidelity",
+            "e_to_g",
+            "g_to_e",
+            "e_core",
+            "g_core",
+            "e_tail",
+            "g_tail",
+            "score",
+            "threshold",
+            "rotation_deg",
         )
         arrays = {name: np.empty(shape) for name in names}
 
         for li in range(shape[0]):
             for gi in range(shape[1]):
-                metrics = fast_histogram_metrics({
-                    "Ig": self.I_g_array[li, gi],
-                    "Qg": self.Q_g_array[li, gi],
-                    "Ie": self.I_e_array[li, gi],
-                    "Qe": self.Q_e_array[li, gi],
-                })
+                metrics = fast_histogram_metrics(
+                    {
+                        "Ig": self.I_g_array[li, gi],
+                        "Qg": self.Q_g_array[li, gi],
+                        "Ie": self.I_e_array[li, gi],
+                        "Qe": self.Q_e_array[li, gi],
+                    }
+                )
                 arrays["fidelity"][li, gi] = metrics["fid"]
                 arrays["e_to_g"][li, gi] = metrics["e_to_g_error"]
                 arrays["g_to_e"][li, gi] = metrics["g_to_e_error"]
@@ -383,15 +467,20 @@ class SingleShot_ge_opt:
             "threshold": float(arrays["threshold"][best_idx]),
             "rotation_deg": float(arrays["rotation_deg"][best_idx]),
         }
-        self.cfg.update({
-            "ro_length": self.best["length"],
-            "res_gain_ge": self.best["gain"],
-        })
+        self.cfg.update(
+            {
+                "ro_length": self.best["length"],
+                "res_gain_ge": self.best["gain"],
+            }
+        )
 
-        raw_iq = np.stack((
-            self.I_g_array + 1j * self.Q_g_array,
-            self.I_e_array + 1j * self.Q_e_array,
-        ), axis=2)
+        raw_iq = np.stack(
+            (
+                self.I_g_array + 1j * self.Q_g_array,
+                self.I_e_array + 1j * self.Q_e_array,
+            ),
+            axis=2,
+        )
         analysis_data = {
             name: {"values": values, "dims": ["length", "gain"]}
             for name, values in arrays.items()
@@ -454,17 +543,32 @@ class SingleShot_ge_opt:
             ("e_tail", "e main-peak tail", "Oranges"),
         )
         extent = [
-            self.gain_sweep[0], self.gain_sweep[-1],
-            self.length_sweep[-1], self.length_sweep[0],
+            self.gain_sweep[0],
+            self.gain_sweep[-1],
+            self.length_sweep[-1],
+            self.length_sweep[0],
         ]
         for ax, (key, title, cmap) in zip(axes.flat, panels):
             image = ax.imshow(
-                self.metrics[key], origin="upper", aspect="auto",
-                extent=extent, cmap=cmap,
+                self.metrics[key],
+                origin="upper",
+                aspect="auto",
+                extent=extent,
+                cmap=cmap,
             )
-            ax.scatter(self.best["gain"], self.best["length"], marker="*", s=130,
-                       color="cyan", edgecolor="black")
-            ax.set(title=title, xlabel="Readout gain", ylabel="Readout length (us)")
+            ax.scatter(
+                self.best["gain"],
+                self.best["length"],
+                marker="*",
+                s=130,
+                color="cyan",
+                edgecolor="black",
+            )
+            ax.set(
+                title=title,
+                xlabel="Readout gain",
+                ylabel="Readout length (us)",
+            )
             fig.colorbar(image, ax=ax)
         fig.suptitle(
             f"Q{str(self.cfg.get('name', '')).lstrip('Q')} readout optimization  "
@@ -480,12 +584,19 @@ class SingleShot_ge_opt:
         if not hasattr(self, "best_index"):
             self.analyze()
         li, gi = self.best_index
-        return hist({
-            "Ig": self.I_g_array[li, gi], "Qg": self.Q_g_array[li, gi],
-            "Ie": self.I_e_array[li, gi], "Qe": self.Q_e_array[li, gi],
-        }, plot=True, verbose=True, title=(
-            f"Best L={self.best['length']:.3f} us, G={self.best['gain']:.6f}"
-        ))
+        return hist(
+            {
+                "Ig": self.I_g_array[li, gi],
+                "Qg": self.Q_g_array[li, gi],
+                "Ie": self.I_e_array[li, gi],
+                "Qe": self.Q_e_array[li, gi],
+            },
+            plot=True,
+            verbose=True,
+            title=(
+                f"Best L={self.best['length']:.3f} us, G={self.best['gain']:.6f}"
+            ),
+        )
 
 
 __all__ = [

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from qick.asm_v2 import QickSweep1D
 
-from ._common import CryoscopeExperimentBase, CryoscopeProgramBase
 from ...core.base_experiment import SweepAxis
+from ._common import CryoscopeExperimentBase, CryoscopeProgramBase
 
 
 class CryoscopeConstProgram(CryoscopeProgramBase):

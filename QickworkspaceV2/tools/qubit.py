@@ -1,5 +1,5 @@
-import qutip as qt
 import numpy as np
+import qutip as qt
 
 
 def flux_to_phi(x, flux_range, phi_range):
@@ -45,7 +45,9 @@ def phi_to_flux(phi, flux_range, phi_range):
     """
     src_min, src_max = phi_range
     tgt_min, tgt_max = flux_range
-    flux_val = tgt_min + (phi - src_min) / (src_max - src_min) * (tgt_max - tgt_min)
+    flux_val = tgt_min + (phi - src_min) / (src_max - src_min) * (
+        tgt_max - tgt_min
+    )
     return flux_val
 
 
@@ -131,7 +133,9 @@ class Fluxonium:
         Any
             Result of the operation.
         """
-        return (-1j / (np.sqrt(2) * self.phi_osc)) * (self.creation - self.destroy)
+        return (-1j / (np.sqrt(2) * self.phi_osc)) * (
+            self.creation - self.destroy
+        )
 
     @property
     def phi_op(self):

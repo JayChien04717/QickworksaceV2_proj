@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm.auto import tqdm
 
-from ...core.base_program import BaseProgram, resolve_gate
-from ...core.base_experiment import BaseExperiment
-from ...core.acquisition import acquire_values
-from ...core.experiment_data import ExperimentData, QualityFlag
 from ...analysis.rb import AllXYAnalysis
-
+from ...core.acquisition import acquire_values
+from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram, resolve_gate
+from ...core.experiment_data import ExperimentData, QualityFlag
 
 ALLXY_SEQUENCE = [
     ("I", "I"),
@@ -218,9 +217,9 @@ class AllXY(BaseExperiment):
             Value for ``config_all``.
         """
         from ...tools.system_tool import (
-            hdf5_generator,
-            get_next_filename_labber,
             config_to_yaml,
+            get_next_filename_labber,
+            hdf5_generator,
         )
 
         save_dir = BaseExperiment._data_path
@@ -239,7 +238,11 @@ class AllXY(BaseExperiment):
                 "unit": "None",
                 "values": np.arange(len(ALLXY_SEQUENCE)),
             },
-            z_info={"name": "Signal", "unit": "ADC unit", "values": self.allxy_lst},
+            z_info={
+                "name": "Signal",
+                "unit": "ADC unit",
+                "values": self.allxy_lst,
+            },
             comment=str(config_yaml),
             tag=self.TAG,
             result=self.result,

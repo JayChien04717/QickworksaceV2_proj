@@ -1,7 +1,7 @@
 from typing import Any, Callable
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from tqdm.auto import tqdm
 
 from ..core.acquisition import acquire_values
@@ -11,6 +11,7 @@ from .theme import style_axes, style_figure
 try:
     from IPython.display import clear_output, display, update_display
 except ImportError:
+
     def display(*args, **kwargs):
         """Return the display result.
 
@@ -134,7 +135,12 @@ def _is_all_iq(iq_process):
     Any
         Result of the operation.
     """
-    return str(iq_process or "abs").lower() in {"all", "iq", "channels", "multi"}
+    return str(iq_process or "abs").lower() in {
+        "all",
+        "iq",
+        "channels",
+        "multi",
+    }
 
 
 def _single_channel_iq_process(iq_process):
@@ -242,7 +248,13 @@ class SoftwareAverageRunner:
     """Acquire repeated QICK averages and emit processed plot data."""
 
     def __init__(
-        self, prog, soc, py_avg, y_axis_vals=None, iq_process="all", threshold=None
+        self,
+        prog,
+        soc,
+        py_avg,
+        y_axis_vals=None,
+        iq_process="all",
+        threshold=None,
     ):
         """Initialize the SoftwareAverageRunner instance.
 
@@ -288,10 +300,17 @@ class SoftwareAverageRunner:
         interrupted = False
 
         try:
-            for i in tqdm(range(self.py_avg), desc="Software Average Count", mininterval=0.1):
+            for i in tqdm(
+                range(self.py_avg),
+                desc="Software Average Count",
+                mininterval=0.1,
+            ):
                 iq_data = acquire_values(
-                    self.prog, self.soc, rounds=1,
-                    progress=False, threshold=self.threshold,
+                    self.prog,
+                    self.soc,
+                    rounds=1,
+                    progress=False,
+                    threshold=self.threshold,
                 )
                 iq = iq_data if i == 0 else iq + iq_data
                 iqdata = iq / (i + 1)
@@ -487,7 +506,9 @@ def liveplotfun(
 
     elif scan_x_axis is not None:
         if get_prog_callback is None:
-            raise ValueError("get_prog_callback must be provided for parameter scan.")
+            raise ValueError(
+                "get_prog_callback must be provided for parameter scan."
+            )
 
         if scan_y_axis is not None:
             return _liveplot_2d_scan(
@@ -594,7 +615,9 @@ def _liveplot_sw_avg(
     is_2d = y_axis_vals is not None
     if plot_all_iq and not is_2d:
         plot_artist = {}
-        for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
+        for channel_ax, channel_name in zip(
+            axes_flat, ("Abs", "Phase", "I", "Q")
+        ):
             (line,) = channel_ax.plot(
                 x_axis_vals,
                 np.zeros_like(x_axis_vals),
@@ -619,7 +642,11 @@ def _liveplot_sw_avg(
         ax.set_ylabel(y_label)
     else:
         (plot_artist,) = ax.plot(
-            x_axis_vals, np.zeros_like(x_axis_vals), "o-", markersize=5, alpha=0.7
+            x_axis_vals,
+            np.zeros_like(x_axis_vals),
+            "o-",
+            markersize=5,
+            alpha=0.7,
         )
         ax.set_ylabel(_y_label_proc)
 
@@ -657,9 +684,7 @@ def _liveplot_sw_avg(
             fig.suptitle(f"{title_prefix} | Average: {index + 1} / {py_avg}")
         elif is_2d:
             plot_artist.set_array(data_to_plot.ravel())
-            plot_artist.set_clim(
-                *_safe_limits(data_to_plot, pad_fraction=0.0)
-            )
+            plot_artist.set_clim(*_safe_limits(data_to_plot, pad_fraction=0.0))
             ax.set_title(f"{title_prefix} | Average: {index + 1} / {py_avg}")
         else:
             plot_artist.set_ydata(data_to_plot)
@@ -674,7 +699,9 @@ def _liveplot_sw_avg(
 
     if show_final_plot:
         if plot_all_iq and not is_2d:
-            final_fig, final_axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            final_fig, final_axes = plt.subplots(
+                2, 2, figsize=(9, 6), sharex=True
+            )
             _style_live_axes(final_fig, final_axes)
             final_ax = final_axes.ravel()[0]
         else:
@@ -682,9 +709,13 @@ def _liveplot_sw_avg(
             _style_live_axes(final_fig, [final_ax])
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq and not is_2d:
-            final_fig.suptitle(f"{title_prefix} ({title_status} at avg {avg_count})")
+            final_fig.suptitle(
+                f"{title_prefix} ({title_status} at avg {avg_count})"
+            )
         else:
-            final_ax.set_title(f"{title_prefix} ({title_status} at avg {avg_count})")
+            final_ax.set_title(
+                f"{title_prefix} ({title_status} at avg {avg_count})"
+            )
             final_ax.set_xlabel(x_label)
 
         if iqdata is not None:
@@ -693,11 +724,17 @@ def _liveplot_sw_avg(
                     final_axes.ravel(), _iq_channel_dict(iqdata).items()
                 ):
                     channel_ax.plot(
-                        x_axis_vals, data_to_plot, "o-", markersize=4, alpha=0.75
+                        x_axis_vals,
+                        data_to_plot,
+                        "o-",
+                        markersize=4,
+                        alpha=0.75,
                     )
                     channel_ax.set_title(channel_name)
                     channel_ax.set_xlabel(x_label)
-                    channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+                    channel_ax.set_ylabel(
+                        "ADC" if channel_name != "Phase" else "rad"
+                    )
                     channel_ax.grid(True, alpha=0.25)
             elif is_2d:
                 plot_data = _process_iq(iqdata, iq_process)
@@ -705,16 +742,24 @@ def _liveplot_sw_avg(
                 im = final_ax.pcolormesh(
                     x_axis_vals, y_axis_vals, final_data, cmap="viridis"
                 )
-                final_fig.colorbar(im, ax=final_ax, label="Normalized Amplitude")
+                final_fig.colorbar(
+                    im, ax=final_ax, label="Normalized Amplitude"
+                )
                 final_ax.set_ylabel(y_label)
             else:
                 plot_data = _process_iq(iqdata, iq_process)
-                final_ax.plot(x_axis_vals, plot_data, "o-", markersize=5, alpha=0.7)
+                final_ax.plot(
+                    x_axis_vals, plot_data, "o-", markersize=5, alpha=0.7
+                )
                 final_ax.set_ylabel(_y_label_proc)
         else:
             final_ax.text(
-                0.5, 0.5, "No data acquired",
-                ha="center", va="center", transform=final_ax.transAxes,
+                0.5,
+                0.5,
+                "No data acquired",
+                ha="center",
+                va="center",
+                transform=final_ax.transAxes,
             )
         display(final_fig)
         plt.close(final_fig)
@@ -791,15 +836,23 @@ def _liveplot_sweep_yoko(
     _colorbar_label = _process_label(iq_process)
 
     if yoko_name is None:
-        raise ValueError("yoko_name must be provided when using instrument_manager.")
+        raise ValueError(
+            "yoko_name must be provided when using instrument_manager."
+        )
     yoko_label = yoko_name
     ramp = instrument_manager.ramp(yoko_name)
     voltage_step = ramp.get("voltage_step")
     current_step = ramp.get("current_step")
     interval = ramp.get("interval")
-    voltage_step_text = f"{voltage_step:.2e}" if voltage_step is not None else "unknown"
-    current_step_text = f"{current_step:.2e}" if current_step is not None else "unknown"
-    interval_text = f"{interval * 1e3:.1f}" if interval is not None else "unknown"
+    voltage_step_text = (
+        f"{voltage_step:.2e}" if voltage_step is not None else "unknown"
+    )
+    current_step_text = (
+        f"{current_step:.2e}" if current_step is not None else "unknown"
+    )
+    interval_text = (
+        f"{interval * 1e3:.1f}" if interval is not None else "unknown"
+    )
 
     result_dtype = float if threshold is not None else complex
     iqdata_full = np.zeros(
@@ -853,7 +906,9 @@ def _liveplot_sweep_yoko(
             title = auto_unit(val)
             instrument_manager.set_value(yoko_name, val, mode=yoko_mode)
             suffix = "A" if yoko_mode == "current" else "V"
-            ax.set_title(f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}")
+            ax.set_title(
+                f"{title_prefix} | {title['value']:.2f}{title['unit']}{suffix}"
+            )
 
             iq_data_row = acquire_values(
                 prog, soc, rounds=py_avg, progress=False, threshold=threshold
@@ -885,7 +940,9 @@ def _liveplot_sweep_yoko(
         print(f"KeyboardInterrupt: Interrupted at Yoko step: {last_idx + 1}")
 
     ax.cla()
-    title_status = f"Interrupted at step {last_idx + 1}" if interrupted else "Completed"
+    title_status = (
+        f"Interrupted at step {last_idx + 1}" if interrupted else "Completed"
+    )
     ax.set_title(f"{title_prefix} ({title_status})")
 
     if len(y_axis_vals_yoko) == 1:
@@ -900,8 +957,12 @@ def _liveplot_sweep_yoko(
         measured_data_final = (
             data_to_plot[: last_idx + 1, :] if interrupted else data_to_plot
         )
-        final_min = np.min(measured_data_final) if measured_data_final.size > 0 else 0
-        final_max = np.max(measured_data_final) if measured_data_final.size > 0 else 1
+        final_min = (
+            np.min(measured_data_final) if measured_data_final.size > 0 else 0
+        )
+        final_max = (
+            np.max(measured_data_final) if measured_data_final.size > 0 else 1
+        )
         if final_min == final_max:
             final_min = 0
 
@@ -973,9 +1034,15 @@ def _liveplot_1d_scan(
         _style_live_axes(fig, axes)
         axes_flat = axes.ravel()
         line = {}
-        for channel_ax, channel_name in zip(axes_flat, ("Abs", "Phase", "I", "Q")):
+        for channel_ax, channel_name in zip(
+            axes_flat, ("Abs", "Phase", "I", "Q")
+        ):
             (channel_line,) = channel_ax.plot(
-                scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=4, alpha=0.75
+                scan_x_axis,
+                np.zeros_like(scan_x_axis),
+                "o-",
+                markersize=4,
+                alpha=0.75,
             )
             line[channel_name] = channel_line
             channel_ax.set_xlabel(x_label)
@@ -987,7 +1054,11 @@ def _liveplot_1d_scan(
         fig, ax = plt.subplots(figsize=(6, 4))
         _style_live_axes(fig, [ax])
         (line,) = ax.plot(
-            scan_x_axis, np.zeros_like(scan_x_axis), "o-", markersize=5, alpha=0.7
+            scan_x_axis,
+            np.zeros_like(scan_x_axis),
+            "o-",
+            markersize=5,
+            alpha=0.7,
         )
         ax.set_xlabel(x_label)
         ax.set_ylabel(_y_label_proc)
@@ -1004,8 +1075,11 @@ def _liveplot_1d_scan(
                 prog = get_prog_callback(val)
                 iqlst.append(
                     acquire_values(
-                        prog, soc, rounds=1,
-                        progress=False, threshold=threshold,
+                        prog,
+                        soc,
+                        rounds=1,
+                        progress=False,
+                        threshold=threshold,
                     )
                 )
 
@@ -1018,7 +1092,9 @@ def _liveplot_1d_scan(
                     axes_flat, _iq_channel_dict(iqdata).items()
                 ):
                     line[channel_name].set_ydata(plot_data)
-                    channel_ax.set_ylim(*_safe_limits(plot_data, pad_fraction=0.05))
+                    channel_ax.set_ylim(
+                        *_safe_limits(plot_data, pad_fraction=0.05)
+                    )
             else:
                 plot_data = _process_iq(iqdata, iq_process)
                 line.set_ydata(plot_data)
@@ -1041,13 +1117,19 @@ def _liveplot_1d_scan(
     if show_final_plot:
         title_status = "Interrupted" if interrupted else "Completed"
         if plot_all_iq:
-            fig_final, axes_final = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+            fig_final, axes_final = plt.subplots(
+                2, 2, figsize=(9, 6), sharex=True
+            )
             _style_live_axes(fig_final, axes_final)
-            fig_final.suptitle(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
+            fig_final.suptitle(
+                f"{title_prefix} ({title_status} at avg {last_avg + 1})"
+            )
         else:
             fig_final, ax_final = plt.subplots(figsize=(6, 4))
             _style_live_axes(fig_final, [ax_final])
-            ax_final.set_title(f"{title_prefix} ({title_status} at avg {last_avg + 1})")
+            ax_final.set_title(
+                f"{title_prefix} ({title_status} at avg {last_avg + 1})"
+            )
             ax_final.set_xlabel(x_label)
             ax_final.set_ylabel(_y_label_proc)
 
@@ -1060,7 +1142,9 @@ def _liveplot_1d_scan(
                         scan_x_axis, plot_data, "o-", markersize=4, alpha=0.75
                     )
                     channel_ax.set_xlabel(x_label)
-                    channel_ax.set_ylabel("ADC" if channel_name != "Phase" else "rad")
+                    channel_ax.set_ylabel(
+                        "ADC" if channel_name != "Phase" else "rad"
+                    )
                     channel_ax.set_title(channel_name)
                     channel_ax.grid(True, alpha=0.25)
             else:
@@ -1074,8 +1158,12 @@ def _liveplot_1d_scan(
         else:
             target_ax = axes_final.ravel()[0] if plot_all_iq else ax_final
             target_ax.text(
-                0.5, 0.5, "No data acquired",
-                ha="center", va="center", transform=target_ax.transAxes,
+                0.5,
+                0.5,
+                "No data acquired",
+                ha="center",
+                va="center",
+                transform=target_ax.transAxes,
             )
 
         display(fig_final)
@@ -1171,8 +1259,11 @@ def _liveplot_2d_scan(
 
                 prog = get_prog_callback(x_val, y_val)
                 iq_data_pt = acquire_values(
-                    prog, soc, rounds=py_avg,
-                    progress=False, threshold=threshold,
+                    prog,
+                    soc,
+                    rounds=py_avg,
+                    progress=False,
+                    threshold=threshold,
                 )
 
                 iqdata_full[y_idx, x_idx] = iq_data_pt
@@ -1202,7 +1293,8 @@ def _liveplot_2d_scan(
     clear_output(wait=True)
     if interrupted:
         print(
-            f"Scan interrupted at {y_label}: {scan_y_axis[last_y_idx]}, {x_label}: {scan_x_axis[last_x_idx]}"
+            f"Scan interrupted at {y_label}: {scan_y_axis[last_y_idx]}, "
+            f"{x_label}: {scan_x_axis[last_x_idx]}"
         )
 
     ax.cla()

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .base import InstrumentSpec, LimitMap, merge_limits
@@ -335,7 +335,10 @@ class BaseInstrumentManager:
         if not self._instruments:
             return TextReport("No instruments registered.")
         return TextReport(
-            "\n".join(self._format_status_line(spec) for spec in self._instruments.values())
+            "\n".join(
+                self._format_status_line(spec)
+                for spec in self._instruments.values()
+            )
         )
 
     def help(self, name: str | None = None) -> TextReport:
@@ -355,7 +358,9 @@ class BaseInstrumentManager:
         if name is None:
             if not self._instruments:
                 return TextReport("No instruments registered.")
-            return TextReport("\n\n".join(str(self.help(item)) for item in self._instruments))
+            return TextReport(
+                "\n\n".join(str(self.help(item)) for item in self._instruments)
+            )
 
         spec = self.spec(name)
         lines = [
@@ -375,10 +380,14 @@ class BaseInstrumentManager:
                 lines.append(f"  {key}: {value}")
         if spec.notes:
             lines.append(f"notes: {spec.notes}")
-        lines.append(f"common: inst.get({name!r}), inst.on({name!r}), inst.off({name!r})")
+        lines.append(
+            f"common: inst.get({name!r}), inst.on({name!r}), inst.off({name!r})"
+        )
         return TextReport("\n".join(lines))
 
-    def limits(self, name: str | None = None) -> dict[str, LimitMap] | LimitMap:
+    def limits(
+        self, name: str | None = None
+    ) -> dict[str, LimitMap] | LimitMap:
         """Return the limits result.
 
         Parameters
@@ -393,7 +402,9 @@ class BaseInstrumentManager:
         """
         if name is not None:
             return dict(self.spec(name).limits)
-        return {item: dict(spec.limits) for item, spec in self._instruments.items()}
+        return {
+            item: dict(spec.limits) for item, spec in self._instruments.items()
+        }
 
     def set(self, name: str, parameter: str, value: Any) -> None:
         """Set a driver property after checking registered limits.
@@ -416,7 +427,9 @@ class BaseInstrumentManager:
         spec = self.spec(name)
         self._validate_range(spec, parameter, value)
         if not hasattr(spec.driver, parameter):
-            raise AttributeError(f"{name!r} has no settable parameter {parameter!r}")
+            raise AttributeError(
+                f"{name!r} has no settable parameter {parameter!r}"
+            )
         setattr(spec.driver, parameter, value)
 
     def set_yoko(self, name: str, value: float, mode: str = "current") -> None:
@@ -462,7 +475,9 @@ class BaseInstrumentManager:
         spec = self.spec(name)
         return self._primary_value(spec)
 
-    def set_value(self, name: str, value: float, *, mode: str | None = None) -> None:
+    def set_value(
+        self, name: str, value: float, *, mode: str | None = None
+    ) -> None:
         """Set the primary output value.
 
                         For Yoko/DC sources this sets current or voltage. For RF sources this
@@ -541,7 +556,10 @@ class BaseInstrumentManager:
         normalized = self._normalize_targets(targets, mode=mode)
         for name, spec in normalized.items():
             inst_spec = self.spec(name)
-            if not (inst_spec.kind == "yoko" or self._is_dc_source(inst_spec.driver)):
+            if not (
+                inst_spec.kind == "yoko"
+                or self._is_dc_source(inst_spec.driver)
+            ):
                 raise TypeError(
                     f"{name!r} is not a Yoko/DC source. Use set_value() or set() "
                     "for RF sources."
@@ -549,7 +567,9 @@ class BaseInstrumentManager:
             self._validate_set_value(name, spec["value"], spec.get("mode"))
 
         if parallel and len(normalized) > 1:
-            return self._set_values_parallel(normalized, max_workers=max_workers)
+            return self._set_values_parallel(
+                normalized, max_workers=max_workers
+            )
 
         lines = []
         for name, spec in normalized.items():
@@ -655,7 +675,9 @@ class BaseInstrumentManager:
             if callable(close):
                 close()
 
-    def _validate_range(self, spec: InstrumentSpec, parameter: str, value: Any) -> None:
+    def _validate_range(
+        self, spec: InstrumentSpec, parameter: str, value: Any
+    ) -> None:
         """Validate range.
 
         Parameters
@@ -681,7 +703,9 @@ class BaseInstrumentManager:
                 f"{low:g} to {high:g}"
             )
 
-    def _validate_set_value(self, name: str, value: float, mode: str | None) -> None:
+    def _validate_set_value(
+        self, name: str, value: float, mode: str | None
+    ) -> None:
         """Validate set value.
 
         Parameters
@@ -704,7 +728,9 @@ class BaseInstrumentManager:
         if spec.kind == "yoko" or self._is_dc_source(spec.driver):
             target_mode = mode or "current"
             if target_mode not in {"current", "voltage"}:
-                raise ValueError(f"{name}: mode must be 'current' or 'voltage'")
+                raise ValueError(
+                    f"{name}: mode must be 'current' or 'voltage'"
+                )
             self._validate_range(spec, target_mode, value)
             return
         if hasattr(spec.driver, "power"):
@@ -744,7 +770,9 @@ class BaseInstrumentManager:
             self.spec(name)
             if isinstance(target, Mapping):
                 if "value" not in target:
-                    raise ValueError(f"{name}: target mapping must contain 'value'")
+                    raise ValueError(
+                        f"{name}: target mapping must contain 'value'"
+                    )
                 normalized[name] = {
                     "value": target["value"],
                     "mode": target.get("mode", mode),
@@ -777,7 +805,9 @@ class BaseInstrumentManager:
         lines = []
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(self.set_value, name, spec["value"], mode=spec.get("mode")): name
+                executor.submit(
+                    self.set_value, name, spec["value"], mode=spec.get("mode")
+                ): name
                 for name, spec in targets.items()
             }
             for future in as_completed(futures):
@@ -873,7 +903,11 @@ class BaseInstrumentManager:
                     "unit": info.get("unit"),
                 }
             except Exception as exc:
-                return {"parameter": "value", "value": f"error({exc})", "unit": ""}
+                return {
+                    "parameter": "value",
+                    "value": f"error({exc})",
+                    "unit": "",
+                }
 
         power = self._safe_get(driver, "power")
         if power is not None:
@@ -929,7 +963,9 @@ class BaseInstrumentManager:
                 return None
         return value
 
-    def _driver_limits(self, driver: Any, *, auto_limits: bool = True) -> LimitMap:
+    def _driver_limits(
+        self, driver: Any, *, auto_limits: bool = True
+    ) -> LimitMap:
         """Return the driver limits result.
 
         Parameters

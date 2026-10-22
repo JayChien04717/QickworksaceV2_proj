@@ -24,8 +24,13 @@ def _add_flux_pulse(prog, cfg):
         return
     prog.declare_gen(ch=cfg["flux_ch"], nqz=cfg.get("nqz_flux", 1))
     prog.add_pulse(
-        ch=cfg["flux_ch"], name="cool_flux", style="const",
-        length=cfg["flux_length"], freq=0, phase=0, gain=cfg["flux_gain"],
+        ch=cfg["flux_ch"],
+        name="cool_flux",
+        style="const",
+        length=cfg["flux_length"],
+        freq=0,
+        phase=0,
+        gain=cfg["flux_gain"],
     )
 
 
@@ -43,17 +48,28 @@ def _add_aux_pulse(prog, cfg, name="aux_cool"):
     if style == "flat_top":
         env = f"{name}_env"
         sigma = cfg.get("aux_cool_sigma", cfg["sigma_ef"])
-        prog.add_gauss(ch=ch, name=env, sigma=sigma, length=5 * sigma, even_length=True)
+        prog.add_gauss(
+            ch=ch, name=env, sigma=sigma, length=5 * sigma, even_length=True
+        )
         prog.add_pulse(
-            ch=ch, name=name, style="flat_top", envelope=env,
-            length=cfg["aux_cool_length"], freq=cfg["aux_cool_freq"],
-            phase=cfg.get("aux_cool_phase", 0), gain=cfg["aux_cool_gain"],
+            ch=ch,
+            name=name,
+            style="flat_top",
+            envelope=env,
+            length=cfg["aux_cool_length"],
+            freq=cfg["aux_cool_freq"],
+            phase=cfg.get("aux_cool_phase", 0),
+            gain=cfg["aux_cool_gain"],
         )
     else:
         prog.add_pulse(
-            ch=ch, name=name, style="const",
-            length=cfg["aux_cool_length"], freq=cfg["aux_cool_freq"],
-            phase=cfg.get("aux_cool_phase", 0), gain=cfg["aux_cool_gain"],
+            ch=ch,
+            name=name,
+            style="const",
+            length=cfg["aux_cool_length"],
+            freq=cfg["aux_cool_freq"],
+            phase=cfg.get("aux_cool_phase", 0),
+            gain=cfg["aux_cool_gain"],
         )
 
 
@@ -66,7 +82,9 @@ class AuxiliaryEfSpecProgram(BaseProgram):
         _add_flux_pulse(self, cfg)
         self.add_loop("freqloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_ge_pi", gain_key="pi_gain_ge")
-        self.setup_qb_pulse(cfg, "ef", name="qb_ef_spec", pulse_type="flat_top")
+        self.setup_qb_pulse(
+            cfg, "ef", name="qb_ef_spec", pulse_type="flat_top"
+        )
 
     def _body(self, cfg):
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
@@ -116,7 +134,9 @@ class AuxiliarySidebandSpecProgram(BaseProgram):
             self.delay_auto(0.02)
         _play_flux_pulse(self, cfg)
         self.delay(cfg.get("aux_cool_pre", 0.01))
-        self.pulse(ch=cfg.get("aux_cool_ch", cfg["qb_ch_ef"]), name="aux_cool", t=0)
+        self.pulse(
+            ch=cfg.get("aux_cool_ch", cfg["qb_ch_ef"]), name="aux_cool", t=0
+        )
         self.delay_auto(cfg.get("aux_cool_ringdown", 0.05))
         if cfg.get("ge_ref", False):
             self.pulse(ch=cfg["qb_ch"], name="qb_ge_pi", t=0)
@@ -170,7 +190,10 @@ class AuxiliaryLevelCooling(BaseExperiment):
 
 
 __all__ = [
-    "AuxiliaryEfSpecProgram", "AuxiliaryEfSpec",
-    "AuxiliarySidebandSpecProgram", "AuxiliarySidebandSpec",
-    "AuxiliaryLevelCoolingProgram", "AuxiliaryLevelCooling",
+    "AuxiliaryEfSpecProgram",
+    "AuxiliaryEfSpec",
+    "AuxiliarySidebandSpecProgram",
+    "AuxiliarySidebandSpec",
+    "AuxiliaryLevelCoolingProgram",
+    "AuxiliaryLevelCooling",
 ]

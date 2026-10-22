@@ -4,14 +4,14 @@ Characterization/state_tomography — s016: Single-qubit state tomography.
 
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 from tqdm.auto import tqdm
 
-from ...core.base_program import BaseProgram, resolve_gate
 from ...core.acquisition import acquire_values
 from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram, resolve_gate
 from ...core.experiment_data import ExperimentData, QualityFlag
 
 
@@ -86,7 +86,7 @@ class Tomography(BaseExperiment):
         self.rho_mle: np.ndarray | None = None
         self.prep_pulse_name: str | None = None
 
-        self._I  = np.array([[1, 0], [0, 1]], dtype=complex)
+        self._I = np.array([[1, 0], [0, 1]], dtype=complex)
         self._sx = np.array([[0, 1], [1, 0]], dtype=complex)
         self._sy = np.array([[0, -1j], [1j, 0]], dtype=complex)
         self._sz = np.array([[1, 0], [0, -1]], dtype=complex)
@@ -105,15 +105,28 @@ class Tomography(BaseExperiment):
             Result of the operation.
         """
         for cal_label, cal_val in [("ground", "None"), ("excited", "x180_ge")]:
-            print(f"Calibrating |{'0' if cal_val == 'None' else '1'}⟩ state...")
+            print(
+                f"Calibrating |{'0' if cal_val == 'None' else '1'}⟩ state..."
+            )
             cfg = self.cfg.copy()
-            cfg.update({"tomo_axis": "Z", "cal_pulse": cal_val if cal_val != "None" else None, "prep_pulse": None})
+            cfg.update(
+                {
+                    "tomo_axis": "Z",
+                    "cal_pulse": cal_val if cal_val != "None" else None,
+                    "prep_pulse": None,
+                }
+            )
             prog = StateTomographyProgram(
-                self.soccfg, reps=self.cfg["reps"],
-                final_delay=self.cfg["relax_delay"], cfg=cfg,
+                self.soccfg,
+                reps=self.cfg["reps"],
+                final_delay=self.cfg["relax_delay"],
+                cfg=cfg,
             )
             iq = acquire_values(
-                prog, self.soc, rounds=pyavg, progress=False,
+                prog,
+                self.soc,
+                rounds=pyavg,
+                progress=False,
                 scalar_readout=True,
             )
             if cal_label == "ground":
@@ -140,15 +153,24 @@ class Tomography(BaseExperiment):
         """
         resolved = resolve_gate(prep_pulse_name) if prep_pulse_name else None
         tomo_data = {}
-        for axis in tqdm(["X", "Y", "Z"], desc=f"Tomography ({prep_pulse_name})"):
+        for axis in tqdm(
+            ["X", "Y", "Z"], desc=f"Tomography ({prep_pulse_name})"
+        ):
             cfg = self.cfg.copy()
-            cfg.update({"tomo_axis": axis, "cal_pulse": None, "prep_pulse": resolved})
+            cfg.update(
+                {"tomo_axis": axis, "cal_pulse": None, "prep_pulse": resolved}
+            )
             prog = StateTomographyProgram(
-                self.soccfg, reps=self.cfg["reps"],
-                final_delay=self.cfg["relax_delay"], cfg=cfg,
+                self.soccfg,
+                reps=self.cfg["reps"],
+                final_delay=self.cfg["relax_delay"],
+                cfg=cfg,
             )
             tomo_data[axis] = acquire_values(
-                prog, self.soc, rounds=pyavg, progress=False,
+                prog,
+                self.soc,
+                rounds=pyavg,
+                progress=False,
                 scalar_readout=True,
             )
         return tomo_data
@@ -172,7 +194,10 @@ class Tomography(BaseExperiment):
         """
         cal_vector = iq_e - iq_g
         data_vector = iq_data - iq_g
-        projection = np.real(data_vector * np.conj(cal_vector)) / np.abs(cal_vector)**2
+        projection = (
+            np.real(data_vector * np.conj(cal_vector))
+            / np.abs(cal_vector) ** 2
+        )
         return float(np.clip((1 - projection) - projection, -1, 1))
 
     def _mle_reconstruction(self, rho_raw):
@@ -203,18 +228,28 @@ class Tomography(BaseExperiment):
             Result of the operation.
         """
         expect_values = {
-            axis: self._project_to_expect(self.tomo_data_raw[axis], self.iq_g, self.iq_e)
+            axis: self._project_to_expect(
+                self.tomo_data_raw[axis], self.iq_g, self.iq_e
+            )
             for axis in ["X", "Y", "Z"]
         }
-        r_x, r_y, r_z = expect_values["X"], expect_values["Y"], expect_values["Z"]
-        rho_raw = 0.5 * (self._I + r_x * self._sx + r_y * self._sy + r_z * self._sz)
+        r_x, r_y, r_z = (
+            expect_values["X"],
+            expect_values["Y"],
+            expect_values["Z"],
+        )
+        rho_raw = 0.5 * (
+            self._I + r_x * self._sx + r_y * self._sy + r_z * self._sz
+        )
         rho_mle = self._mle_reconstruction(rho_raw)
         purity = float(np.real(np.trace(rho_mle @ rho_mle)))
         print(f"\n<X>={r_x:.4f}, <Y>={r_y:.4f}, <Z>={r_z:.4f}")
         print(f"Purity: {purity:.5f}")
         return expect_values, rho_mle
 
-    def run(self, py_avg: int, prep_pulse_name: str | None = None) -> ExperimentData:
+    def run(
+        self, py_avg: int, prep_pulse_name: str | None = None
+    ) -> ExperimentData:
         """Run the operation.
 
         Parameters
@@ -236,11 +271,14 @@ class Tomography(BaseExperiment):
 
         purity = float(np.real(np.trace(self.rho_mle @ self.rho_mle)))
         expectation_axis = np.array([0.0, 1.0, 2.0])
-        expectation_values = np.array([
-            self.expect_values["X"],
-            self.expect_values["Y"],
-            self.expect_values["Z"],
-        ], dtype=float)
+        expectation_values = np.array(
+            [
+                self.expect_values["X"],
+                self.expect_values["Y"],
+                self.expect_values["Z"],
+            ],
+            dtype=float,
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq={
@@ -268,8 +306,14 @@ class Tomography(BaseExperiment):
                 "bra": {"values": ["0", "1"]},
             },
             analysis_data={
-                "expectation": {"values": expectation_values, "dims": ["tomography_axis"]},
-                "density_matrix": {"values": self.rho_mle, "dims": ["bra", "ket"]},
+                "expectation": {
+                    "values": expectation_values,
+                    "dims": ["tomography_axis"],
+                },
+                "density_matrix": {
+                    "values": self.rho_mle,
+                    "dims": ["bra", "ket"],
+                },
             },
             metadata={
                 "qubit": self.cfg.get("name"),
@@ -336,8 +380,21 @@ class Tomography(BaseExperiment):
                     for j in range(2):
                         val = data[i, j]
                         bg = cmap(norm(val))
-                        tc = "black" if 0.299*bg[0]+0.587*bg[1]+0.114*bg[2] > 0.5 else "white"
-                        ax.text(j, i, f"{val:.2f}", ha="center", va="center", color=tc, fontsize=12)
+                        tc = (
+                            "black"
+                            if 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+                            > 0.5
+                            else "white"
+                        )
+                        ax.text(
+                            j,
+                            i,
+                            f"{val:.2f}",
+                            ha="center",
+                            va="center",
+                            color=tc,
+                            fontsize=12,
+                        )
             plt.tight_layout()
             plt.show()
             return fig, (ax1, ax2)
@@ -345,14 +402,26 @@ class Tomography(BaseExperiment):
         elif plot_type == "3d":
             fig = plt.figure(figsize=(12, 6))
             fig.suptitle(title_prefix, fontsize=18, y=1.0)
-            for idx, (data, norm, title) in enumerate([
-                (rho_real, norm_r, "Real(ρ)"), (rho_imag, norm_i, "Imag(ρ)"),
-            ]):
+            for idx, (data, norm, title) in enumerate(
+                [
+                    (rho_real, norm_r, "Real(ρ)"),
+                    (rho_imag, norm_i, "Imag(ρ)"),
+                ]
+            ):
                 ax = fig.add_subplot(1, 2, idx + 1, projection="3d")
                 x_pos, y_pos = [0, 0, 1, 1], [0, 1, 0, 1]
                 dz = data.flatten()
                 colors = cmap(norm(dz))
-                ax.bar3d(x_pos, y_pos, np.zeros(4), 0.8, 0.8, dz, color=colors, shade=True)
+                ax.bar3d(
+                    x_pos,
+                    y_pos,
+                    np.zeros(4),
+                    0.8,
+                    0.8,
+                    dz,
+                    color=colors,
+                    shade=True,
+                )
                 ax.set_title(title, fontsize=16)
                 ax.set_xticks([0.4, 1.4])
                 ax.set_yticks([0.4, 1.4])
@@ -379,9 +448,16 @@ class Tomography(BaseExperiment):
         if not self.tomo_data_raw:
             print("No data. Run first.")
             return
-        from ...tools.system_tool import hdf5_generator, get_next_filename_labber, config_to_yaml
+        from ...tools.system_tool import (
+            config_to_yaml,
+            get_next_filename_labber,
+            hdf5_generator,
+        )
+
         save_dir = BaseExperiment._data_path
-        file_path = get_next_filename_labber(save_dir, f"s016_Tomography_ge_Q{qb_idx}", yoko_value)
+        file_path = get_next_filename_labber(
+            save_dir, f"s016_Tomography_ge_Q{qb_idx}", yoko_value
+        )
         config_yaml = (
             config_all.to_yaml(q_id=qb_idx)
             if config_all is not None
@@ -397,10 +473,24 @@ class Tomography(BaseExperiment):
         )
         hdf5_generator(
             filepath=file_path,
-            x_info={"name": "Axis", "unit": "None (0=X,1=Y,2=Z)", "values": np.array([0, 1, 2])},
-            z_info={"name": "Signal", "unit": "ADC unit",
-                    "values": np.array([self.tomo_data_raw["X"], self.tomo_data_raw["Y"], self.tomo_data_raw["Z"]])},
-            comment=comment, tag="Tomography",
+            x_info={
+                "name": "Axis",
+                "unit": "None (0=X,1=Y,2=Z)",
+                "values": np.array([0, 1, 2]),
+            },
+            z_info={
+                "name": "Signal",
+                "unit": "ADC unit",
+                "values": np.array(
+                    [
+                        self.tomo_data_raw["X"],
+                        self.tomo_data_raw["Y"],
+                        self.tomo_data_raw["Z"],
+                    ]
+                ),
+            },
+            comment=comment,
+            tag="Tomography",
             result=self.result,
         )
         print(f"Data saved to {file_path}")

@@ -10,7 +10,6 @@ from ..core.base_analysis import BaseAnalysis
 from ..core.experiment_data import ExperimentData, QualityFlag
 
 
-
 class T1Analysis(BaseAnalysis):
     """Exponential decay fit → T1 relaxation time."""
 
@@ -31,7 +30,9 @@ class T1Analysis(BaseAnalysis):
         from ..tools.fitting import expfunc, fitexp
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitexp, expfunc
+            )
             err = np.sqrt(np.diag(pcov))
             T1 = abs(float(popt[2]))
             data.fit_params = np.array(popt)
@@ -67,11 +68,11 @@ class T1Analysis(BaseAnalysis):
             expfunc,
             data.fit_params,
             xlabel="Delay time (us)",
-            title=f"T1 Relaxation  |  T1 = {T1:.2f} µs" if T1 else "T1 Relaxation",
+            title=f"T1 Relaxation  |  T1 = {T1:.2f} µs"
+            if T1
+            else "T1 Relaxation",
             result_text="\n".join(lines),
         )
-
-
 
 
 class RamseyAnalysis(BaseAnalysis):
@@ -149,7 +150,9 @@ class RamseyAnalysis(BaseAnalysis):
         from ..tools.fitting import expfunc, fitexp
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitexp, expfunc
+            )
             err = np.sqrt(np.diag(pcov))
             T2r = abs(float(popt[2]))
             data.fit_params = np.array(popt)
@@ -204,8 +207,6 @@ class RamseyAnalysis(BaseAnalysis):
         )
 
 
-
-
 class SpinEchoAnalysis(BaseAnalysis):
     """Hahn echo fit -- T2E."""
 
@@ -245,7 +246,9 @@ class SpinEchoAnalysis(BaseAnalysis):
             else:
                 from ..tools.fitting import expfunc, fitexp
 
-                _, popt, pcov, channel, score = self._fit_channel(data, fitexp, expfunc)
+                _, popt, pcov, channel, score = self._fit_channel(
+                    data, fitexp, expfunc
+                )
                 err = np.sqrt(np.diag(pcov))
                 T2e = abs(float(popt[2]))
                 T2e_err = err[2]
@@ -329,7 +332,9 @@ class PowerRabiAnalysis(BaseAnalysis):
         from ..tools.fitting import fitsin, fix_phase, sinfunc
 
         try:
-            _, popt, pcov, channel, score = self._fit_channel(data, fitsin, sinfunc)
+            _, popt, pcov, channel, score = self._fit_channel(
+                data, fitsin, sinfunc
+            )
             err = np.sqrt(np.diag(pcov))
             pi_gain, pi2_gain = fix_phase(popt)
             data.fit_params = np.array(popt)
@@ -390,12 +395,12 @@ class PowerRabiAnalysis(BaseAnalysis):
             sinfunc,
             data.fit_params,
             xlabel="Gain (a.u.)",
-            title=f"Power Rabi  |  π gain = {pi_gain:.4f}" if pi_gain else "Power Rabi",
+            title=f"Power Rabi  |  π gain = {pi_gain:.4f}"
+            if pi_gain
+            else "Power Rabi",
             result_text="\n".join(lines),
             extra_lines=extra,
         )
-
-
 
 
 class TimeRabiAnalysis(BaseAnalysis):
@@ -452,11 +457,11 @@ class TimeRabiAnalysis(BaseAnalysis):
             decaysin,
             data.fit_params,
             xlabel="Pulse length (µs)",
-            title=f"Time Rabi  |  π time = {pi_len:.3f} µs" if pi_len else "Time Rabi",
+            title=f"Time Rabi  |  π time = {pi_len:.3f} µs"
+            if pi_len
+            else "Time Rabi",
             result_text=f"π length = {pi_len:.3f} µs" if pi_len else "",
         )
-
-
 
 
 class QubitTempAnalysis(BaseAnalysis):
@@ -488,8 +493,6 @@ class QubitTempAnalysis(BaseAnalysis):
                 T_mK = T_K * 1000
                 data.fit_result["T_mK"] = (round(T_mK, 1), None)
                 data.scalar_result = T_mK
-
-
 
 
 class SingleShotAnalysis(BaseAnalysis):

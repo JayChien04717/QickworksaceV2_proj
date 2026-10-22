@@ -82,7 +82,9 @@ class MuxTomographyProgram(AveragerProgramV2):
             ("y90m_ge", -90, "pi2_gain_ge"),
         ]
         for gate_name, phase, gain_key in gates:
-            self._add_gate_pulse(cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot])
+            self._add_gate_pulse(
+                cfg, slot, f"{name}_{gate_name}", phase, cfg[gain_key][slot]
+            )
 
     def _add_gate_pulse(self, cfg, slot, pulse_name, phase, gain):
         """Add gate pulse.
@@ -292,7 +294,9 @@ class MuxTomography(BaseExperiment):
         """
         cal_vector = iq_e - iq_g
         data_vector = iq_data - iq_g
-        projection = np.real(data_vector * np.conj(cal_vector)) / (np.abs(cal_vector) ** 2 + 1e-12)
+        projection = np.real(data_vector * np.conj(cal_vector)) / (
+            np.abs(cal_vector) ** 2 + 1e-12
+        )
         return float(np.clip(1 - 2 * projection, -1, 1))
 
     @staticmethod
@@ -339,17 +343,29 @@ class MuxTomography(BaseExperiment):
 
         try:
             g_cfg = dict(cfg)
-            g_cfg.update({"tomo_axis": "Z", "cal_pulse": None, "prep_pulse": None})
+            g_cfg.update(
+                {"tomo_axis": "Z", "cal_pulse": None, "prep_pulse": None}
+            )
             e_cfg = dict(cfg)
-            e_cfg.update({"tomo_axis": "Z", "cal_pulse": "x180", "prep_pulse": None})
+            e_cfg.update(
+                {"tomo_axis": "Z", "cal_pulse": "x180", "prep_pulse": None}
+            )
             self.iq_g = self._acquire_axis(g_cfg, py_avg)
             self.iq_e = self._acquire_axis(e_cfg, py_avg)
 
-            resolved_prep = resolve_gate(prep_pulse_name) if prep_pulse_name else None
+            resolved_prep = (
+                resolve_gate(prep_pulse_name) if prep_pulse_name else None
+            )
             self.tomo_data_raw = {}
             for axis in tqdm(["X", "Y", "Z"], desc="Mux Tomography"):
                 run_cfg = dict(cfg)
-                run_cfg.update({"tomo_axis": axis, "cal_pulse": None, "prep_pulse": resolved_prep})
+                run_cfg.update(
+                    {
+                        "tomo_axis": axis,
+                        "cal_pulse": None,
+                        "prep_pulse": resolved_prep,
+                    }
+                )
                 self.tomo_data_raw[axis] = self._acquire_axis(run_cfg, py_avg)
         except KeyboardInterrupt:
             interrupted = True
@@ -361,12 +377,17 @@ class MuxTomography(BaseExperiment):
             for qidx, name in enumerate(qubit_names):
                 ev = {
                     axis: self._project_to_expect(
-                        self.tomo_data_raw[axis][qidx], self.iq_g[qidx], self.iq_e[qidx]
+                        self.tomo_data_raw[axis][qidx],
+                        self.iq_g[qidx],
+                        self.iq_e[qidx],
                     )
                     for axis in ["X", "Y", "Z"]
                 }
                 rho_raw = 0.5 * (
-                    self._I + ev["X"] * self._sx + ev["Y"] * self._sy + ev["Z"] * self._sz
+                    self._I
+                    + ev["X"] * self._sx
+                    + ev["Y"] * self._sy
+                    + ev["Z"] * self._sz
                 )
                 rho = self._mle_reconstruction(rho_raw)
                 purity = float(np.real(np.trace(rho @ rho)))
@@ -382,12 +403,20 @@ class MuxTomography(BaseExperiment):
         figures = []
         if plot and self.rho_mle:
             fig, axes = plt.subplots(
-                len(qubit_names), 2, figsize=(8, max(3, 2.8 * len(qubit_names))), squeeze=False
+                len(qubit_names),
+                2,
+                figsize=(8, max(3, 2.8 * len(qubit_names))),
+                squeeze=False,
             )
             cmap = plt.get_cmap("RdBu")
             labels = ["|0>", "|1>"]
             for row, name in enumerate(qubit_names):
-                for col, (part, title) in enumerate([(self.rho_mle[name].real, "Real"), (self.rho_mle[name].imag, "Imag")]):
+                for col, (part, title) in enumerate(
+                    [
+                        (self.rho_mle[name].real, "Real"),
+                        (self.rho_mle[name].imag, "Imag"),
+                    ]
+                ):
                     vmax = max(np.max(np.abs(part)), 1e-9)
                     norm = mcolors.Normalize(vmin=-vmax, vmax=vmax)
                     ax = axes[row, col]
@@ -401,13 +430,23 @@ class MuxTomography(BaseExperiment):
                     fig.colorbar(im, ax=ax, shrink=0.75)
                     for i in range(2):
                         for j in range(2):
-                            ax.text(j, i, f"{part[i, j]:.2f}", ha="center", va="center")
-            fig.suptitle(self.TITLE_PREFIX + (" (Interrupted)" if interrupted else ""))
+                            ax.text(
+                                j,
+                                i,
+                                f"{part[i, j]:.2f}",
+                                ha="center",
+                                va="center",
+                            )
+            fig.suptitle(
+                self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
+            )
             fig.tight_layout()
             figures.append(fig)
             plt.show()
 
-        y_axis = np.asarray(expectations, dtype=float) if expectations else None
+        y_axis = (
+            np.asarray(expectations, dtype=float) if expectations else None
+        )
         result = ExperimentData(
             experiment_type=self.EXPT_NAME,
             raw_iq={
@@ -434,12 +473,17 @@ class MuxTomography(BaseExperiment):
             },
             analysis_data={
                 "expectation": {
-                    "values": y_axis if y_axis is not None else np.empty((0, 3)),
+                    "values": y_axis
+                    if y_axis is not None
+                    else np.empty((0, 3)),
                     "dims": ["qubit", "tomography_axis"],
                 },
                 "density_matrix": {
-                    "values": np.asarray([self.rho_mle[name] for name in qubit_names])
-                    if self.rho_mle else np.empty((0, 2, 2), dtype=complex),
+                    "values": np.asarray(
+                        [self.rho_mle[name] for name in qubit_names]
+                    )
+                    if self.rho_mle
+                    else np.empty((0, 2, 2), dtype=complex),
                     "dims": ["qubit", "bra", "ket"],
                 },
                 "purity": {"values": np.asarray(purities), "dims": ["qubit"]},

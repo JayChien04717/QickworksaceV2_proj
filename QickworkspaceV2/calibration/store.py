@@ -70,7 +70,6 @@ class CalibrationStore:
         self._lock = RLock()
         self._load()
 
-
     def _load(self):
         """Return the load result."""
         if os.path.exists(self._path):
@@ -78,7 +77,9 @@ class CalibrationStore:
                 with open(self._path, "r", encoding="utf-8") as f:
                     self._store = json.load(f)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Calibration store is not valid JSON: {self._path}") from exc
+                raise ValueError(
+                    f"Calibration store is not valid JSON: {self._path}"
+                ) from exc
 
     def save(self):
         """Flush the in-memory store to disk."""
@@ -101,7 +102,6 @@ class CalibrationStore:
                     pass
                 raise
 
-
     def set(self, qubit: str, key: str, value: Any, *, autosave: bool = True):
         """Store a calibration parameter for *qubit*.
 
@@ -120,7 +120,9 @@ class CalibrationStore:
             if qubit not in self._store:
                 self._store[qubit] = {}
             self._store[qubit][key] = {
-                "value": value if not isinstance(value, np.ndarray) else value.tolist(),
+                "value": value
+                if not isinstance(value, np.ndarray)
+                else value.tolist(),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             if autosave:
@@ -193,7 +195,9 @@ class CalibrationStore:
         except (ValueError, KeyError):
             return None
 
-    def is_stale(self, qubit: str, key: str, max_age_hours: float | None = None) -> bool:
+    def is_stale(
+        self, qubit: str, key: str, max_age_hours: float | None = None
+    ) -> bool:
         """Return True if *key* is missing or older than *max_age_hours*.
 
         Parameters
@@ -213,7 +217,11 @@ class CalibrationStore:
         ts = self.timestamp(qubit, key)
         if ts is None:
             return True
-        threshold = timedelta(hours=max_age_hours) if max_age_hours is not None else self._default_max_age
+        threshold = (
+            timedelta(hours=max_age_hours)
+            if max_age_hours is not None
+            else self._default_max_age
+        )
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         return datetime.now(timezone.utc) - ts > threshold
@@ -274,8 +282,9 @@ class CalibrationStore:
         if autosave:
             self.save()
 
-
-    def update_from_dict(self, qubit: str, params: dict[str, Any], *, autosave: bool = True):
+    def update_from_dict(
+        self, qubit: str, params: dict[str, Any], *, autosave: bool = True
+    ):
         """Batch-update multiple parameters for *qubit* from a flat dict.
 
         Parameters
@@ -327,7 +336,9 @@ class CalibrationStore:
             lines.append(f"[{q}]")
             for k, rec in self._store.get(q, {}).items():
                 stale = " (STALE)" if self.is_stale(q, k) else ""
-                lines.append(f"  {k:<28s} = {rec['value']}  @ {rec['timestamp']}{stale}")
+                lines.append(
+                    f"  {k:<28s} = {rec['value']}  @ {rec['timestamp']}{stale}"
+                )
         return "\n".join(lines)
 
     def __repr__(self) -> str:
@@ -339,4 +350,7 @@ class CalibrationStore:
             Result of the operation.
         """
         total = sum(len(v) for v in self._store.values())
-        return f"CalibrationStore(path={self._path!r}, qubits={self.all_qubits()}, entries={total})"
+        return (
+            f"CalibrationStore(path={self._path!r}, "
+            f"qubits={self.all_qubits()}, entries={total})"
+        )

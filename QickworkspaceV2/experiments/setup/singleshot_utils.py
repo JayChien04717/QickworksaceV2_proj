@@ -15,13 +15,14 @@ from scipy.stats import norm as _norm
 
 try:
     from sklearn.mixture import GaussianMixture
+
     _HAS_SKLEARN = True
 except ImportError:
     _HAS_SKLEARN = False
 
 default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 linestyle_cycle = ["solid", "dashed", "dotted", "dashdot"]
-marker_cycle    = ["o", "*", "s", "^"]
+marker_cycle = ["o", "*", "s", "^"]
 
 
 @dataclass(frozen=True)
@@ -157,7 +158,9 @@ def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
     soft_accuracies = []
     for state_index, values in enumerate(projections):
         samples = values.reshape(-1, 1)
-        log_likelihoods = np.array([gmm.score_samples(samples) for gmm in gmms])
+        log_likelihoods = np.array(
+            [gmm.score_samples(samples) for gmm in gmms]
+        )
         shifted = log_likelihoods - log_likelihoods.max(axis=0)
         posteriors = np.exp(shifted)
         posteriors /= posteriors.sum(axis=0)
@@ -180,8 +183,17 @@ def histogram_metrics(details: HistogramAnalysis) -> dict[str, float]:
     }
 
 
-def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
-              label=None, alpha=None, normalize=True):
+def plot_hist(
+    data,
+    bins,
+    ax=None,
+    xlims=None,
+    color=None,
+    linestyle=None,
+    label=None,
+    alpha=None,
+    normalize=True,
+):
     """Plot hist.
 
     Parameters
@@ -219,20 +231,32 @@ def plot_hist(data, bins, ax=None, xlims=None, color=None, linestyle=None,
             hist_data = hist_data / s
 
     for i in range(len(hist_data)):
-        ax.plot([bin_edges[i], bin_edges[i + 1]], [hist_data[i], hist_data[i]],
-                color=color, linestyle=linestyle,
-                label=label if i == 0 else None,
-                alpha=alpha, linewidth=0.9)
+        ax.plot(
+            [bin_edges[i], bin_edges[i + 1]],
+            [hist_data[i], hist_data[i]],
+            color=color,
+            linestyle=linestyle,
+            label=label if i == 0 else None,
+            alpha=alpha,
+            linewidth=0.9,
+        )
         if i < len(hist_data) - 1:
-            ax.plot([bin_edges[i + 1], bin_edges[i + 1]],
-                    [hist_data[i], hist_data[i + 1]],
-                    color=color, linestyle=linestyle, alpha=alpha, linewidth=0.9)
+            ax.plot(
+                [bin_edges[i + 1], bin_edges[i + 1]],
+                [hist_data[i], hist_data[i + 1]],
+                color=color,
+                linestyle=linestyle,
+                alpha=alpha,
+                linewidth=0.9,
+            )
     ax.relim()
     ax.set_ylim((0, None))
     return hist_data, bin_edges
 
-def _local_density_alpha(x, y, bins=120, alpha_min=0.025,
-                         alpha_max=0.95, gamma=0.7):
+
+def _local_density_alpha(
+    x, y, bins=120, alpha_min=0.025, alpha_max=0.95, gamma=0.7
+):
     """Map each point's local 2D-bin density to a display alpha."""
     x = np.asarray(x, dtype=float).ravel()
     y = np.asarray(y, dtype=float).ravel()
@@ -248,10 +272,16 @@ def _local_density_alpha(x, y, bins=120, alpha_min=0.025,
 
     xf, yf = x[finite], y[finite]
     histogram, x_edges, y_edges = np.histogram2d(xf, yf, bins=bins)
-    x_idx = np.clip(np.searchsorted(x_edges, xf, side="right") - 1,
-                    0, histogram.shape[0] - 1)
-    y_idx = np.clip(np.searchsorted(y_edges, yf, side="right") - 1,
-                    0, histogram.shape[1] - 1)
+    x_idx = np.clip(
+        np.searchsorted(x_edges, xf, side="right") - 1,
+        0,
+        histogram.shape[0] - 1,
+    )
+    y_idx = np.clip(
+        np.searchsorted(y_edges, yf, side="right") - 1,
+        0,
+        histogram.shape[1] - 1,
+    )
     local_counts = histogram[x_idx, y_idx]
     peak = float(np.max(local_counts, initial=0.0))
     if peak > 1.0:
@@ -285,8 +315,14 @@ def _density_scatter_interleaved(ax, datasets, bins=120, seed=0):
     facecolors = np.concatenate(facecolors)
     order = np.random.default_rng(seed).permutation(len(points))
     return ax.scatter(
-        points[order, 0], points[order, 1], c=facecolors[order],
-        marker=".", s=9, edgecolors="none", linewidths=0, rasterized=True,
+        points[order, 0],
+        points[order, 1],
+        c=facecolors[order],
+        marker=".",
+        s=9,
+        edgecolors="none",
+        linewidths=0,
+        rasterized=True,
     )
 
 
@@ -311,8 +347,10 @@ def _bic_gmm(X, max_components=2, n_init=5):
     for k in range(1, max_components + 1):
         try:
             g = GaussianMixture(
-                n_components=k, covariance_type="full",
-                n_init=n_init, random_state=0,
+                n_components=k,
+                covariance_type="full",
+                n_init=n_init,
+                random_state=0,
             )
             g.fit(X)
             b = g.bic(X)
@@ -325,7 +363,9 @@ def _bic_gmm(X, max_components=2, n_init=5):
 
 def _ordered_threshold_classifier(projections):
     """Classify ordered one-dimensional states with contiguous thresholds."""
-    values_by_state = [np.asarray(values, dtype=float).ravel() for values in projections]
+    values_by_state = [
+        np.asarray(values, dtype=float).ravel() for values in projections
+    ]
     n_states = len(values_by_state)
     state_order = np.argsort([np.mean(values) for values in values_by_state])
     ordered = [values_by_state[index] for index in state_order]
@@ -333,11 +373,17 @@ def _ordered_threshold_classifier(projections):
     if n_states == 2:
         a, b = ordered
         values = np.unique(np.concatenate((a, b)))
-        candidates = np.concatenate((
-            [np.nextafter(values[0], -np.inf)],
-            (values[:-1] + values[1:]) / 2.0,
-            [np.nextafter(values[-1], np.inf)],
-        )) if values.size > 1 else values
+        candidates = (
+            np.concatenate(
+                (
+                    [np.nextafter(values[0], -np.inf)],
+                    (values[:-1] + values[1:]) / 2.0,
+                    [np.nextafter(values[-1], np.inf)],
+                )
+            )
+            if values.size > 1
+            else values
+        )
         cdf_a = np.searchsorted(np.sort(a), candidates, side="right") / a.size
         cdf_b = np.searchsorted(np.sort(b), candidates, side="right") / b.size
         scores = cdf_a - cdf_b
@@ -347,13 +393,20 @@ def _ordered_threshold_classifier(projections):
         thresholds = [float(candidates[index])]
     elif n_states == 3:
         values = np.unique(np.concatenate(ordered))
-        candidates = np.concatenate((
-            [np.nextafter(values[0], -np.inf)],
-            (values[:-1] + values[1:]) / 2.0,
-            [np.nextafter(values[-1], np.inf)],
-        )) if values.size > 1 else values
+        candidates = (
+            np.concatenate(
+                (
+                    [np.nextafter(values[0], -np.inf)],
+                    (values[:-1] + values[1:]) / 2.0,
+                    [np.nextafter(values[-1], np.inf)],
+                )
+            )
+            if values.size > 1
+            else values
+        )
         cdfs = [
-            np.searchsorted(np.sort(values), candidates, side="right") / values.size
+            np.searchsorted(np.sort(values), candidates, side="right")
+            / values.size
             for values in ordered
         ]
         left_gain = cdfs[0] - cdfs[1]
@@ -361,7 +414,10 @@ def _ordered_threshold_classifier(projections):
         prefix_best = np.maximum.accumulate(left_gain)
         right_index = int(np.argmax(prefix_best[:-1] + right_gain[1:]) + 1)
         left_index = int(np.argmax(left_gain[:right_index]))
-        thresholds = [float(candidates[left_index]), float(candidates[right_index])]
+        thresholds = [
+            float(candidates[left_index]),
+            float(candidates[right_index]),
+        ]
     else:
         means = [float(np.mean(values)) for values in ordered]
         thresholds = [0.5 * (a + b) for a, b in zip(means[:-1], means[1:])]
@@ -384,7 +440,9 @@ def _optimize_multistate_rotation(iqshots, max_samples_per_state=3000):
     for i_values, q_values in iqshots:
         cloud = np.asarray(i_values) + 1j * np.asarray(q_values)
         if cloud.size > max_samples_per_state:
-            cloud = cloud[rng.choice(cloud.size, max_samples_per_state, replace=False)]
+            cloud = cloud[
+                rng.choice(cloud.size, max_samples_per_state, replace=False)
+            ]
         sampled.append(cloud)
 
     def score(angle):
@@ -401,6 +459,7 @@ def _optimize_multistate_rotation(iqshots, max_samples_per_state=3000):
     fine = best + np.linspace(-np.deg2rad(5), np.deg2rad(5), 21)
     fine_scores = np.array([score(angle) for angle in fine])
     return float(fine[int(np.argmax(fine_scores))])
+
 
 def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
     """Fit gmm.
@@ -429,28 +488,49 @@ def _fit_gmm(I_projs, xlims, n_init=5, max_components=2):
         gmm = _bic_gmm(proj.reshape(-1, 1), max_components, n_init)
         state_gmms.append(gmm)
 
-    primary_means   = np.zeros(n_states)
-    primary_stds    = np.zeros(n_states)
+    primary_means = np.zeros(n_states)
+    primary_stds = np.zeros(n_states)
     primary_weights = np.zeros(n_states)
     for i, gmm in enumerate(state_gmms):
         idx = int(np.argmax(gmm.weights_))
-        primary_means[i]   = float(gmm.means_[idx, 0])
-        primary_stds[i]    = float(np.sqrt(gmm.covariances_[idx, 0, 0]))
+        primary_means[i] = float(gmm.means_[idx, 0])
+        primary_stds[i] = float(np.sqrt(gmm.covariances_[idx, 0, 0]))
         primary_weights[i] = float(gmm.weights_[idx])
 
+    state_order, thresholds, conf_matrix = _ordered_threshold_classifier(
+        I_projs
+    )
 
-    state_order, thresholds, conf_matrix = _ordered_threshold_classifier(I_projs)
+    return (
+        state_gmms,
+        state_order,
+        conf_matrix,
+        thresholds,
+        primary_means,
+        primary_stds,
+        primary_weights,
+    )
 
 
-    return (state_gmms, state_order, conf_matrix, thresholds,
-            primary_means, primary_stds, primary_weights)
-
-
-def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
-                 check_qubit_label=None, numbins=200, amplitude_mode=False,
-                 ps_threshold=None, theta=None, plot=True, verbose=True,
-                 fid_avg=False, normalize=True, title=None, export=False,
-                 return_details=False):
+def general_hist(
+    iqshots,
+    state_labels,
+    g_states,
+    e_states,
+    e_label="e",
+    check_qubit_label=None,
+    numbins=200,
+    amplitude_mode=False,
+    ps_threshold=None,
+    theta=None,
+    plot=True,
+    verbose=True,
+    fid_avg=False,
+    normalize=True,
+    title=None,
+    export=False,
+    return_details=False,
+):
     """Return the general hist result.
 
     Parameters
@@ -516,12 +596,12 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
             if n_states >= 3:
                 theta_rad = _optimize_multistate_rotation(iqshots)
             else:
-                g_c = np.concatenate([
-                    iqshots[i][0] + 1j * iqshots[i][1] for i in g_states
-                ])
-                e_c = np.concatenate([
-                    iqshots[i][0] + 1j * iqshots[i][1] for i in e_states
-                ])
+                g_c = np.concatenate(
+                    [iqshots[i][0] + 1j * iqshots[i][1] for i in g_states]
+                )
+                e_c = np.concatenate(
+                    [iqshots[i][0] + 1j * iqshots[i][1] for i in e_states]
+                )
                 theta_rad = -np.arctan2(
                     np.mean(e_c.imag) - np.mean(g_c.imag),
                     np.mean(e_c.real) - np.mean(g_c.real),
@@ -573,15 +653,19 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         [i_values + 1j * q_values for i_values, q_values in iqshots]
     )
     proj_all = _rot_I(all_c)
-    span     = (proj_all.max() - proj_all.min()) / 2
-    mid      = (proj_all.max() + proj_all.min()) / 2
-    xlims    = [mid - span, mid + span]
+    span = (proj_all.max() - proj_all.min()) / 2
+    mid = (proj_all.max() + proj_all.min()) / 2
+    xlims = [mid - span, mid + span]
 
     if plot:
         fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(9, 7))
         _title = title or (
             "Readout Fidelity"
-            + (f" on Q{check_qubit_label}" if check_qubit_label is not None else "")
+            + (
+                f" on Q{check_qubit_label}"
+                if check_qubit_label is not None
+                else ""
+            )
         )
         fig.suptitle(_title)
         axs[0, 0].set_title("Unrotated", fontsize=13)
@@ -589,7 +673,9 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         axs[0, 0].set_ylabel("Q [ADC levels]", fontsize=11)
         axs[0, 0].axis("equal")
         axs[0, 1].set_title(
-            f"Rotated ($\\theta = {theta_rad * 180 / np.pi:.1f}^\\circ$)", fontsize=13)
+            f"Rotated ($\\theta = {theta_rad * 180 / np.pi:.1f}^\\circ$)",
+            fontsize=13,
+        )
         axs[0, 1].set_xlabel("I [ADC levels]", fontsize=11)
         axs[0, 1].axis("equal")
         x_axis_lbl = "Amplitude" if amplitude_mode else "I"
@@ -604,25 +690,37 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
     scatter_centers = []
 
     for idx, (i_values, q_values) in enumerate(iqshots):
-        cmplx        = i_values + 1j * q_values
+        cmplx = i_values + 1j * q_values
         I_new, Q_new = _rot_IQ(cmplx)
-        proj         = _rot_I(cmplx)
+        proj = _rot_I(cmplx)
         I_projs.append(proj)
-        color     = default_colors[idx % len(default_colors)]
-        marker    = marker_cycle[idx % len(marker_cycle)]
-        lbl       = state_labels[idx]
+        color = default_colors[idx % len(default_colors)]
+        marker = marker_cycle[idx % len(marker_cycle)]
+        lbl = state_labels[idx]
 
         if plot:
             unrotated_scatter.append((i_values, q_values, color, lbl))
             rotated_scatter.append((I_new, Q_new, color, lbl))
-            scatter_centers.append((
-                np.mean(i_values), np.mean(q_values), np.mean(I_new), np.mean(Q_new),
-                color, marker,
-            ))
+            scatter_centers.append(
+                (
+                    np.mean(i_values),
+                    np.mean(q_values),
+                    np.mean(I_new),
+                    np.mean(Q_new),
+                    color,
+                    marker,
+                )
+            )
             _, bins_dist = plot_hist(
-                proj, bins=numbins, ax=axs[1, 0], xlims=xlims,
-                color=color, linestyle=linestyle_cycle[0],
-                label=lbl, alpha=0.6, normalize=False,
+                proj,
+                bins=numbins,
+                ax=axs[1, 0],
+                xlims=xlims,
+                color=color,
+                linestyle=linestyle_cycle[0],
+                label=lbl,
+                alpha=0.6,
+                normalize=False,
             )
         else:
             _, bins_dist = np.histogram(proj, bins=numbins, range=xlims)
@@ -631,15 +729,43 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         _density_scatter_interleaved(axs[0, 0], unrotated_scatter)
         _density_scatter_interleaved(axs[0, 1], rotated_scatter)
         # State centers stay crisp and visible above the shuffled shot cloud.
-        for i_mean, q_mean, i_rot_mean, q_rot_mean, color, marker in scatter_centers:
-            axs[0, 0].plot(i_mean, q_mean, color="k", marker=marker,
-                           markerfacecolor=color, markersize=6, zorder=4)
-            axs[0, 1].plot(i_rot_mean, q_rot_mean, color="k", marker=marker,
-                           markerfacecolor=color, markersize=6, zorder=4)
-    state_gmms, state_order, conf_matrix, thresholds, gmm_means, gmm_stds, gmm_weights = \
-        _fit_gmm(I_projs, xlims)
+        for (
+            i_mean,
+            q_mean,
+            i_rot_mean,
+            q_rot_mean,
+            color,
+            marker,
+        ) in scatter_centers:
+            axs[0, 0].plot(
+                i_mean,
+                q_mean,
+                color="k",
+                marker=marker,
+                markerfacecolor=color,
+                markersize=6,
+                zorder=4,
+            )
+            axs[0, 1].plot(
+                i_rot_mean,
+                q_rot_mean,
+                color="k",
+                marker=marker,
+                markerfacecolor=color,
+                markersize=6,
+                zorder=4,
+            )
+    (
+        state_gmms,
+        state_order,
+        conf_matrix,
+        thresholds,
+        gmm_means,
+        gmm_stds,
+        gmm_weights,
+    ) = _fit_gmm(I_projs, xlims)
 
-    fid  = float(np.mean(np.diag(conf_matrix)))
+    fid = float(np.mean(np.diag(conf_matrix)))
     fids = [fid]
     conf_matrix_pct = conf_matrix * 100.0
 
@@ -662,7 +788,9 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
                 label=f"Core {state_labels[idx]} ({100 * retained:.0f}%)",
             )
         for th in thresholds:
-            axs[1, 0].axvline(th, color="k", linestyle="--", linewidth=1.2, label="Threshold")
+            axs[1, 0].axvline(
+                th, color="k", linestyle="--", linewidth=1.2, label="Threshold"
+            )
 
         if ps_threshold is not None:
             axs[1, 0].axvline(ps_threshold, color="gray", linestyle="-.")
@@ -671,7 +799,9 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
             fid_title = "$F_{\\overline{gef}}$"
         else:
             fid_title = "$F_{\\overline{ge}}$" if fid_avg else "$F_{ge}$"
-        axs[1, 0].set_title(f"{fid_title} (threshold): {100 * fid:.2f}%", fontsize=13)
+        axs[1, 0].set_title(
+            f"{fid_title} (threshold): {100 * fid:.2f}%", fontsize=13
+        )
         axs[1, 0].legend(fontsize=8, loc="upper right")
         axs[0, 0].legend(fontsize=8)
         axs[0, 1].legend(fontsize=8)
@@ -686,12 +816,21 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
         ax_cm.set_yticklabels(cm_labels)
         ax_cm.set_xlabel("Declared output", fontsize=11)
         ax_cm.set_ylabel("Input state", fontsize=11)
-        ax_cm.tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
+        ax_cm.tick_params(
+            top=False, bottom=True, labeltop=False, labelbottom=True
+        )
         for i in range(n_states):
             for j in range(n_states):
                 val = conf_matrix_pct[i, j]
-                ax_cm.text(j, i, f"{val:.1f}%", ha="center", va="center",
-                           color="white" if val > 50 else "black", fontsize=12)
+                ax_cm.text(
+                    j,
+                    i,
+                    f"{val:.1f}%",
+                    ha="center",
+                    va="center",
+                    color="white" if val > 50 else "black",
+                    fontsize=12,
+                )
         ax_cm.set_title("Confusion Matrix (%)")
 
         fig.tight_layout(rect=[0, 0, 1, 0.96])
@@ -730,9 +869,19 @@ def general_hist(iqshots, state_labels, g_states, e_states, e_label="e",
     return details if return_details else legacy_result
 
 
-def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
-         plot=True, verbose=True, fid_avg=False,
-         normalize=True, title=None, export=False, return_details=False):
+def hist(
+    data,
+    amplitude_mode=False,
+    ps_threshold=None,
+    theta=None,
+    plot=True,
+    verbose=True,
+    fid_avg=False,
+    normalize=True,
+    title=None,
+    export=False,
+    return_details=False,
+):
     """Return the hist result.
 
     Parameters
@@ -765,10 +914,10 @@ def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
     Any
         Result of the operation.
     """
-    iqshots      = [(data["Ig"], data["Qg"]), (data["Ie"], data["Qe"])]
+    iqshots = [(data["Ig"], data["Qg"]), (data["Ie"], data["Qe"])]
     state_labels = ["g", "e"]
-    g_states     = [0]
-    e_states     = [1]
+    g_states = [0]
+    e_states = [1]
 
     if "If" in data:
         iqshots.append((data["If"], data["Qf"]))
@@ -776,16 +925,30 @@ def hist(data, amplitude_mode=False, ps_threshold=None, theta=None,
         e_states = [2]
 
     return general_hist(
-        iqshots=iqshots, state_labels=state_labels,
-        g_states=g_states, e_states=e_states,
-        amplitude_mode=amplitude_mode, ps_threshold=ps_threshold,
-        theta=theta, plot=plot, verbose=verbose,
-        fid_avg=fid_avg, normalize=normalize,
-        title=title, export=export, return_details=return_details,
+        iqshots=iqshots,
+        state_labels=state_labels,
+        g_states=g_states,
+        e_states=e_states,
+        amplitude_mode=amplitude_mode,
+        ps_threshold=ps_threshold,
+        theta=theta,
+        plot=plot,
+        verbose=verbose,
+        fid_avg=fid_avg,
+        normalize=normalize,
+        title=title,
+        export=export,
+        return_details=return_details,
     )
 
 
 __all__ = [
-    "HistogramAnalysis", "histogram_metrics", "plot_hist", "general_hist",
-    "hist", "fast_histogram_metrics", "_fit_gmm", "_bic_gmm",
+    "HistogramAnalysis",
+    "histogram_metrics",
+    "plot_hist",
+    "general_hist",
+    "hist",
+    "fast_histogram_metrics",
+    "_fit_gmm",
+    "_bic_gmm",
 ]

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Service layer: FastAPI REST interface for remote experiment execution.
 
 Endpoints
@@ -30,9 +30,10 @@ from datetime import datetime
 from typing import Any
 
 try:
-    from fastapi import FastAPI, HTTPException, BackgroundTasks
+    from fastapi import BackgroundTasks, FastAPI, HTTPException
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
@@ -65,6 +66,7 @@ def _set_job(job_id: str, **kwargs):
 
 # ── App factory ───────────────────────────────────────────────────────────────
 
+
 def create_app(cal_store=None, config_all=None) -> "FastAPI":
     """
     Create the FastAPI application.
@@ -77,7 +79,9 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
         Required for /calibrate endpoints.
     """
     if not _FASTAPI_AVAILABLE:
-        raise ImportError("fastapi and pydantic are required: pip install fastapi uvicorn pydantic")
+        raise ImportError(
+            "fastapi and pydantic are required: pip install fastapi uvicorn pydantic"
+        )
 
     app = FastAPI(
         title="Reconstruct Experiment API",
@@ -101,29 +105,50 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
 
     def _resolve_experiment(exp_type: str):
         from ..core.experiment_registry import resolve_experiment_class
+
         return resolve_experiment_class(exp_type)
 
-    def _run_job(job_id: str, exp_type: str, cfg: dict, py_avg: int, kwargs: dict):
-        _set_job(job_id, status="running", started_at=datetime.now().isoformat())
+    def _run_job(
+        job_id: str, exp_type: str, cfg: dict, py_avg: int, kwargs: dict
+    ):
+        _set_job(
+            job_id, status="running", started_at=datetime.now().isoformat()
+        )
         try:
             cls = _resolve_experiment(exp_type)
             expt = cls(cfg)
             result = expt.run(py_avg, **kwargs)
             from ..data.serializer import experiment_to_json
-            _set_job(job_id, status="done", result=experiment_to_json(result),
-                     finished_at=datetime.now().isoformat())
+
+            _set_job(
+                job_id,
+                status="done",
+                result=experiment_to_json(result),
+                finished_at=datetime.now().isoformat(),
+            )
         except Exception:
-            _set_job(job_id, status="error", error=traceback.format_exc(),
-                     finished_at=datetime.now().isoformat())
+            _set_job(
+                job_id,
+                status="error",
+                error=traceback.format_exc(),
+                finished_at=datetime.now().isoformat(),
+            )
 
     # ── Experiment endpoints ──────────────────────────────────────────────────
 
     @app.post("/experiments/run", status_code=202)
-    async def run_experiment(req: RunRequest, background_tasks: BackgroundTasks):
+    async def run_experiment(
+        req: RunRequest, background_tasks: BackgroundTasks
+    ):
         """Submit an experiment; returns job_id immediately."""
         job_id = _new_job(req.experiment_type)
         background_tasks.add_task(
-            _run_job, job_id, req.experiment_type, req.config, req.py_avg, req.kwargs
+            _run_job,
+            job_id,
+            req.experiment_type,
+            req.config,
+            req.py_avg,
+            req.kwargs,
         )
         return {"job_id": job_id, "status": "pending"}
 
@@ -132,20 +157,29 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
         """Poll job status: pending | running | done | error."""
         job = _JOBS.get(exp_id)
         if job is None:
-            raise HTTPException(status_code=404, detail=f"Job {exp_id!r} not found")
-        return {"job_id": exp_id, "status": job["status"],
-                "experiment_type": job["experiment_type"],
-                "created_at": job["created_at"],
-                "error": job.get("error")}
+            raise HTTPException(
+                status_code=404, detail=f"Job {exp_id!r} not found"
+            )
+        return {
+            "job_id": exp_id,
+            "status": job["status"],
+            "experiment_type": job["experiment_type"],
+            "created_at": job["created_at"],
+            "error": job.get("error"),
+        }
 
     @app.get("/experiments/{exp_id}/result")
     async def get_result(exp_id: str):
         """Retrieve the full ExperimentData JSON for a completed job."""
         job = _JOBS.get(exp_id)
         if job is None:
-            raise HTTPException(status_code=404, detail=f"Job {exp_id!r} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Job {exp_id!r} not found"
+            )
         if job["status"] != "done":
-            raise HTTPException(status_code=409, detail=f"Job is {job['status']}, not done")
+            raise HTTPException(
+                status_code=409, detail=f"Job is {job['status']}, not done"
+            )
         return JSONResponse(content=job["result"])
 
     @app.get("/experiments")
@@ -153,8 +187,12 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
         """List all submitted jobs (id, type, status)."""
         with _JOB_LOCK:
             return [
-                {"id": j["id"], "experiment_type": j["experiment_type"],
-                 "status": j["status"], "created_at": j["created_at"]}
+                {
+                    "id": j["id"],
+                    "experiment_type": j["experiment_type"],
+                    "status": j["status"],
+                    "created_at": j["created_at"],
+                }
                 for j in _JOBS.values()
             ]
 
@@ -162,6 +200,7 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
     async def get_experiment_schema():
         """Return experiment catalog for GUI/web clients."""
         from ..core.experiment_registry import experiment_schema
+
         return experiment_schema()
 
     # ── Calibration endpoints ─────────────────────────────────────────────────
@@ -170,14 +209,18 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
     async def get_params(qubit: str):
         """Return all calibration parameters for *qubit*."""
         if cal_store is None:
-            raise HTTPException(status_code=503, detail="CalibrationStore not configured")
+            raise HTTPException(
+                status_code=503, detail="CalibrationStore not configured"
+            )
         return cal_store.to_flat_dict(qubit)
 
     @app.post("/calibrations/{qubit}/set")
     async def set_param(qubit: str, body: CalParamSet):
         """Update a single calibration parameter for *qubit*."""
         if cal_store is None:
-            raise HTTPException(status_code=503, detail="CalibrationStore not configured")
+            raise HTTPException(
+                status_code=503, detail="CalibrationStore not configured"
+            )
         cal_store.set(qubit, body.key, body.value)
         return {"qubit": qubit, "key": body.key, "value": body.value}
 
@@ -185,9 +228,14 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
     async def get_stale(qubit: str):
         """Return list of stale parameter keys for *qubit*."""
         if cal_store is None:
-            raise HTTPException(status_code=503, detail="CalibrationStore not configured")
+            raise HTTPException(
+                status_code=503, detail="CalibrationStore not configured"
+            )
         keys = cal_store.all_keys(qubit)
-        return {"qubit": qubit, "stale_keys": [k for k in keys if cal_store.is_stale(qubit, k)]}
+        return {
+            "qubit": qubit,
+            "stale_keys": [k for k in keys if cal_store.is_stale(qubit, k)],
+        }
 
     # ── AutoCalibrate endpoint ────────────────────────────────────────────────
 
@@ -195,23 +243,40 @@ def create_app(cal_store=None, config_all=None) -> "FastAPI":
         skip: list[str] = []
 
     @app.post("/calibrate/{qubit}/run", status_code=202)
-    async def run_autocal(qubit: str, req: AutoCalibrateRequest, background_tasks: BackgroundTasks):
+    async def run_autocal(
+        qubit: str,
+        req: AutoCalibrateRequest,
+        background_tasks: BackgroundTasks,
+    ):
         """Trigger the full AutoCalibrate pipeline for *qubit* in the background."""
         if config_all is None:
-            raise HTTPException(status_code=503, detail="config_all not configured")
+            raise HTTPException(
+                status_code=503, detail="config_all not configured"
+            )
         job_id = _new_job(f"AutoCalibrate/{qubit}")
 
         def _autocal_job():
             from ..calibration.pipeline import AutoCalibrate
-            _set_job(job_id, status="running", started_at=datetime.now().isoformat())
+
+            _set_job(
+                job_id, status="running", started_at=datetime.now().isoformat()
+            )
             try:
                 cal = AutoCalibrate(config_all, qubit, cal_store=cal_store)
                 cal.run(skip=tuple(req.skip))
-                _set_job(job_id, status="done", result=cal.results,
-                         finished_at=datetime.now().isoformat())
+                _set_job(
+                    job_id,
+                    status="done",
+                    result=cal.results,
+                    finished_at=datetime.now().isoformat(),
+                )
             except Exception:
-                _set_job(job_id, status="error", error=traceback.format_exc(),
-                         finished_at=datetime.now().isoformat())
+                _set_job(
+                    job_id,
+                    status="error",
+                    error=traceback.format_exc(),
+                    finished_at=datetime.now().isoformat(),
+                )
 
         background_tasks.add_task(_autocal_job)
         return {"job_id": job_id, "qubit": qubit, "status": "pending"}

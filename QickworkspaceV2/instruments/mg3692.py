@@ -1,11 +1,18 @@
+from typing import Tuple, Union
+
 import pyvisa
-from typing import Union, Tuple
 
 from .base import RFSourceInstrument
 
 ON_OFF_MAP = {
-    "on": "1", "1": "1", "true": "1", 1: "1",
-    "off": "0", "0": "0", "false": "0", 0: "0",
+    "on": "1",
+    "1": "1",
+    "true": "1",
+    1: "1",
+    "off": "0",
+    "0": "0",
+    "false": "0",
+    0: "0",
 }
 ON_OFF_MAP_INV = {"1": "on", "0": "off"}
 
@@ -51,7 +58,9 @@ class AnritsuMG3692(RFSourceInstrument):
             self.instrument.timeout = 5000
         except pyvisa.Error as e:
             self.instrument = None
-            raise ValueError(f"Could not connect to {self.resource_name}. Error: {e}")
+            raise ValueError(
+                f"Could not connect to {self.resource_name}. Error: {e}"
+            )
 
         self.instrument.read_termination = "\n"
         self.instrument.write_termination = "\n"
@@ -99,7 +108,7 @@ class AnritsuMG3692(RFSourceInstrument):
                 pass
             self.instrument = self.rm.open_resource(self.resource_name)
             self.instrument.timeout = 5000
-            self.instrument.read_termination  = "\n"
+            self.instrument.read_termination = "\n"
             self.instrument.write_termination = "\n"
             print("[mg3692] Reconnected.")
         except pyvisa.Error as e:
@@ -117,7 +126,10 @@ class AnritsuMG3692(RFSourceInstrument):
             try:
                 self.instrument.write(cmd)
             except pyvisa.errors.VisaIOError as e:
-                if e.error_code == pyvisa.constants.StatusCode.error_connection_lost:
+                if (
+                    e.error_code
+                    == pyvisa.constants.StatusCode.error_connection_lost
+                ):
                     self.reconnect()
                     self.instrument.write(cmd)
                 else:
@@ -140,7 +152,10 @@ class AnritsuMG3692(RFSourceInstrument):
             try:
                 return self.instrument.query(cmd).strip()
             except pyvisa.errors.VisaIOError as e:
-                if e.error_code == pyvisa.constants.StatusCode.error_connection_lost:
+                if (
+                    e.error_code
+                    == pyvisa.constants.StatusCode.error_connection_lost
+                ):
                     self.reconnect()
                     return self.instrument.query(cmd).strip()
                 else:
@@ -209,12 +224,17 @@ class AnritsuMG3692(RFSourceInstrument):
         }
         for key, (min_query, max_query) in queries.items():
             try:
-                limits[key] = (float(self.query(min_query)), float(self.query(max_query)))
+                limits[key] = (
+                    float(self.query(min_query)),
+                    float(self.query(max_query)),
+                )
             except Exception:
                 pass
         return limits
 
-    def _map_and_write(self, cmd_template: str, value: Union[str, int, bool], name: str) -> None:
+    def _map_and_write(
+        self, cmd_template: str, value: Union[str, int, bool], name: str
+    ) -> None:
         """Return the map and write result.
 
         Parameters
@@ -235,7 +255,9 @@ class AnritsuMG3692(RFSourceInstrument):
             mapped_val = ON_OFF_MAP[str(value).lower()]
             self.write(cmd_template.format(mapped_val))
         except KeyError:
-            raise ValueError(f"Invalid {name} value: {value}. Use 'on' or 'off'.")
+            raise ValueError(
+                f"Invalid {name} value: {value}. Use 'on' or 'off'."
+            )
 
     def _query_and_map(self, cmd: str) -> str:
         """Return and map.
@@ -278,7 +300,9 @@ class AnritsuMG3692(RFSourceInstrument):
         """
         min_f, max_f = self.get_limit("frequency")
         if not (min_f <= value <= max_f):
-            print(f"Warning: Frequency {value} Hz is outside normal range ({min_f}, {max_f})")
+            print(
+                f"Warning: Frequency {value} Hz is outside normal range ({min_f}, {max_f})"
+            )
         self.write(f"FREQ {value} HZ")
 
     @property
@@ -306,7 +330,9 @@ class AnritsuMG3692(RFSourceInstrument):
         """
         min_p, max_p = self.get_limit("power")
         if not (min_p <= value <= max_p):
-            print(f"Warning: Power {value} dBm is outside normal range ({min_p}, {max_p})")
+            print(
+                f"Warning: Power {value} dBm is outside normal range ({min_p}, {max_p})"
+            )
         self.write(f"POW {value} DBM")
 
     @property

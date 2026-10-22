@@ -53,17 +53,15 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
+from qick.asm_v2 import AsmInst, Macro
 from tqdm.auto import tqdm
 
-from qick.asm_v2 import AsmInst, Macro
-
+from ...analysis.rb import RBAnalysis
+from ...core.acquisition import acquire_values
 from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
-from ...core.acquisition import acquire_values
 from ...core.experiment_data import ExperimentData, QualityFlag
-from ...analysis.rb import RBAnalysis
-from ...tools.fitting import fitrb, rb_func, rb_error, error_fit_err
-
+from ...tools.fitting import error_fit_err, fitrb, rb_error, rb_func
 
 
 class _RegOp(Macro):
@@ -99,35 +97,42 @@ class _RegOp(Macro):
             Result of the operation.
         """
         dst = prog._get_reg(self.dst)
-        src = "#%d" % self.src if isinstance(self.src, int) else prog._get_reg(self.src)
+        src = (
+            "#%d" % self.src
+            if isinstance(self.src, int)
+            else prog._get_reg(self.src)
+        )
         return [
             AsmInst(
-                inst={"CMD": "REG_WR", "DST": dst, "SRC": "op", "OP": f"{dst} {self.op} {src}"},
+                inst={
+                    "CMD": "REG_WR",
+                    "DST": dst,
+                    "SRC": "op",
+                    "OP": f"{dst} {self.op} {src}",
+                },
                 addr_inc=1,
             )
         ]
 
 
-
 _GATE_CODES: dict[str, int] = {
-    "I":    0,
-    "X":    1,
-    "Y":    2,
-    "X/2":  3,
+    "I": 0,
+    "X": 1,
+    "Y": 2,
+    "X/2": 3,
     "-X/2": 4,
-    "Y/2":  5,
+    "Y/2": 5,
     "-Y/2": 6,
 }
 
 _INTERLEAVED_FILE_SUFFIX: dict[str, str] = {
-    "X":    "X",
-    "Y":    "Y",
-    "X/2":  "halfX",
+    "X": "X",
+    "Y": "Y",
+    "X/2": "halfX",
     "-X/2": "halfXm",
-    "Y/2":  "halfY",
+    "Y/2": "halfY",
     "-Y/2": "halfYm",
 }
-
 
 
 class RBAsmProgram(BaseProgram):
@@ -155,7 +160,7 @@ class RBAsmProgram(BaseProgram):
 
         # gate_idx is allocated automatically by open_loop()
         self.add_reg("gate_code")  # unpacked 4-bit gate code from current word
-        self.add_reg("word_reg")   # cached packed dmem word (8 codes × 4 bits)
+        self.add_reg("word_reg")  # cached packed dmem word (8 codes × 4 bits)
         self.add_reg("shift_reg")  # bit offset within word_reg: 0/4/8/.../28
         self.add_reg("word_addr")  # current dmem word index
 
@@ -196,8 +201,8 @@ class RBAsmProgram(BaseProgram):
         """
         pfx = cfg.get("prefix", "ge")
         # gate slot duration — must be a compile-time constant (see module notes)
-        slot = float(cfg[f"sigma_{pfx}"]) * 5 + 0.01   # µs
-        ch   = cfg["qb_ch"]
+        slot = float(cfg[f"sigma_{pfx}"]) * 5 + 0.01  # µs
+        ch = cfg["qb_ch"]
 
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
         if cfg.get("cooling", False):
@@ -205,22 +210,22 @@ class RBAsmProgram(BaseProgram):
 
         self.write_reg("shift_reg", 0)
         self.write_reg("word_addr", 0)
-        self.read_dmem("word_reg", "word_addr")   # preload word 0
+        self.read_dmem("word_reg", "word_addr")  # preload word 0
 
         self.open_loop(len(cfg["gate_seq"]), name="gate_idx")
 
         # decode: gate_code = (word_reg >> shift_reg) & 0xF
         self.write_reg("gate_code", "word_reg")
         self.append_macro(_RegOp(dst="gate_code", src="shift_reg", op="ASR"))
-        self.append_macro(_RegOp(dst="gate_code", src=0xF,         op="AND"))
+        self.append_macro(_RegOp(dst="gate_code", src=0xF, op="AND"))
 
         # dispatch
-        self.cond_jump("GATE_I",   "gate_code", "Z")
-        self.cond_jump("GATE_X",   "gate_code", "Z", op="-", arg2=1)
-        self.cond_jump("GATE_Y",   "gate_code", "Z", op="-", arg2=2)
-        self.cond_jump("GATE_X2",  "gate_code", "Z", op="-", arg2=3)
+        self.cond_jump("GATE_I", "gate_code", "Z")
+        self.cond_jump("GATE_X", "gate_code", "Z", op="-", arg2=1)
+        self.cond_jump("GATE_Y", "gate_code", "Z", op="-", arg2=2)
+        self.cond_jump("GATE_X2", "gate_code", "Z", op="-", arg2=3)
         self.cond_jump("GATE_mX2", "gate_code", "Z", op="-", arg2=4)
-        self.cond_jump("GATE_Y2",  "gate_code", "Z", op="-", arg2=5)
+        self.cond_jump("GATE_Y2", "gate_code", "Z", op="-", arg2=5)
         self.cond_jump("GATE_mY2", "gate_code", "Z", op="-", arg2=6)
         self.jump("POST_GATE")
 
@@ -272,7 +277,6 @@ class RBAsmProgram(BaseProgram):
         self.measure(cfg)
 
 
-
 class RandomizedBenchmarkingAsm(BaseExperiment):
     """Single-qubit RB using ASMv2 DMEM dispatch (constant pmem).
 
@@ -299,7 +303,7 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
     """
 
     EXPT_NAME = "s015_RB_asm"
-    Analysis   = RBAnalysis
+    Analysis = RBAnalysis
 
     def __init__(self, config):
         """Initialize the RandomizedBenchmarkingAsm instance.
@@ -310,12 +314,12 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             Experiment configuration.
         """
         super().__init__(config)
-        self.cfg          = config
-        self.x            = None
-        self.rb_result    = None
+        self.cfg = config
+        self.x = None
+        self.rb_result = None
         self._number_sample = None
         self._interleaved = None
-        self._iq_process  = "abs"
+        self._iq_process = "abs"
 
     def run(
         self,
@@ -365,23 +369,26 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         ValueError
             If ``interleaved_gate`` is not in the supported gate set.
         """
-        from ...tools.rb_generator import single_qb_rb, INTERLEAVE_GATES
+        from ...tools.rb_generator import INTERLEAVE_GATES, single_qb_rb
 
-        self._iq_process    = iq_process
-        self.x              = np.arange(1, max_circuit_depth, delta_clifford)
+        self._iq_process = iq_process
+        self.x = np.arange(1, max_circuit_depth, delta_clifford)
         self._number_sample = number_sample
-        self._interleaved   = interleaved_gate
-        self._prefix        = prefix
+        self._interleaved = interleaved_gate
+        self._prefix = prefix
 
-        if interleaved_gate is not None and interleaved_gate not in INTERLEAVE_GATES:
+        if (
+            interleaved_gate is not None
+            and interleaved_gate not in INTERLEAVE_GATES
+        ):
             raise ValueError(
                 f"interleaved_gate '{interleaved_gate}' not in "
                 f"{list(INTERLEAVE_GATES.keys())}"
             )
 
         is_irb = interleaved_gate is not None
-        desc   = f"IRB ({interleaved_gate})" if is_irb else "Standard RB (ASM)"
-        rng    = np.random.default_rng(seed)
+        desc = f"IRB ({interleaved_gate})" if is_irb else "Standard RB (ASM)"
+        rng = np.random.default_rng(seed)
         n_depths = len(self.x)
 
         depth_indices = np.arange(n_depths)
@@ -393,20 +400,22 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         seeds_matrix: list = [None] * n_depths
         sequences_matrix: list = [None] * n_depths
         for idx in tqdm(depth_indices, desc=desc):
-            depth  = self.x[idx]
+            depth = self.x[idx]
             rblist = []
             depth_seeds = []
             depth_sequences = []
             for _ in tqdm(range(number_sample), desc="Samples", leave=False):
                 child_seed = int(rng.integers(0, 2**31))
                 seqs = single_qb_rb(
-                    n_clifford=depth, n_sample=1,
-                    interleave=interleaved_gate, seed=child_seed,
+                    n_clifford=depth,
+                    n_sample=1,
+                    interleave=interleaved_gate,
+                    seed=child_seed,
                 )
                 depth_seeds.append(child_seed)
                 depth_sequences.append(seqs[0])
                 self.cfg["gate_seq"] = seqs[0]
-                self.cfg["prefix"]   = prefix
+                self.cfg["prefix"] = prefix
                 prog = RBAsmProgram(
                     self.soccfg,
                     reps=self.cfg["reps"],
@@ -445,7 +454,10 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
                 "randomized_depth_order": self.x[depth_indices].tolist(),
             },
             axes={
-                "depth": {"values": self.x.astype(float), "unit": "# Cliffords"},
+                "depth": {
+                    "values": self.x.astype(float),
+                    "unit": "# Cliffords",
+                },
                 "sample": {"values": np.arange(number_sample), "unit": "#"},
             },
             dataset_dims={"iq": ["depth", "sample"]},
@@ -510,35 +522,61 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
             raise RuntimeError("Call run() first.")
 
         _proc = np.real if self._iq_process == "real" else np.abs
-        raw   = np.array(self.rb_result)
-        amp   = _proc(raw)
-        avg   = amp.mean(axis=1)
+        raw = np.array(self.rb_result)
+        amp = _proc(raw)
+        avg = amp.mean(axis=1)
 
-        pOpt, pCov    = fitrb(self.x, avg)
-        p_fit         = pOpt[0]
-        p_fit_err     = float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
-        epc           = rb_error(p_fit, d=2)
-        epc_err       = (
-            float(np.sqrt(error_fit_err(pCov[0, 0], d=2))) if pCov is not None else 0.0
+        pOpt, pCov = fitrb(self.x, avg)
+        p_fit = pOpt[0]
+        p_fit_err = (
+            float(np.sqrt(np.diag(pCov))[0]) if pCov is not None else 0.0
+        )
+        epc = rb_error(p_fit, d=2)
+        epc_err = (
+            float(np.sqrt(error_fit_err(pCov[0, 0], d=2)))
+            if pCov is not None
+            else 0.0
         )
 
         print(f"\n--- {label} (ASM) ---")
-        print(f"  p   = {p_fit*100:.6f} ± {p_fit_err*100:.6f} %")
-        print(f"  EPC = {epc*100:.6f} ± {epc_err*100:.6f} %")
+        print(f"  p   = {p_fit * 100:.6f} ± {p_fit_err * 100:.6f} %")
+        print(f"  EPC = {epc * 100:.6f} ± {epc_err * 100:.6f} %")
 
         if ax is None:
             _, ax = plt.subplots(figsize=(7, 5))
         c = color or "steelblue"
         if show_individual:
             for s in range(amp.shape[1]):
-                ax.scatter(self.x, amp[:, s], s=6, color="gray",
-                           alpha=0.25, linewidths=0, zorder=1)
+                ax.scatter(
+                    self.x,
+                    amp[:, s],
+                    s=6,
+                    color="gray",
+                    alpha=0.25,
+                    linewidths=0,
+                    zorder=1,
+                )
         xfit = np.linspace(self.x.min(), self.x.max(), 400)
         ax.plot(xfit, rb_func(xfit, *pOpt), color=c, linewidth=2.0, zorder=3)
-        ax.errorbar(self.x, avg, yerr=amp.std(axis=1) / np.sqrt(amp.shape[1]),
-                    fmt="none", ecolor=c, capsize=3, zorder=4)
-        ax.scatter(self.x, avg, s=60, color=c, marker=marker,
-                   edgecolors="black", label=label, zorder=5)
+        ax.errorbar(
+            self.x,
+            avg,
+            yerr=amp.std(axis=1) / np.sqrt(amp.shape[1]),
+            fmt="none",
+            ecolor=c,
+            capsize=3,
+            zorder=4,
+        )
+        ax.scatter(
+            self.x,
+            avg,
+            s=60,
+            color=c,
+            marker=marker,
+            edgecolors="black",
+            label=label,
+            zorder=5,
+        )
         return epc, epc_err, p_fit, p_fit_err, pCov
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None, title=None):
@@ -563,17 +601,22 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         if self.x is None or self.rb_result is None:
             raise RuntimeError("Call run() first.")
         from ...tools.system_tool import (
-            config_to_yaml, get_next_filename_labber, hdf5_generator,
+            config_to_yaml,
+            get_next_filename_labber,
+            hdf5_generator,
         )
+
         if title is not None:
             expt_name = f"s015_RB_asm_{title}_{qb_idx}"
         elif self._interleaved is not None:
-            suffix = _INTERLEAVED_FILE_SUFFIX.get(self._interleaved, self._interleaved)
+            suffix = _INTERLEAVED_FILE_SUFFIX.get(
+                self._interleaved, self._interleaved
+            )
             expt_name = f"s015_RB_asm_{suffix}_{qb_idx}"
         else:
             expt_name = f"s015_RB_asm_{qb_idx}_ref"
 
-        save_dir  = BaseExperiment._data_path
+        save_dir = BaseExperiment._data_path
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         dict_val = (
             config_all.to_yaml(q_id=qb_idx)
@@ -582,17 +625,26 @@ class RandomizedBenchmarkingAsm(BaseExperiment):
         )
         hdf5_generator(
             filepath=file_path,
-            x_info={"name": "Circuit Depth", "unit": "", "values": self.x.astype(float)},
-            y_info={"name": "Sample Number",  "unit": "",
-                    "values": np.arange(self._number_sample, dtype=float)},
-            z_info={"name": "Signal", "unit": "ADC unit",
-                    "values": np.array(self.rb_result).T},
+            x_info={
+                "name": "Circuit Depth",
+                "unit": "",
+                "values": self.x.astype(float),
+            },
+            y_info={
+                "name": "Sample Number",
+                "unit": "",
+                "values": np.arange(self._number_sample, dtype=float),
+            },
+            z_info={
+                "name": "Signal",
+                "unit": "ADC unit",
+                "values": np.array(self.rb_result).T,
+            },
             comment=str(dict_val),
             tag="RB",
             result=self.result,
         )
         print(f"RB data saved to {file_path}")
-
 
 
 def _gate_fidelity(p_ref: float, p_irb: float, d: int = 2):
@@ -617,8 +669,10 @@ def _gate_fidelity(p_ref: float, p_irb: float, d: int = 2):
 
 
 def _gate_fidelity_err(
-    p_ref: float, p_irb: float,
-    var_p_ref: float, var_p_irb: float,
+    p_ref: float,
+    p_irb: float,
+    var_p_ref: float,
+    var_p_irb: float,
     d: int = 2,
 ) -> float:
     """Return the gate fidelity err result.
@@ -643,8 +697,10 @@ def _gate_fidelity_err(
     """
     c = (d - 1) / d
     return float(
-        np.sqrt((c * p_irb / p_ref**2) ** 2 * var_p_ref
-                + (c / p_ref) ** 2 * var_p_irb)
+        np.sqrt(
+            (c * p_irb / p_ref**2) ** 2 * var_p_ref
+            + (c / p_ref) ** 2 * var_p_irb
+        )
     )
 
 
@@ -676,9 +732,9 @@ class AutoRBAsm:
         config : Any
             Experiment configuration.
         """
-        self.cfg           = config
+        self.cfg = config
         self._rb_kwargs: dict = {}
-        self.results: dict    = {}
+        self.results: dict = {}
         self._rb_objects: dict = {}
 
     def run(
@@ -733,7 +789,9 @@ class AutoRBAsm:
             rb.result.session_id = session_id
             self._rb_objects[label] = rb
 
-    def plot(self, show_individual: bool = False, *, plot_analysis: bool = True):
+    def plot(
+        self, show_individual: bool = False, *, plot_analysis: bool = True
+    ):
         """Plot all RB/IRB decay curves and print gate fidelities.
 
         Parameters
@@ -744,38 +802,48 @@ class AutoRBAsm:
             Whether to render the analysis figure.
         """
         fig, ax = plt.subplots(figsize=(8, 6))
-        colors  = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        ref_rb  = self._rb_objects.get("ref")
+        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+        ref_rb = self._rb_objects.get("ref")
         if ref_rb is None:
             print("No reference RB — call run() first.")
             return
 
         ref_epc, ref_epc_err, p_ref, p_ref_err, ref_cov = ref_rb.plot(
-            "Reference RB", color=colors[0], ax=ax,
+            "Reference RB",
+            color=colors[0],
+            ax=ax,
             show_individual=show_individual,
         )
         self.results["ref"] = dict(
-            epc=ref_epc, epc_err=ref_epc_err, p=p_ref, p_err=p_ref_err,
+            epc=ref_epc,
+            epc_err=ref_epc_err,
+            p=p_ref,
+            p_err=p_ref_err,
         )
 
         for i, (label, rb) in enumerate(self._rb_objects.items()):
             if label == "ref":
                 continue
             epc, epc_err, p_irb, p_irb_err, irb_cov = rb.plot(
-                f"IRB ({label})", color=colors[(i + 1) % len(colors)],
-                ax=ax, show_individual=show_individual,
+                f"IRB ({label})",
+                color=colors[(i + 1) % len(colors)],
+                ax=ax,
+                show_individual=show_individual,
             )
             var_ref = ref_cov[0, 0] if ref_cov is not None else 0.0
             var_irb = irb_cov[0, 0] if irb_cov is not None else 0.0
-            f_gate, epc_gate     = _gate_fidelity(p_ref, p_irb)
-            epc_gate_err         = _gate_fidelity_err(p_ref, p_irb, var_ref, var_irb)
-            self.results[label]  = dict(
-                fidelity=f_gate, epc=epc_gate, epc_err=epc_gate_err,
-                p=p_irb, p_err=p_irb_err,
+            f_gate, epc_gate = _gate_fidelity(p_ref, p_irb)
+            epc_gate_err = _gate_fidelity_err(p_ref, p_irb, var_ref, var_irb)
+            self.results[label] = dict(
+                fidelity=f_gate,
+                epc=epc_gate,
+                epc_err=epc_gate_err,
+                p=p_irb,
+                p_err=p_irb_err,
             )
             print(
-                f"  Gate '{label}': F = {f_gate*100:.4f}%  "
-                f"EPC = {epc_gate*100:.4f} ± {epc_gate_err*100:.4f} %"
+                f"  Gate '{label}': F = {f_gate * 100:.4f}%  "
+                f"EPC = {epc_gate * 100:.4f} ± {epc_gate_err * 100:.4f} %"
             )
 
         ax.set_xlabel("Circuit Depth (# Cliffords)")
@@ -797,13 +865,11 @@ class AutoRBAsm:
         for key, val in self.results.items():
             if "fidelity" in val:
                 lines.append(
-                    f"  {key:<10s}  F={val['fidelity']*100:.4f}%  "
-                    f"EPC={val['epc']*100:.5f}%"
+                    f"  {key:<10s}  F={val['fidelity'] * 100:.4f}%  "
+                    f"EPC={val['epc'] * 100:.5f}%"
                 )
             else:
-                lines.append(
-                    f"  {key:<10s}  EPC={val['epc']*100:.5f}%"
-                )
+                lines.append(f"  {key:<10s}  EPC={val['epc'] * 100:.5f}%")
         return "\n".join(lines)
 
     def saveLabber(self, qb_idx, config_all=None, yoko_value=None):
@@ -819,5 +885,9 @@ class AutoRBAsm:
             Yokogawa flux bias embedded in filenames.
         """
         for label, rb in self._rb_objects.items():
-            rb.saveLabber(qb_idx, config_all=config_all,
-                          yoko_value=yoko_value, title=label)
+            rb.saveLabber(
+                qb_idx,
+                config_all=config_all,
+                yoko_value=yoko_value,
+                title=label,
+            )

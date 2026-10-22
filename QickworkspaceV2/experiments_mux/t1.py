@@ -112,7 +112,9 @@ class MuxT1Program(AveragerProgramV2):
                     gain=gain,
                 )
 
-        self.wait_time = QickSweep1D("waitloop", cfg["start_wait"], cfg["stop_wait"])
+        self.wait_time = QickSweep1D(
+            "waitloop", cfg["start_wait"], cfg["stop_wait"]
+        )
 
     def _body(self, cfg):
         """Execute one iteration of the pulse sequence.
@@ -270,7 +272,10 @@ class MuxT1(BaseExperiment):
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             from ..tools.fitting import expfunc
 

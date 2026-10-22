@@ -2,7 +2,6 @@
 
 from qick.asm_v2 import AveragerProgramV2
 
-
 GATE_ALIAS = {
     "X": "x180_{pfx}",
     "Y": "y180_{pfx}",

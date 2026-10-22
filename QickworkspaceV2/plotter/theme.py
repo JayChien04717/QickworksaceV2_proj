@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from cycler import cycler
 
-
 COLORS = {
     "ink": "#172033",
     "muted": "#667085",

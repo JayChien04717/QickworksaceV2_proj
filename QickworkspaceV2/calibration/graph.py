@@ -10,7 +10,13 @@ from typing import Callable
 class CalibrationNode:
     """Single node in the calibration DAG."""
 
-    def __init__(self, name: str, run_fn: Callable, provides: list[str], requires: list[str] | None = None):
+    def __init__(
+        self,
+        name: str,
+        run_fn: Callable,
+        provides: list[str],
+        requires: list[str] | None = None,
+    ):
         """Initialize the CalibrationNode instance.
 
         Parameters
@@ -37,7 +43,10 @@ class CalibrationNode:
         str
             Result of the operation.
         """
-        return f"CalibrationNode({self.name!r}, provides={self.provides}, requires={self.requires})"
+        return (
+            f"CalibrationNode({self.name!r}, provides={self.provides}, "
+            f"requires={self.requires})"
+        )
 
 
 class CalibrationGraph:
@@ -59,7 +68,8 @@ class CalibrationGraph:
     -------
     >>> graph = CalibrationGraph(store, "Q1")
     >>> graph.add(CalibrationNode("res_spec", fn, provides=["res_freq_ge"]))
-    >>> graph.add(CalibrationNode("qubit_spec", fn2, provides=["qb_freq_ge"], requires=["res_freq_ge"]))
+    >>> graph.add(CalibrationNode("qubit_spec", fn2,
+    ...     provides=["qb_freq_ge"], requires=["res_freq_ge"]))
     >>> graph.run_stale()
     """
 
@@ -96,7 +106,6 @@ class CalibrationGraph:
             Name of the target object.
         """
         self._nodes.pop(name, None)
-
 
     def _topological_order(self) -> list[str]:
         """Return node names in a valid execution order.
@@ -142,8 +151,9 @@ class CalibrationGraph:
             raise RuntimeError("Cycle detected in CalibrationGraph")
         return order
 
-
-    def _node_is_stale(self, node: CalibrationNode, max_age_hours: float | None = None) -> bool:
+    def _node_is_stale(
+        self, node: CalibrationNode, max_age_hours: float | None = None
+    ) -> bool:
         """Return the node is stale result.
 
         Parameters
@@ -163,8 +173,9 @@ class CalibrationGraph:
             for p in node.provides
         )
 
-
-    def run_stale(self, max_age_hours: float | None = None, dry_run: bool = False) -> list[str]:
+    def run_stale(
+        self, max_age_hours: float | None = None, dry_run: bool = False
+    ) -> list[str]:
         """Run all nodes whose outputs are stale, in dependency order.
 
         Parameters
@@ -184,13 +195,23 @@ class CalibrationGraph:
         dirty_params: set[str] = set()
         for name in order:
             node = self._nodes[name]
-            dependency_dirty = any(req in dirty_params for req in node.requires)
+            dependency_dirty = any(
+                req in dirty_params for req in node.requires
+            )
             if self._node_is_stale(node, max_age_hours) or dependency_dirty:
                 if dry_run:
-                    reason = "dependency changed" if dependency_dirty else "stale output"
+                    reason = (
+                        "dependency changed"
+                        if dependency_dirty
+                        else "stale output"
+                    )
                     print(f"[dry-run] would run: {name} ({reason})")
                 else:
-                    reason = "dependency changed" if dependency_dirty else "stale output"
+                    reason = (
+                        "dependency changed"
+                        if dependency_dirty
+                        else "stale output"
+                    )
                     print(f"[CalibrationGraph] running: {name} ({reason})")
                     node.run_fn()
                 ran.append(name)
@@ -232,7 +253,9 @@ class CalibrationGraph:
         for name in order:
             node = self._nodes[name]
             stale = self._node_is_stale(node)
-            lines.append(f"  {'STALE' if stale else 'OK   '} {name:<24s} provides={node.provides}")
+            lines.append(
+                f"  {'STALE' if stale else 'OK   '} {name:<24s} provides={node.provides}"
+            )
         return "\n".join(lines)
 
     def __repr__(self) -> str:

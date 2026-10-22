@@ -1,24 +1,23 @@
-import numpy as np
 from copy import deepcopy
+
+import numpy as np
+
 from .plot import plot
 
 if __name__ == "__main__":
-
     from utils import (
-        zeros2eps,
         get_prefix_str,
+        zeros2eps,
     )
 
 else:
-
     from .utils import (
-        zeros2eps,
         get_prefix_str,
+        zeros2eps,
     )
 
 
 def transmission(freq, f_0, kappa):
-
     """Return the transmission result.
 
     Parameters
@@ -42,7 +41,6 @@ def transmission(freq, f_0, kappa):
 
 
 def reflection(freq, f_0, kappa, kappa_c_real, phi_0=0):
-
     """Return the reflection result.
 
     Parameters
@@ -63,14 +61,15 @@ def reflection(freq, f_0, kappa, kappa_c_real, phi_0=0):
     Any
         Result of the operation.
     """
-    num = 2j * (freq - f_0) + kappa - 2*kappa_c_real*(1+1j*np.tan(phi_0))
+    num = (
+        2j * (freq - f_0) + kappa - 2 * kappa_c_real * (1 + 1j * np.tan(phi_0))
+    )
     den = 2j * (freq - f_0) + kappa
 
     return num / zeros2eps(den)
 
 
 def reflection_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
-
     """Return the reflection mismatched result.
 
     Parameters
@@ -95,7 +94,6 @@ def reflection_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
 
 
 def hanger(freq, f_0, kappa, kappa_c_real, phi_0=0):
-
     """Return the hanger result.
 
     Parameters
@@ -116,14 +114,13 @@ def hanger(freq, f_0, kappa, kappa_c_real, phi_0=0):
     Any
         Result of the operation.
     """
-    num = 2j * (freq - f_0) + kappa - kappa_c_real*(1+1j*np.tan(phi_0))
+    num = 2j * (freq - f_0) + kappa - kappa_c_real * (1 + 1j * np.tan(phi_0))
     den = 2j * (freq - f_0) + kappa
 
     return num / zeros2eps(den)
 
 
 def hanger_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
-
     """Return the hanger mismatched result.
 
     Parameters
@@ -146,6 +143,7 @@ def hanger_mismatched(freq, f_0, kappa, kappa_c_real, phi_0):
     """
     return hanger(freq, f_0, kappa, kappa_c_real, phi_0)
 
+
 resonator_dict = {
     "transmission": transmission,
     "t": transmission,
@@ -158,6 +156,7 @@ resonator_dict = {
     "hanger_mismatched": hanger_mismatched,
     "hm": hanger_mismatched,
 }
+
 
 def get_fit_function(geometry, amplitude=True, edelay=True):
     """Return fit function.
@@ -190,6 +189,7 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
         return resonator_func
 
     elif amplitude and not edelay:
+
         def fit_func(*args):
             """Fit func.
 
@@ -208,6 +208,7 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
         return fit_func
 
     elif not amplitude and edelay:
+
         def fit_func(*args):
             """Fit func.
 
@@ -221,11 +222,14 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
             Any
                 Result of the operation.
             """
-            return resonator_func(*args[:-1]) * np.exp(2j * np.pi * args[-1] * args[0])
+            return resonator_func(*args[:-1]) * np.exp(
+                2j * np.pi * args[-1] * args[0]
+            )
 
         return fit_func
 
     elif amplitude and edelay:
+
         def fit_func(*args):
             """Fit func.
 
@@ -248,12 +252,11 @@ def get_fit_function(geometry, amplitude=True, edelay=True):
         return fit_func
 
     else:
-
         raise Exception("Unreachable")
 
-class ResonatorParams(object):
-    def __init__(self, params, geometry, freq = None, signal = None):
 
+class ResonatorParams(object):
+    def __init__(self, params, geometry, freq=None, signal=None):
         """Initialize the ResonatorParams instance.
 
         Parameters
@@ -350,8 +353,13 @@ class ResonatorParams(object):
         Any
             Result of the operation.
         """
-        if hasattr(self, "kappa_index") and hasattr(self, "kappa_c_real_index"):
-            return self.params[self.kappa_index] - self.params[self.kappa_c_real_index]
+        if hasattr(self, "kappa_index") and hasattr(
+            self, "kappa_c_real_index"
+        ):
+            return (
+                self.params[self.kappa_index]
+                - self.params[self.kappa_c_real_index]
+            )
         else:
             return None
 
@@ -391,7 +399,8 @@ class ResonatorParams(object):
         """
         if hasattr(self, "re_a_in_index") and hasattr(self, "im_a_in_index"):
             return (
-                self.params[self.re_a_in_index] + 1j * self.params[self.im_a_in_index]
+                self.params[self.re_a_in_index]
+                + 1j * self.params[self.im_a_in_index]
             )
         else:
             return None
@@ -454,7 +463,15 @@ class ResonatorParams(object):
         else:
             return None
 
-    def str(self, latex=False, separator=", ", precision=2, only_f_and_kappa=False, f_precision=2, red_warning = False):
+    def str(
+        self,
+        latex=False,
+        separator=", ",
+        precision=2,
+        only_f_and_kappa=False,
+        f_precision=2,
+        red_warning=False,
+    ):
         """Return the str result.
 
         Parameters
@@ -483,7 +500,10 @@ class ResonatorParams(object):
         phi_0 = {False: "phi_0", True: r"$\varphi_0$"}
 
         if self.edelay is not None:
-            edelay_str = "%sedelay = %ss" % (separator, get_prefix_str(self.edelay, precision))
+            edelay_str = "%sedelay = %ss" % (
+                separator,
+                get_prefix_str(self.edelay, precision),
+            )
         else:
             edelay_str = ""
 
@@ -504,15 +524,26 @@ class ResonatorParams(object):
             )
 
         if self.resonator_func in [hanger_mismatched, reflection_mismatched]:
-            if red_warning and self.phi_0 is not None and np.abs(self.phi_0) > 0.25:
+            if (
+                red_warning
+                and self.phi_0 is not None
+                and np.abs(self.phi_0) > 0.25
+            ):
                 phi_0_str = r"%s = %0.2f rad" % (phi_0[latex], self.phi_0)
-                phi_0_str = "%s/!\\ "%separator + phi_0_str + " /!\\"
+                phi_0_str = "%s/!\\ " % separator + phi_0_str + " /!\\"
             else:
-                phi_0_str = r"%s%s = %0.2f rad" % (separator, phi_0[latex], self.phi_0)
+                phi_0_str = r"%s%s = %0.2f rad" % (
+                    separator,
+                    phi_0[latex],
+                    self.phi_0,
+                )
         else:
             phi_0_str = ""
 
-        f_0_str = r"%s = %sHz" % (f_0[latex], get_prefix_str(self.f_0, f_precision))
+        f_0_str = r"%s = %sHz" % (
+            f_0[latex],
+            get_prefix_str(self.f_0, f_precision),
+        )
 
         if only_f_and_kappa:
             return f_0_str + kappa_str
@@ -566,30 +597,32 @@ class ResonatorParams(object):
         else:
             if len(kwargs) == 0:
                 params = np.copy(self.params)
-                params[:len(args)] = args
+                params[: len(args)] = args
             else:
                 resonator = deepcopy(self)
                 for key in kwargs:
-                    resonator.params[resonator.__dict__[key + "_index"]] = kwargs[key]
-                resonator.params[:len(args)] = args
+                    resonator.params[resonator.__dict__[key + "_index"]] = (
+                        kwargs[key]
+                    )
+                resonator.params[: len(args)] = args
                 params = resonator.params
-        
+
         return fit_func(freq, *params)
-    
+
     def plot(
-            self,
-            fig = None,
-            plot_not_corrected = True,
-            font_size = None,
-            plot_circle = True,
-            center_freq = False,
-            only_f_and_kappa = False,
-            precision = 2,
-            alpha_fit = 1.0,
-            style = 'Normal',
-            title = None,
-            params = None,
-        ):
+        self,
+        fig=None,
+        plot_not_corrected=True,
+        font_size=None,
+        plot_circle=True,
+        center_freq=False,
+        only_f_and_kappa=False,
+        precision=2,
+        alpha_fit=1.0,
+        style='Normal',
+        title=None,
+        params=None,
+    ):
         """Plot the operation.
 
         Parameters
@@ -632,12 +665,11 @@ class ResonatorParams(object):
             precision=precision,
             alpha_fit=alpha_fit,
             style=style,
-            title=title
+            title=title,
         )
 
 
 if __name__ == "__main__":
-
     f_0 = 3.8e9
     kappa_i = 50e6
     kappa_c = 150e6
@@ -646,7 +678,15 @@ if __name__ == "__main__":
     phi_0 = 4
     geometry = "hm"
 
-    params = [f_0, kappa_i, kappa_c, phi_0, np.real(a_in), np.imag(a_in), edelay]
+    params = [
+        f_0,
+        kappa_i,
+        kappa_c,
+        phi_0,
+        np.real(a_in),
+        np.imag(a_in),
+        edelay,
+    ]
 
     params = ResonatorParams(params, geometry)
 

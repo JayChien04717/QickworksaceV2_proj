@@ -130,10 +130,12 @@ Set multiple independent instruments from one notebook cell. This runs in
 parallel by default, so two Yoko/DC flux ramps can happen at the same time:
 
 ```python
-inst.set_values({
-    "q1_flux": {"value": 0.5e-3, "mode": "current"},
-    "q2_flux": {"value": -0.2e-3, "mode": "current"},
-})
+inst.set_values(
+    {
+        "q1_flux": {"value": 0.5e-3, "mode": "current"},
+        "q2_flux": {"value": -0.2e-3, "mode": "current"},
+    }
+)
 ```
 
 `set_values(...)` is intentionally for Yoko/DC sources only. RF sources usually
@@ -252,11 +254,9 @@ class MyInstrument:
     def __init__(self, address: str):
         self.address = address
 
-    def idn(self) -> str:
-        ...
+    def idn(self) -> str: ...
 
-    def close(self) -> None:
-        ...
+    def close(self) -> None: ...
 
     def get_limits(self) -> dict:
         return dict(self.DEFAULT_LIMITS)
@@ -272,11 +272,10 @@ class MyInstrument:
 For source instruments, also provide:
 
 ```python
-def on(self) -> None:
-    ...
+def on(self) -> None: ...
 
-def off(self) -> None:
-    ...
+
+def off(self) -> None: ...
 ```
 
 RF source drivers should use property names:

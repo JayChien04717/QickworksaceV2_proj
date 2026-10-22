@@ -46,7 +46,9 @@ class MuxRamseyProgram(AveragerProgramV2):
             )
 
         self.add_loop("waitloop", cfg["steps"])
-        self.wait_time = QickSweep1D("waitloop", cfg["start_wait"], cfg["stop_wait"])
+        self.wait_time = QickSweep1D(
+            "waitloop", cfg["start_wait"], cfg["stop_wait"]
+        )
 
         for idx, name in zip(cfg["active_slots"], cfg["qubit_names"]):
             self.declare_gen(ch=cfg["qb_ch"][idx], nqz=cfg["nqz_qb"][idx])
@@ -66,8 +68,12 @@ class MuxRamseyProgram(AveragerProgramV2):
             phase1 = cfg["qb_phase"][idx]
             phase2 = phase1 + self.wait_time * 360 * virtual_detune
 
-            self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse1", pulse_type, phase1)
-            self._add_qubit_pulse(cfg, idx, qb_ch, f"{name}_pulse2", pulse_type, phase2)
+            self._add_qubit_pulse(
+                cfg, idx, qb_ch, f"{name}_pulse1", pulse_type, phase1
+            )
+            self._add_qubit_pulse(
+                cfg, idx, qb_ch, f"{name}_pulse2", pulse_type, phase2
+            )
 
     def _add_qubit_pulse(self, cfg, idx, qb_ch, pulse_name, pulse_type, phase):
         """Add qubit pulse.
@@ -316,7 +322,10 @@ class MuxRamsey(BaseExperiment):
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             from ..tools.fitting import decaysin, expfunc
 
@@ -397,7 +406,9 @@ class MuxRamsey(BaseExperiment):
         corrections = {}
 
         for name, slot in zip(qubit_names, active_slots):
-            fit_freq = self.result.fit_result.get(f"{name}_fit_freq_MHz", (None,))[0]
+            fit_freq = self.result.fit_result.get(
+                f"{name}_fit_freq_MHz", (None,)
+            )[0]
             if fit_freq is None:
                 print(f"{name}: fitted Ramsey frequency not available.")
                 continue
@@ -410,7 +421,9 @@ class MuxRamsey(BaseExperiment):
                 new_freq = old_freq - delta
                 qb_freqs[slot] = new_freq
                 status = "corrected"
-                print(f"{name}: detune error {delta:+.5f} MHz, qb_freq_ge -> {new_freq:.5f} MHz")
+                print(
+                    f"{name}: detune error {delta:+.5f} MHz, qb_freq_ge -> {new_freq:.5f} MHz"
+                )
             else:
                 new_freq = old_freq
                 status = "detune < 5 kHz"

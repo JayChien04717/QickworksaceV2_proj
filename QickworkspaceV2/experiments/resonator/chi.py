@@ -75,7 +75,9 @@ def _decode_frequency_shots(acquired, shots, frequencies):
     """Return complex IQ with shape (state, shot, frequency)."""
     values = np.asarray(acquired)
     if values.shape[-1] != 2:
-        raise RuntimeError(f"Expected trailing IQ axis, received shape {values.shape}")
+        raise RuntimeError(
+            f"Expected trailing IQ axis, received shape {values.shape}"
+        )
     values = np.squeeze(values.dot([1.0, 1.0j]))
     if values.ndim != 3 or values.shape[0] != 2:
         raise RuntimeError(
@@ -107,11 +109,13 @@ def _frequency_snr(iq_shots):
     ) / 4.0
     signal = np.abs(means[1] - means[0]) ** 2
     snr = np.divide(
-        signal, 2.0 * variance,
+        signal,
+        2.0 * variance,
         out=np.full(signal.shape, np.nan, dtype=float),
         where=variance > 0,
     )
     return means, variance, snr
+
 
 class _ExcitedResonatorSpec(ResonatorSpec):
     """Internal excited-state spectrum used by :class:`DispersiveShift`."""
@@ -137,7 +141,9 @@ class DispersiveShift(BaseExperiment):
     Y_SAVE_UNIT = "0:g, 1:e"
     Analysis = DispersiveShiftAnalysis
 
-    def run(self, py_avg: int, solve_type: str = "hm", **kwargs) -> ExperimentData:
+    def run(
+        self, py_avg: int, solve_type: str = "hm", **kwargs
+    ) -> ExperimentData:
         """Acquire g/e frequency shots, fit chi, and select maximum-SNR frequency.
 
         ``py_avg`` is the number of batches; ``cfg["snr_shots"]`` is the
@@ -183,8 +189,10 @@ class DispersiveShift(BaseExperiment):
         run_cfg = dict(self.cfg)
         run_cfg["snr_shots"] = shots_per_batch
         program = ReadoutFrequencySNRProgram(
-            self.soccfg, reps=1,
-            final_delay=run_cfg["relax_delay"], cfg=run_cfg,
+            self.soccfg,
+            reps=1,
+            final_delay=run_cfg["relax_delay"],
+            cfg=run_cfg,
         )
         frequency = np.asarray(
             program.get_pulse_param("res_pulse", "freq", as_array=True),
@@ -207,9 +215,11 @@ class DispersiveShift(BaseExperiment):
             acquired = program.acquire(
                 self.soc, rounds=1, progress=progress and batches == 1
             )[0]
-            chunks.append(_decode_frequency_shots(
-                acquired, shots=shots_per_batch, frequencies=frequency.size
-            ))
+            chunks.append(
+                _decode_frequency_shots(
+                    acquired, shots=shots_per_batch, frequencies=frequency.size
+                )
+            )
         iq_shots = np.concatenate(chunks, axis=1)
         means, noise_variance, snr = _frequency_snr(iq_shots)
         if not np.any(np.isfinite(snr)):
@@ -239,7 +249,8 @@ class DispersiveShift(BaseExperiment):
             analysis_data={
                 "readout_snr": {"values": snr, "dims": ["frequency"]},
                 "noise_variance": {
-                    "values": noise_variance, "dims": ["frequency"]
+                    "values": noise_variance,
+                    "dims": ["frequency"],
                 },
             },
             dataset_dims={"iq": ["state", "frequency"]},
@@ -261,15 +272,18 @@ class DispersiveShift(BaseExperiment):
             y_unit=self.Y_SAVE_UNIT,
         )
         result = self.Analysis().run(result)
-        result.fit_result.update({
-            "best_readout_frequency_MHz": (best_frequency, None),
-            "max_readout_snr": (float(snr[best_index]), None),
-        })
+        result.fit_result.update(
+            {
+                "best_readout_frequency_MHz": (best_frequency, None),
+                "max_readout_snr": (float(snr[best_index]), None),
+            }
+        )
         self.best_frequency = best_frequency
         self.result = result
         if plot_analysis:
             self.Analysis().plot(result)
         return (result, best_frequency) if return_best_freq else result
+
     def optimize_readout_frequency(
         self, shots: int, solve_type: str = "hm", **kwargs
     ) -> float:
@@ -278,7 +292,13 @@ class DispersiveShift(BaseExperiment):
         result = self.run(shots, solve_type=solve_type, **kwargs)
         return float(result["best_readout_frequency_MHz"])
 
+
 # Concise notebook alias.
 Chi = DispersiveShift
 
-__all__ = ["Chi", "DispersiveShift", "ExcitedResonatorSpecProgram", "ReadoutFrequencySNRProgram"]
+__all__ = [
+    "Chi",
+    "DispersiveShift",
+    "ExcitedResonatorSpecProgram",
+    "ReadoutFrequencySNRProgram",
+]

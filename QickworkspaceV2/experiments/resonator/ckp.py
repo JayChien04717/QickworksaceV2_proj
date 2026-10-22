@@ -5,7 +5,6 @@ from __future__ import annotations
 import numpy as np
 from scipy.optimize import curve_fit
 
-
 from ...core.acquisition import acquire_values
 from ...core.base_analysis import BaseAnalysis
 from ...core.base_experiment import BaseExperiment
@@ -14,7 +13,9 @@ from ...core.experiment_data import ExperimentData, QualityFlag
 
 
 def _ridge_lorentzian(frequency, offset, amplitude, center, half_width):
-    return offset + amplitude / (1.0 + ((frequency - center) / half_width) ** 2)
+    return offset + amplitude / (
+        1.0 + ((frequency - center) / half_width) ** 2
+    )
 
 
 def _process_ckp_iq(iq, channel):
@@ -56,6 +57,7 @@ def _process_ckp_iq(iq, channel):
     raise ValueError(
         "ckp_fit_channel must be one of: pca, abs, real, imag, phase"
     )
+
 
 def _joint_ckp_model(
     coordinates, qubit_idle, resonator_mid, chi, kappa, peak_stark_shift
@@ -203,10 +205,14 @@ class CKPAnalysis(BaseAnalysis):
         qb_freq = np.asarray(data.y_axis, dtype=float)
         expected = (2, qb_freq.size, res_freq.size)
         if response.shape != expected:
-            self._fail(data, f"Expected raw_iq shape {expected}, got {response.shape}")
+            self._fail(
+                data, f"Expected raw_iq shape {expected}, got {response.shape}"
+            )
             return
         if min(qb_freq.size, res_freq.size) < 7:
-            self._fail(data, "CKP needs at least seven points on each frequency axis")
+            self._fail(
+                data, "CKP needs at least seven points on each frequency axis"
+            )
             return
 
         contrast = np.ptp(response, axis=1)
@@ -224,7 +230,11 @@ class CKPAnalysis(BaseAnalysis):
             {
                 "ckp_response": {
                     "values": response,
-                    "dims": ["state", "qubit_frequency", "resonator_frequency"],
+                    "dims": [
+                        "state",
+                        "qubit_frequency",
+                        "resonator_frequency",
+                    ],
                 },
                 "qubit_resonance_ridge_MHz": {
                     "values": ridge,
@@ -286,12 +296,18 @@ class CKPAnalysis(BaseAnalysis):
         error = np.sqrt(np.maximum(np.diag(pcov), 0.0))
         qubit_idle, resonator_mid, chi, kappa, peak_shift = popt
         if abs(chi) <= np.finfo(float).eps:
-            self._fail(data, "CKP fit returned chi indistinguishable from zero")
+            self._fail(
+                data, "CKP fit returned chi indistinguishable from zero"
+            )
             return
         predicted = _joint_ckp_model((states, res_points), *popt)
         residual = ridge_points - predicted
         denominator = np.sum((ridge_points - np.mean(ridge_points)) ** 2)
-        r2 = 1 - np.sum(residual**2) / denominator if denominator > 0 else np.nan
+        r2 = (
+            1 - np.sum(residual**2) / denominator
+            if denominator > 0
+            else np.nan
+        )
 
         nbar_resonant = float(peak_shift / (2 * chi))
         nbar_error = (
@@ -312,9 +328,7 @@ class CKPAnalysis(BaseAnalysis):
         # In input-output normalization, |A|^2 is incident photon flux and
         # n_res = 4|A|^2/kappa. kappa_MHz here means kappa/(2*pi).
         photon_flux = nbar_resonant * (2 * np.pi * abs(kappa) * 1e6) / 4
-        incident_power_w = (
-            6.62607015e-34 * resonator_mid * 1e6 * photon_flux
-        )
+        incident_power_w = 6.62607015e-34 * resonator_mid * 1e6 * photon_flux
         incident_power_dbm = (
             10 * np.log10(incident_power_w / 1e-3)
             if incident_power_w > 0
@@ -380,7 +394,10 @@ class CKPAnalysis(BaseAnalysis):
         for state in range(2):
             for index in range(response.shape[2]):
                 trace = response[state, :, index]
-                if not np.all(np.isfinite(trace)) or np.ptp(trace) < min_contrast:
+                if (
+                    not np.all(np.isfinite(trace))
+                    or np.ptp(trace) < min_contrast
+                ):
                     continue
                 edge = max(1, qb_freq.size // 8)
                 offset = float(np.median(np.r_[trace[:edge], trace[-edge:]]))
@@ -414,7 +431,9 @@ class CKPAnalysis(BaseAnalysis):
         edge = max(2, res_freq.size // 6)
         qubit_idle = float(
             np.nanmedian(
-                np.concatenate((ridge[:, :edge].ravel(), ridge[:, -edge:].ravel()))
+                np.concatenate(
+                    (ridge[:, :edge].ravel(), ridge[:, -edge:].ravel())
+                )
             )
         )
         resonances = [
@@ -427,7 +446,9 @@ class CKPAnalysis(BaseAnalysis):
         peak_shift = float(
             np.nanmedian(
                 [
-                    ridge[state, np.nanargmax(np.abs(ridge[state] - qubit_idle))]
+                    ridge[
+                        state, np.nanargmax(np.abs(ridge[state] - qubit_idle))
+                    ]
                     - qubit_idle
                     for state in range(2)
                 ]
@@ -439,7 +460,9 @@ class CKPAnalysis(BaseAnalysis):
             qubit_idle,
             float(np.mean(resonances)),
             chi,
-            max(4 * np.median(np.abs(np.diff(res_freq))), np.ptp(res_freq) / 5),
+            max(
+                4 * np.median(np.abs(np.diff(res_freq))), np.ptp(res_freq) / 5
+            ),
             peak_shift,
         ]
 
@@ -475,9 +498,17 @@ class CKPAnalysis(BaseAnalysis):
                 cmap="viridis",
             )
             if ridge.shape == (2, len(data.x_axis)):
-                ax.plot(data.x_axis, ridge[state], "w.", ms=4, label="slice fits")
+                ax.plot(
+                    data.x_axis, ridge[state], "w.", ms=4, label="slice fits"
+                )
             if fit.shape == (2, len(data.x_axis)):
-                ax.plot(data.x_axis, fit[state], color="tab:red", lw=2, label="CKP fit")
+                ax.plot(
+                    data.x_axis,
+                    fit[state],
+                    color="tab:red",
+                    lw=2,
+                    label="CKP fit",
+                )
             ax.set(
                 title=f"Prepared |{'g' if state == 0 else 'e'}>",
                 xlabel="Resonator drive frequency (MHz)",
@@ -560,7 +591,9 @@ class CKP(BaseExperiment):
         kwargs.pop("liveplot", None)
         kwargs.pop("show_final_plot", None)
         if kwargs:
-            raise TypeError(f"Unsupported CKP.run options: {', '.join(sorted(kwargs))}")
+            raise TypeError(
+                f"Unsupported CKP.run options: {', '.join(sorted(kwargs))}"
+            )
         rounds = int(py_avg)
         if rounds < 1:
             raise ValueError("py_avg must be positive")

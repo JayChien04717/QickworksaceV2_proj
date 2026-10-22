@@ -35,14 +35,16 @@ from typing import Optional, Type
 
 import numpy as np
 
-from .base_analysis import BaseAnalysis
 from .acquisition import acquire_values
-from .experiment_data import ExperimentData, QualityFlag
+from .base_analysis import BaseAnalysis
 from .experiment_components import (
     AcquisitionResult as _AcquisitionResult,
+)
+from .experiment_components import (
     SweepAxis,
     infer_iq_dims,
 )
+from .experiment_data import ExperimentData, QualityFlag
 
 
 class BaseExperiment:
@@ -217,8 +219,6 @@ class BaseExperiment:
     EXPT_NAME: str = ""
     # Set False when qb_idx selects config but should not be part of the file name.
     INCLUDE_QUBIT_IN_FILENAME: bool = True
-    # Set False when the saved comment should contain the full system config.
-    INCLUDE_QUBIT_IN_COMMENT: bool = True
     TAG: str = ""
     X_LABEL: str = ""
     Y_LABEL: str = "ADC Units"
@@ -296,7 +296,6 @@ class BaseExperiment:
         print(prog)
         return prog
 
-
     def run(
         self,
         py_avg: int,
@@ -334,7 +333,9 @@ class BaseExperiment:
                 fit_params, error = expt.run(py_avg)
                 freq = float(expt.run(py_avg))
         """
-        if isinstance(py_avg, bool) or not isinstance(py_avg, (int, np.integer)):
+        if isinstance(py_avg, bool) or not isinstance(
+            py_avg, (int, np.integer)
+        ):
             raise TypeError("py_avg must be an integer")
         if py_avg < 1:
             raise ValueError("py_avg must be at least 1")
@@ -389,10 +390,12 @@ class BaseExperiment:
             else ctx["iq_process"]
         )
         metadata = {"iq_process": iq_process, **acq.metadata}
-        required_keys = dict.fromkeys((
-            "fit_channel",
-            *getattr(self.Analysis, "REQUIRED_CONFIG_KEYS", ()),
-        ))
+        required_keys = dict.fromkeys(
+            (
+                "fit_channel",
+                *getattr(self.Analysis, "REQUIRED_CONFIG_KEYS", ()),
+            )
+        )
         analysis_context = {}
         for key in required_keys:
             try:
@@ -481,8 +484,14 @@ class BaseExperiment:
         if hasattr(rendered, "savefig"):
             candidates.append(rendered)
         elif isinstance(rendered, (list, tuple)):
-            candidates.extend(item for item in rendered if hasattr(item, "savefig"))
-        candidates.extend(plt.figure(number) for number in plt.get_fignums() if number not in before)
+            candidates.extend(
+                item for item in rendered if hasattr(item, "savefig")
+            )
+        candidates.extend(
+            plt.figure(number)
+            for number in plt.get_fignums()
+            if number not in before
+        )
         known = {id(figure) for figure in result.figures}
         for figure in candidates:
             if id(figure) not in known:
@@ -525,8 +534,14 @@ class BaseExperiment:
         ValueError
             If the operation cannot be completed.
         """
-        if analyze is not None and plot_analysis is not None and analyze != plot_analysis:
-            raise ValueError("analyze and plot_analysis specify conflicting values")
+        if (
+            analyze is not None
+            and plot_analysis is not None
+            and analyze != plot_analysis
+        ):
+            raise ValueError(
+                "analyze and plot_analysis specify conflicting values"
+            )
         should_analyze = (
             plot_analysis
             if plot_analysis is not None
@@ -535,7 +550,9 @@ class BaseExperiment:
         if self.result is None:
             raise RuntimeError("No result to plot. Call run() first.")
         if self.Analysis is None:
-            raise RuntimeError(f"{self.__class__.__name__} has no Analysis class.")
+            raise RuntimeError(
+                f"{self.__class__.__name__} has no Analysis class."
+            )
 
         result = self.result
         if not should_analyze:
@@ -563,6 +580,7 @@ class BaseExperiment:
             If the operation cannot be completed.
         """
         import matplotlib.pyplot as plt
+
         from ..plotter.theme import COLORS, style_axes, style_figure
 
         if result.raw_iq is None:
@@ -585,8 +603,14 @@ class BaseExperiment:
         if values.ndim == 1:
             x = np.arange(values.size) if x is None else x
             ax.plot(
-                x, values, "o-", markersize=4, markeredgewidth=0,
-                linewidth=1.35, color=COLORS["blue"], alpha=0.82,
+                x,
+                values,
+                "o-",
+                markersize=4,
+                markeredgewidth=0,
+                linewidth=1.35,
+                color=COLORS["blue"],
+                alpha=0.82,
             )
         elif values.ndim == 2 and x is not None and values.shape[-1] == len(x):
             for index, trace in enumerate(values):
@@ -594,8 +618,11 @@ class BaseExperiment:
             ax.legend(frameon=False, ncols=min(values.shape[0], 4))
         else:
             image = ax.imshow(
-                values, aspect="auto", origin="lower",
-                cmap="viridis", interpolation="nearest",
+                values,
+                aspect="auto",
+                origin="lower",
+                cmap="viridis",
+                interpolation="nearest",
             )
             colorbar = fig.colorbar(image, ax=ax, label=ylabel, pad=0.025)
             colorbar.outline.set_visible(False)
@@ -611,7 +638,9 @@ class BaseExperiment:
         style_axes(ax, grid=values.ndim < 2)
         plt.show()
 
-    def _acquire(self, prog, x_vals, y_vals, options: dict) -> _AcquisitionResult:
+    def _acquire(
+        self, prog, x_vals, y_vals, options: dict
+    ) -> _AcquisitionResult:
         """Acquire through the live plotter or directly through QICK."""
         threshold = self._get_readout_threshold()
         kwargs = options["kwargs"]
@@ -656,7 +685,9 @@ class BaseExperiment:
             )
         elif instrument_manager is not None and yoko_name is not None:
             if y_vals is None:
-                raise ValueError("y_axis_vals must be provided for a Yoko sweep.")
+                raise ValueError(
+                    "y_axis_vals must be provided for a Yoko sweep."
+                )
             rows = []
             for value in y_vals:
                 instrument_manager.set_value(
@@ -729,7 +760,14 @@ class BaseExperiment:
             )
         return result
 
-    def saveLabber(self, qb_idx, yoko_value=None, config_all=None, title=None, filename_mode="random"):
+    def saveLabber(
+        self,
+        qb_idx,
+        yoko_value=None,
+        config_all=None,
+        title=None,
+        filename_mode="random",
+    ):
         """Save legacy Labber-format HDF5 with class-controlled file naming.
 
         Parameters
@@ -742,12 +780,8 @@ class BaseExperiment:
             Value for ``config_all``.
         title : Any, default: None
             Value for ``title``.
-        filename_mode : {'random', 'sequential'}, default: 'random'
-            File-naming strategy. ``'random'`` replaces the temporary
-            three-digit suffix with the sortable experiment ID, for example
-            ``s002_res_ge_Q1_<experiment_id>.hdf5``. ``'sequential'`` keeps
-            the traditional numbered filename, for example
-            ``s002_res_ge_Q1_001.hdf5``.
+        filename_mode : Any, default: 'random'
+            Value for ``filename_mode``.
 
         Returns
         -------
@@ -770,12 +804,11 @@ class BaseExperiment:
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
 
-        if config_all is not None:
-            dict_val = config_all.to_yaml(
-                q_id=qb_idx if self.INCLUDE_QUBIT_IN_COMMENT else None
-            )
-        else:
-            dict_val = config_to_yaml(self.cfg)
+        dict_val = (
+            config_all.to_yaml(q_id=qb_idx)
+            if config_all is not None
+            else config_to_yaml(self.cfg)
+        )
 
         comment = self._save_comment(dict_val)
 
@@ -796,16 +829,21 @@ class BaseExperiment:
             filepath=file_path,
             x_info=x_info,
             y_info=y_info,
-            z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
+            z_info={
+                "name": "Signal",
+                "unit": "ADC unit",
+                "values": self.iqdata,
+            },
             comment=comment,
             tag=self.TAG,
             result=self.result,
-            figures=(list(self.result.figures) if self.result is not None else []),
+            figures=(
+                list(self.result.figures) if self.result is not None else []
+            ),
             filename_mode=filename_mode,
         )
         print(f"Data saved to {saved_path}")
         return str(saved_path)
-
 
     @staticmethod
     def _resolve_axis(vals, steps=None):
@@ -840,7 +878,9 @@ class BaseExperiment:
             return None
 
         # Already a plain numpy numeric array — fast path
-        if isinstance(vals, np.ndarray) and np.issubdtype(vals.dtype, np.number):
+        if isinstance(vals, np.ndarray) and np.issubdtype(
+            vals.dtype, np.number
+        ):
             return vals.astype(float)
 
         # QickParam: try every known array-extraction method
@@ -853,13 +893,23 @@ class BaseExperiment:
                     pass
 
         # QickParam with is_sweep(): extract from start/stop/step/expts/steps
-        if hasattr(vals, "is_sweep") and callable(vals.is_sweep) and vals.is_sweep():
+        if (
+            hasattr(vals, "is_sweep")
+            and callable(vals.is_sweep)
+            and vals.is_sweep()
+        ):
             start = getattr(vals, "start", None)
             stop = getattr(vals, "stop", None)
             step = getattr(vals, "step", None)
             # 'expts' or 'steps' for count
-            n_raw = getattr(vals, "expts", None) or getattr(vals, "steps", None)
-            n = int(n_raw) if n_raw is not None else (int(steps) if steps else 100)
+            n_raw = getattr(vals, "expts", None) or getattr(
+                vals, "steps", None
+            )
+            n = (
+                int(n_raw)
+                if n_raw is not None
+                else (int(steps) if steps else 100)
+            )
             if start is not None and stop is not None:
                 try:
                     return np.linspace(float(start), float(stop), n)
@@ -900,7 +950,9 @@ class BaseExperiment:
                     fn = getattr(v, method, None)
                     if callable(fn):
                         try:
-                            resolved.extend(np.asarray(fn(), dtype=float).tolist())
+                            resolved.extend(
+                                np.asarray(fn(), dtype=float).tolist()
+                            )
                             break
                         except Exception:
                             pass
@@ -909,7 +961,9 @@ class BaseExperiment:
                     e = getattr(v, "stop", None)
                     if s is not None and e is not None and steps:
                         resolved.extend(
-                            np.linspace(float(s), float(e), int(steps)).tolist()
+                            np.linspace(
+                                float(s), float(e), int(steps)
+                            ).tolist()
                         )
                     elif s is not None:
                         try:
@@ -926,7 +980,9 @@ class BaseExperiment:
         except Exception:
             pass
 
-        raise ValueError(f"Cannot resolve sweep axis from {type(vals).__name__}")
+        raise ValueError(
+            f"Cannot resolve sweep axis from {type(vals).__name__}"
+        )
 
     def _get_readout_threshold(self):
         """Return configured readout threshold, or None when disabled.
@@ -938,10 +994,14 @@ class BaseExperiment:
         """
         if not hasattr(self.cfg, "get"):
             return None
-        if self.cfg.get("threshold") is None and self.cfg.get("theshold") is not None:
-            raise KeyError("Config key 'theshold' is misspelled; use 'threshold'.")
+        if (
+            self.cfg.get("threshold") is None
+            and self.cfg.get("theshold") is not None
+        ):
+            raise KeyError(
+                "Config key 'theshold' is misspelled; use 'threshold'."
+            )
         return self.cfg.get("threshold")
-
 
     def _create_program(self):
         """Construct the declared ``PROGRAM`` with standard QICK arguments."""
@@ -994,7 +1054,6 @@ class BaseExperiment:
             Result of the operation.
         """
         return self.Y_AXIS.extract(prog) if self.Y_AXIS is not None else None
-
 
     def _post_fit(self, x_vals):
         """Optional: fit and return old-style value. Should set self.fit_params.

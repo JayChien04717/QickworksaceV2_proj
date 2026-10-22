@@ -1,11 +1,11 @@
 """Functions for evaluating the quality of TWPA gain vs frequency curves."""
 
-import numpy as np
-import xarray as xr
 import logging
 from typing import List
 
 import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
 
 
 def score_ai_twpa_c_gain_data(
@@ -23,7 +23,9 @@ def score_ai_twpa_c_gain_data(
 ):
     """Run individual score_*() functions and combine:
 
-               total = (min. gain score)^gain_min_exp * [gain_median_weight*(median gain score) + ripple_weight*(ripple score)]
+               total = (min. gain score)^gain_min_exp
+                       * [gain_median_weight*(median gain score)
+                          + ripple_weight*(ripple score)]
 
     Parameters
     ----------
@@ -61,9 +63,15 @@ def score_ai_twpa_c_gain_data(
         gain_data, gain_median=gain_median, **common_args
     )
     score += ripple_weight * score_gain_ripple(
-        gain_data, ripple_max=ripple_max, ripple_window=ripple_window, **common_args
+        gain_data,
+        ripple_max=ripple_max,
+        ripple_window=ripple_window,
+        **common_args,
     )
-    score *= score_min_gain(gain_data, gain_min=gain_min, **common_args) ** gain_min_exp
+    score *= (
+        score_min_gain(gain_data, gain_min=gain_min, **common_args)
+        ** gain_min_exp
+    )
     score = score.rename("total_score")
     return score
 
@@ -84,7 +92,9 @@ def gain_ensure_dB(gain: xr.DataArray):
     if np.iscomplexobj(gain):
         gain = 20 * np.log10(np.abs(gain))
     if gain.max() < 2:
-        logging.warning("Max gain appears to be < 2 dB. Is it on linear scale?")
+        logging.warning(
+            "Max gain appears to be < 2 dB. Is it on linear scale?"
+        )
     return gain
 
 
@@ -120,9 +130,9 @@ def score_min_gain(
     f_region = (f > f_min) & (f < f_max)
     gain_data = gain_data.where(f_region, drop=True)
     ax = gain_data.dims.index(freq_key)
-    score = (gain_data > gain_min).reduce(np.sum, axis=ax, keep_attrs=True) / np.sum(
-        f_region
-    )
+    score = (gain_data > gain_min).reduce(
+        np.sum, axis=ax, keep_attrs=True
+    ) / np.sum(f_region)
     return score.rename("gain_min_score")
 
 
@@ -200,7 +210,11 @@ def score_gain_ripple(
         f_max=f_max,
     )
     score = score_min_gain(
-        -ripple, gain_min=-ripple_max, f_min=f_min, f_max=f_max, freq_key=freq_key
+        -ripple,
+        gain_min=-ripple_max,
+        f_min=f_min,
+        f_max=f_max,
+        freq_key=freq_key,
     )
     return score.rename("ripple_score")
 
@@ -257,7 +271,9 @@ def compute_ripple(
 
     int_period = int(np.round(ripple_window / df[0]))
     ripple_within_window = max_minus_min(
-        gain.rolling({f.dims[0]: int_period}, min_periods=int_period // 2, center=True)
+        gain.rolling(
+            {f.dims[0]: int_period}, min_periods=int_period // 2, center=True
+        )
     )
 
     edge_exclusion = min(ripple_window / 2, (f_max - f_min) / 4)
@@ -295,7 +311,8 @@ def operation_point_distance(
         if (dim in point0.coords) and (dim in point1.coords):
             sum_of_squares = (
                 sum_of_squares
-                + ((point1[dim] - point0[dim]) / characteristic_scale[dim]) ** 2
+                + ((point1[dim] - point0[dim]) / characteristic_scale[dim])
+                ** 2
             )
         else:
             if dim != "pump_power":
@@ -348,7 +365,9 @@ def find_best_operation_point(
     try:
         best_point_indices = scored_data.argmax(dim=argmax_dims, skipna=True)
     except ValueError:
-        logging.warning("Cannot determine argmax. No non-NaN scores after exclusions.")
+        logging.warning(
+            "Cannot determine argmax. No non-NaN scores after exclusions."
+        )
         return None
 
     return scored_data.isel(best_point_indices)

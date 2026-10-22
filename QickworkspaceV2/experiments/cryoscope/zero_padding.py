@@ -34,7 +34,9 @@ class CryoscopeZeroPaddingProgram(CryoscopeProgramBase):
         )
         self.flux_waveform = normalized
         self.flux_active_samples = active_samples
-        self.flux_sample_period_ns = generator_sample_period_ns(self.soccfg, ch)
+        self.flux_sample_period_ns = generator_sample_period_ns(
+            self.soccfg, ch
+        )
 
         self.add_envelope(
             ch=ch,
@@ -79,7 +81,9 @@ class CryoscopeZeroPadding(CryoscopeExperimentBase):
         active_ns = prog.flux_active_samples * prog.flux_sample_period_ns
         return np.array([active_ns])
 
-    def run_sample_sweep(self, active_samples, py_avg: int, *, acquire_xy=True, **run_kwargs):
+    def run_sample_sweep(
+        self, active_samples, py_avg: int, *, acquire_xy=True, **run_kwargs
+    ):
         """Rebuild and run one envelope per requested sample count, including zero.
 
         Parameters
@@ -106,9 +110,13 @@ class CryoscopeZeroPadding(CryoscopeExperimentBase):
             point_cfg["flux_active_samples"] = sample_count
             point_experiment = type(self)(point_cfg)
             if acquire_xy:
-                results[sample_count] = point_experiment.run_xy(py_avg, **run_kwargs)
+                results[sample_count] = point_experiment.run_xy(
+                    py_avg, **run_kwargs
+                )
             else:
-                results[sample_count] = point_experiment.run(py_avg, **run_kwargs)
+                results[sample_count] = point_experiment.run(
+                    py_avg, **run_kwargs
+                )
         return results
 
 

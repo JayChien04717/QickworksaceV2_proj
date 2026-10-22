@@ -31,7 +31,9 @@ class PredistortedCryoscopeProgram(CryoscopeProgramBase):
         """
         ch = cfg["flux_ch"]
         supplied = np.asarray(cfg["predistorted_waveform"], dtype=float)
-        active_samples = int(cfg.get("predistorted_active_samples", supplied.size))
+        active_samples = int(
+            cfg.get("predistorted_active_samples", supplied.size)
+        )
         if not 1 <= active_samples <= supplied.size:
             raise ValueError(
                 "predistorted_active_samples must lie between 1 and the waveform length"
@@ -42,7 +44,9 @@ class PredistortedCryoscopeProgram(CryoscopeProgramBase):
         self.flux_waveform = padded
         self.flux_waveform_unpadded = useful_waveform
         self.flux_active_samples = active_samples
-        self.flux_sample_period_ns = generator_sample_period_ns(self.soccfg, ch)
+        self.flux_sample_period_ns = generator_sample_period_ns(
+            self.soccfg, ch
+        )
 
         self.add_envelope(
             ch=ch,
@@ -87,7 +91,9 @@ class PredistortedCryoscope(CryoscopeExperimentBase):
         applied_ns = prog.flux_active_samples * prog.flux_sample_period_ns
         return np.array([applied_ns])
 
-    def run_prefix_sweep(self, sample_counts, py_avg: int, *, acquire_xy=True, **run_kwargs):
+    def run_prefix_sweep(
+        self, sample_counts, py_avg: int, *, acquire_xy=True, **run_kwargs
+    ):
         """Measure prefixes of one compensated waveform in a Python-side loop.
 
         Parameters
@@ -124,9 +130,13 @@ class PredistortedCryoscope(CryoscopeExperimentBase):
             point_cfg["predistorted_active_samples"] = sample_count
             point_experiment = type(self)(point_cfg)
             if acquire_xy:
-                results[sample_count] = point_experiment.run_xy(py_avg, **run_kwargs)
+                results[sample_count] = point_experiment.run_xy(
+                    py_avg, **run_kwargs
+                )
             else:
-                results[sample_count] = point_experiment.run(py_avg, **run_kwargs)
+                results[sample_count] = point_experiment.run(
+                    py_avg, **run_kwargs
+                )
         return results
 
 

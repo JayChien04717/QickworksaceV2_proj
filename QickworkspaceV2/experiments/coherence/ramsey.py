@@ -23,12 +23,19 @@ class RamseyProgram(BaseProgram):
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
-        self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge"
+        )
         ramsey_phase = (
-            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
+            cfg.get("qb_phase", 0)
+            + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
-            cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
+            cfg,
+            "ge",
+            name="qb_pulse2",
+            gain_key="pi2_gain_ge",
+            phase=ramsey_phase,
         )
 
     def _body(self, cfg):
@@ -94,7 +101,9 @@ class Ramsey(BaseExperiment):
             self.cfg["qb_freq_ge"] = self.cfg["qb_freq_ge"] - round(
                 (detune - self.cfg["virtual_detune"]), 2
             )
-            print(f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz")
+            print(
+                f"over detune {round((detune - self.cfg['virtual_detune']), 5)}MHz"
+            )
             return round(self.cfg["qb_freq_ge"], 5)
         else:
             print("Detune < 5kHz")
@@ -134,12 +143,19 @@ class ACStarkProgram(BaseProgram):
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
         self.add_loop("waitloop", cfg["steps"])
-        self.setup_qb_pulse(cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge")
+        self.setup_qb_pulse(
+            cfg, "ge", name="qb_pulse1", gain_key="pi2_gain_ge"
+        )
         ramsey_phase = (
-            cfg.get("qb_phase", 0) + cfg["wait_time"] * 360 * cfg["virtual_detune"]
+            cfg.get("qb_phase", 0)
+            + cfg["wait_time"] * 360 * cfg["virtual_detune"]
         )
         self.setup_qb_pulse(
-            cfg, "ge", name="qb_pulse2", gain_key="pi2_gain_ge", phase=ramsey_phase
+            cfg,
+            "ge",
+            name="qb_pulse2",
+            gain_key="pi2_gain_ge",
+            phase=ramsey_phase,
         )
 
     def _body(self, cfg):
@@ -151,7 +167,9 @@ class ACStarkProgram(BaseProgram):
             Experiment configuration mapping.
         """
         self.send_readoutconfig(ch=cfg["ro_ch"], name="myro", t=0)
-        self.pulse(ch=cfg["res_ch"], name="res_pulse", t=0)  # Stark tone on during wait
+        self.pulse(
+            ch=cfg["res_ch"], name="res_pulse", t=0
+        )  # Stark tone on during wait
         self.pulse(ch=cfg["qb_ch"], name="qb_pulse1", t=0)
         self.delay_auto(cfg["wait_time"] + 0.01, tag="wait")
         self.pulse(ch=cfg["qb_ch"], name="qb_pulse2", t=0)

@@ -127,13 +127,19 @@ def validate_bounds(fitparams, bounds):
             hi_safe = hi if np.isfinite(hi) else param + 1
             fitparams[i] = (lo_safe + hi_safe) / 2
             print(
-                f"fitparam[{i}]={param:.4g} out of bounds [{lo:.4g}, {hi:.4g}] → reset to {fitparams[i]:.4g}"
+                f"fitparam[{i}]={param:.4g} out of bounds "
+                f"[{lo:.4g}, {hi:.4g}] → reset to {fitparams[i]:.4g}"
             )
     return fitparams
 
 
 def generic_fit(
-    fitfunc, xdata, ydata, fitparams, bounds=None, error_message="Warning: fit failed!"
+    fitfunc,
+    xdata,
+    ydata,
+    fitparams,
+    bounds=None,
+    error_message="Warning: fit failed!",
 ):
     """Generic curve-fitting wrapper using scipy Trust Region Reflective.
 
@@ -225,7 +231,9 @@ def _calculate_normalized_errors(fits, fit_errors):
         param_errors = np.sqrt(np.abs(np.diag(err_matrix)))
         param_values = np.abs(fit)
         with np.errstate(divide="ignore", invalid="ignore"):
-            ratios = np.where(param_values > 0, param_errors / param_values, np.inf)
+            ratios = np.where(
+                param_values > 0, param_errors / param_values, np.inf
+            )
         norm_err = np.nanmean(ratios)
         norm_errors.append(np.inf if np.isnan(norm_err) else norm_err)
     return np.array(norm_errors)
@@ -319,7 +327,9 @@ def get_best_fit(
     for err_matrix in fit_errors:
         diag = np.diag(err_matrix)
         zero_mask = diag == 0
-        err_matrix[np.diag_indices_from(err_matrix)] = np.where(zero_mask, np.inf, diag)
+        err_matrix[np.diag_indices_from(err_matrix)] = np.where(
+            zero_mask, np.inf, diag
+        )
     if override is not None and override in check_measures:
         best_index = list(check_measures).index(override)
     elif fitfunc is not None:
@@ -772,7 +782,9 @@ def fitdecayslopesin(xdata, ydata, fitparams=None, debug=False):
     pOpt = fitparams
     pCov = np.full(shape=(len(fitparams), len(fitparams)), fill_value=np.inf)
     try:
-        pOpt, pCov = sp.optimize.curve_fit(decayslopesin, xdata, ydata, p0=fitparams)
+        pOpt, pCov = sp.optimize.curve_fit(
+            decayslopesin, xdata, ydata, p0=fitparams
+        )
     except RuntimeError:
         try:
             fitparams[2] = fitparams[2] - 90
@@ -806,7 +818,18 @@ def twofreq_decaysin(x, *p):
     Any
         Result of the operation.
     """
-    yscale0, freq0, phase_deg0, decay0, y00, x00, yscale1, freq1, phase_deg1, y01 = p
+    (
+        yscale0,
+        freq0,
+        phase_deg0,
+        decay0,
+        y00,
+        x00,
+        yscale1,
+        freq1,
+        phase_deg1,
+        y01,
+    ) = p
     p0 = [yscale0, freq0, phase_deg0, decay0, 0]
     p1 = [yscale1, freq1, phase_deg1, y01]
     return y00 + decaysin(x, *p0) * sinfunc(x, *p1)
@@ -1017,7 +1040,12 @@ def fit_doublegauss(xdata, ydata, fitparams):
     ub = [np.inf, mug + delta_mu_g, np.inf, np.inf, mue + delta_mu_e, np.inf]
     try:
         pOpt, pCov = sp.optimize.curve_fit(
-            double_gaussian, xdata, ydata, p0=fitparams, bounds=(lb, ub), maxfev=10000
+            double_gaussian,
+            xdata,
+            ydata,
+            p0=fitparams,
+            bounds=(lb, ub),
+            maxfev=10000,
         )
     except Exception:
         pOpt = fitparams
@@ -1042,7 +1070,9 @@ def hangerfunc(x, *p):
     """
     f0, Qi, Qe, phi, scale = p
     Q0 = 1 / (1 / Qi + np.real(1 / Qe))
-    return scale * (1 - Q0 / Qe * np.exp(1j * phi) / (1 + 2j * Q0 * (x - f0) / f0))
+    return scale * (
+        1 - Q0 / Qe * np.exp(1j * phi) / (1 + 2j * Q0 * (x - f0) / f0)
+    )
 
 
 def hangerS21func(x, *p):
@@ -1079,7 +1109,9 @@ def hangerS21func_sloped(x, *p):
         Result of the operation.
     """
     f0, Qi, Qe, phi, scale, slope = p
-    return hangerS21func(x, f0, 1e4 * Qi, 1e4 * Qe, phi, scale) + slope * (x - f0)
+    return hangerS21func(x, f0, 1e4 * Qi, 1e4 * Qe, phi, scale) + slope * (
+        x - f0
+    )
 
 
 def hangerphasefunc(x, *p):
@@ -1287,11 +1319,18 @@ def fitrb(xdata, ydata, fitparams=None, p_bounds=(0.0, 1.0), maxfev=10000):
     pCov = np.full((3, 3), np.inf)
     try:
         pOpt, pCov = sp.optimize.curve_fit(
-            rb_func, x, y, p0=fitparams, bounds=bounds, maxfev=maxfev, method="trf"
+            rb_func,
+            x,
+            y,
+            p0=fitparams,
+            bounds=bounds,
+            maxfev=maxfev,
+            method="trf",
         )
         print(f"[fitrb] p={pOpt[0]:.6f}  a={pOpt[1]:.4f}  b={pOpt[2]:.4f}")
         print(
-            f"[fitrb] σ(p)={np.sqrt(pCov[0, 0]):.2e}  σ(a)={np.sqrt(pCov[1, 1]):.2e}  σ(b)={np.sqrt(pCov[2, 2]):.2e}"
+            f"[fitrb] σ(p)={np.sqrt(pCov[0, 0]):.2e}  "
+            f"σ(a)={np.sqrt(pCov[1, 1]):.2e}  σ(b)={np.sqrt(pCov[2, 2]):.2e}"
         )
     except RuntimeError:
         print("Warning: RB fit failed!")

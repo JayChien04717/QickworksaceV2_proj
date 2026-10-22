@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-from ...core.base_program import BaseProgram
 from ...core.base_experiment import BaseExperiment
+from ...core.base_program import BaseProgram
 from ...core.experiment_data import ExperimentData, QualityFlag
 from ...plotter.liveplot import liveplotfun
 
@@ -27,10 +27,22 @@ class DragProgram(BaseProgram):
         """
         self.setup_resonator(cfg)
         self.setup_qubit_gen(cfg, "ge")
-        self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="x180_ge",
-                            phase=0, gain_key="pi_gain_ge")
-        self.setup_qb_pulse(cfg, prefix="ge", shape="drag", name="mx180_ge",
-                            phase=180, gain_key="pi_gain_ge")
+        self.setup_qb_pulse(
+            cfg,
+            prefix="ge",
+            shape="drag",
+            name="x180_ge",
+            phase=0,
+            gain_key="pi_gain_ge",
+        )
+        self.setup_qb_pulse(
+            cfg,
+            prefix="ge",
+            shape="drag",
+            name="mx180_ge",
+            phase=180,
+            gain_key="pi_gain_ge",
+        )
 
     def _body(self, cfg):
         """Execute one iteration of the pulse sequence.
@@ -92,13 +104,23 @@ class DragCalibration(BaseExperiment):
             If the operation cannot be completed.
         """
         cfg = self.cfg
-        if "alpha_start" not in cfg or "alpha_stop" not in cfg or "alpha_steps" not in cfg:
-            raise ValueError("cfg must contain 'alpha_start', 'alpha_stop', 'alpha_steps'.")
-        alphas = np.linspace(cfg["alpha_start"], cfg["alpha_stop"], cfg["alpha_steps"])
+        if (
+            "alpha_start" not in cfg
+            or "alpha_stop" not in cfg
+            or "alpha_steps" not in cfg
+        ):
+            raise ValueError(
+                "cfg must contain 'alpha_start', 'alpha_stop', 'alpha_steps'."
+            )
+        alphas = np.linspace(
+            cfg["alpha_start"], cfg["alpha_stop"], cfg["alpha_steps"]
+        )
         if "iteration_start" in cfg and "iteration_stop" in cfg:
             iters = np.arange(
-                cfg["iteration_start"], cfg["iteration_stop"] + 1,
-                cfg.get("iteration_step", 1), dtype=float,
+                cfg["iteration_start"],
+                cfg["iteration_stop"] + 1,
+                cfg.get("iteration_step", 1),
+                dtype=float,
             )
         else:
             iters = np.array([float(cfg["iteration"])])
@@ -185,8 +207,12 @@ class DragCalibration(BaseExperiment):
             fit_params=self.fit_params,
             fit_errors=self.fit_errors,
             fit_result={k: (v, None) for k, v in fit_result.items()},
-            figures=[self._last_analysis_figure] if getattr(self, "_last_analysis_figure", None) is not None else [],
-            scalar_result=float(optimal_alpha) if optimal_alpha is not None else None,
+            figures=[self._last_analysis_figure]
+            if getattr(self, "_last_analysis_figure", None) is not None
+            else [],
+            scalar_result=float(optimal_alpha)
+            if optimal_alpha is not None
+            else None,
             quality=QualityFlag.NO_INFORMATION,
             interrupted=interrupted,
             avg_count=avg_count,
@@ -286,6 +312,7 @@ class DragCalibration(BaseExperiment):
         optimal_alpha_min = alphas[idx_min]
 
         try:
+
             def parabola(x, a, b, c):
                 """Return the parabola result.
 
@@ -311,7 +338,9 @@ class DragCalibration(BaseExperiment):
                 i0 = max(idx_pk - 3, 0)
                 i1 = min(idx_pk + 4, len(alphas))
                 popt, _ = curve_fit(
-                    parabola, alphas[i0:i1], sum_trace[i0:i1],
+                    parabola,
+                    alphas[i0:i1],
+                    sum_trace[i0:i1],
                     p0=[1.0, alphas[idx_pk], sum_trace[idx_pk]],
                 )
                 if alphas.min() <= popt[1] <= alphas.max():
@@ -325,26 +354,47 @@ class DragCalibration(BaseExperiment):
         baseline = np.median(sum_trace)
         dev_max = abs(sum_trace[idx_max] - baseline)
         dev_min = abs(sum_trace[idx_min] - baseline)
-        optimal_alpha = optimal_alpha_max if dev_max >= dev_min else optimal_alpha_min
+        optimal_alpha = (
+            optimal_alpha_max if dev_max >= dev_min else optimal_alpha_min
+        )
         print(f"\n[DRAG Sum] Optimal α = {optimal_alpha:.6f})")
 
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
         ax0 = axes[0]
-        im = ax0.pcolormesh(alphas, iters, np.abs(self.iqdata), shading="auto", cmap="viridis")
+        im = ax0.pcolormesh(
+            alphas, iters, np.abs(self.iqdata), shading="auto", cmap="viridis"
+        )
         fig.colorbar(im, ax=ax0, label="ADC Units (Abs)")
-        ax0.axvline(optimal_alpha, color="red", linestyle="--", linewidth=2,
-                    label=f"α={optimal_alpha:.4f}")
+        ax0.axvline(
+            optimal_alpha,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label=f"α={optimal_alpha:.4f}",
+        )
         ax0.set_xlabel(self.X_LABEL)
         ax0.set_ylabel(self.Y_LABEL)
         ax0.set_title("Drag calibration")
         ax0.legend(fontsize=9)
 
         ax1 = axes[1]
-        ax1.plot(alphas, sum_trace, "o-", color="steelblue", linewidth=2,
-                 markersize=5, label="Σ iterations")
-        ax1.axvline(optimal_alpha, color="red", linestyle="--", linewidth=2,
-                    label=f"α={optimal_alpha:.4f}")
+        ax1.plot(
+            alphas,
+            sum_trace,
+            "o-",
+            color="steelblue",
+            linewidth=2,
+            markersize=5,
+            label="Σ iterations",
+        )
+        ax1.axvline(
+            optimal_alpha,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label=f"α={optimal_alpha:.4f}",
+        )
         ax1.set_xlabel(self.X_LABEL)
         ax1.set_ylabel("ADC Units")
         ax1.set_title("Summed Trace")

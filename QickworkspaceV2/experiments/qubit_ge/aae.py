@@ -9,10 +9,10 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
-from ...core.base_experiment import BaseExperiment
 from ...core.acquisition import acquire_values
-from ...core.experiment_data import ExperimentData, QualityFlag
+from ...core.base_experiment import BaseExperiment
 from ...core.base_program import BaseProgram
+from ...core.experiment_data import ExperimentData, QualityFlag
 
 
 class PowerRabiChevronProgram(BaseProgram):
@@ -169,7 +169,9 @@ class PowerRabiChevron(BaseExperiment):
         data_to_plot = np.zeros((len(iters), len(gains)))
 
         fig, ax = plt.subplots(figsize=(6, 4))
-        mesh = ax.pcolormesh(gains, iters, data_to_plot, shading="auto", cmap="viridis")
+        mesh = ax.pcolormesh(
+            gains, iters, data_to_plot, shading="auto", cmap="viridis"
+        )
         fig.colorbar(mesh, ax=ax, label="ADC Units (Abs)")
         ax.set_xlabel(self.X_LABEL)
         ax.set_ylabel("Iterations (N)")
@@ -306,7 +308,9 @@ class PowerRabiChevron(BaseExperiment):
 
         idx_max = int(np.argmax(sum_trace))
         idx_min = int(np.argmin(sum_trace))
-        if abs(sum_trace[idx_max] - off_guess) >= abs(sum_trace[idx_min] - off_guess):
+        if abs(sum_trace[idx_max] - off_guess) >= abs(
+            sum_trace[idx_min] - off_guess
+        ):
             x0_guess = gains[idx_max]
             sign_guess = 1.0
         else:
@@ -381,9 +385,16 @@ class PowerRabiChevron(BaseExperiment):
 
         ax1 = axes[1]
         ax1.scatter(
-            gains, raw_sum_trace, s=20, color="steelblue", alpha=0.5, label="Raw Data"
+            gains,
+            raw_sum_trace,
+            s=20,
+            color="steelblue",
+            alpha=0.5,
+            label="Raw Data",
         )
-        ax1.plot(gains, sum_trace, "--", color="gray", alpha=0.7, label="Smoothed")
+        ax1.plot(
+            gains, sum_trace, "--", color="gray", alpha=0.7, label="Smoothed"
+        )
 
         if fit_success:
             fine_x = np.linspace(gains.min(), gains.max(), 2000)
@@ -426,6 +437,7 @@ class PowerRabiChevron(BaseExperiment):
             g = self._chevron_fit_result["optimal_gain"]
             return f"Power Rabi Chevron\nOptimal gain = {g}\n{dict_val}"
         return f"{dict_val}"
+
 
 __all__ = [
     "PowerRabiProgram",

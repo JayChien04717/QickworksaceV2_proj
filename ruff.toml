@@ -1,0 +1,20 @@
+# PEP 8 style settings for QickworkspaceV2.
+# Format:  uvx ruff format QickworkspaceV2
+# Check:   uvx ruff check QickworkspaceV2
+line-length = 79
+target-version = "py310"
+extend-exclude = ["*.ipynb"]
+
+[format]
+quote-style = "preserve"
+
+[lint]
+select = ["E", "W", "I"]
+
+[lint.per-file-ignores]
+# Package __init__ files keep their import order to avoid circular imports.
+"__init__.py" = ["I001"]
+
+[lint.pycodestyle]
+# PEP 8 allows up to 99 chars by team agreement; the formatter targets 79.
+max-line-length = 99

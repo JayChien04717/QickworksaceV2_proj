@@ -72,7 +72,9 @@ def as_complex_iq(iq) -> np.ndarray:
     return np.squeeze(values.astype(complex))
 
 
-def project_iq_to_expectation(iq, iq_ground: complex, iq_excited: complex) -> np.ndarray:
+def project_iq_to_expectation(
+    iq, iq_ground: complex, iq_excited: complex
+) -> np.ndarray:
     """Project resonator IQ onto the calibrated g-e axis and return <sigma_z>.
 
     Parameters
@@ -99,9 +101,10 @@ def project_iq_to_expectation(iq, iq_ground: complex, iq_excited: complex) -> np
     calibration_vector = complex(iq_excited) - complex(iq_ground)
     if abs(calibration_vector) == 0:
         raise ValueError("iq_ground and iq_excited must be different")
-    excited_population = np.real(
-        (iq - complex(iq_ground)) * np.conj(calibration_vector)
-    ) / abs(calibration_vector) ** 2
+    excited_population = (
+        np.real((iq - complex(iq_ground)) * np.conj(calibration_vector))
+        / abs(calibration_vector) ** 2
+    )
     return 1.0 - 2.0 * excited_population
 
 
@@ -137,7 +140,9 @@ def merge_xy_segments(*segments):
         x = np.atleast_1d(np.asarray(x, dtype=float))
         y = np.atleast_1d(np.asarray(y, dtype=float))
         if time_ns.shape != x.shape or time_ns.shape != y.shape:
-            raise ValueError("each segment's time_ns, x, and y shapes must match")
+            raise ValueError(
+                "each segment's time_ns, x, and y shapes must match"
+            )
         times.append(time_ns)
         x_values.append(x)
         y_values.append(y)
@@ -188,7 +193,9 @@ def _odd_window(requested: int, length: int, polyorder: int) -> int:
         minimum += 1
     window = max(window, minimum)
     if window > length:
-        raise ValueError("trace is too short for the requested smoothing polynomial")
+        raise ValueError(
+            "trace is too short for the requested smoothing polynomial"
+        )
     return window
 
 
@@ -235,10 +242,18 @@ def trace_from_xy(
     time_ns = np.asarray(time_ns, dtype=float)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
-    if time_ns.ndim != 1 or x.shape != time_ns.shape or y.shape != time_ns.shape:
-        raise ValueError("time_ns, x, and y must be one-dimensional arrays of equal length")
+    if (
+        time_ns.ndim != 1
+        or x.shape != time_ns.shape
+        or y.shape != time_ns.shape
+    ):
+        raise ValueError(
+            "time_ns, x, and y must be one-dimensional arrays of equal length"
+        )
     if time_ns.size < 7 or np.any(np.diff(time_ns) <= 0):
-        raise ValueError("time_ns must contain at least 7 strictly increasing points")
+        raise ValueError(
+            "time_ns must contain at least 7 strictly increasing points"
+        )
 
     wrapped = np.arctan2(y, x)
     unwrapped = np.unwrap(wrapped)
@@ -249,7 +264,9 @@ def trace_from_xy(
     tail_points = max(1, min(int(tail_points), detuning_mhz.size))
     steady_detuning = float(np.median(detuning_mhz[-tail_points:]))
     if abs(steady_detuning) < 1e-12:
-        raise ValueError("steady detuning is zero; the cryoscope signal is too small to normalize")
+        raise ValueError(
+            "steady detuning is zero; the cryoscope signal is too small to normalize"
+        )
     normalized_step = detuning_mhz / steady_detuning
 
     return CryoscopeTrace(
@@ -264,7 +281,9 @@ def trace_from_xy(
     )
 
 
-def normalize_step_response(step_response, *, head_points=0, tail_points=10) -> np.ndarray:
+def normalize_step_response(
+    step_response, *, head_points=0, tail_points=10
+) -> np.ndarray:
     """Scale a step response to one, optionally removing pre-step baseline.
 
             The default assumes the caller already supplied a zero-referenced response,
@@ -293,7 +312,9 @@ def normalize_step_response(step_response, *, head_points=0, tail_points=10) -> 
 
     step = np.asarray(step_response, dtype=float)
     if step.ndim != 1 or step.size < 4 or not np.all(np.isfinite(step)):
-        raise ValueError("step_response must be a finite one-dimensional array")
+        raise ValueError(
+            "step_response must be a finite one-dimensional array"
+        )
     head_points = max(0, min(int(head_points), step.size))
     tail_points = max(1, min(int(tail_points), step.size))
     baseline = float(np.median(step[:head_points])) if head_points else 0.0
@@ -444,7 +465,9 @@ def fit_inverse_iir(
     na = int(denominator_order)
     nb = int(numerator_order)
     if na < 1 or nb < 0:
-        raise ValueError("denominator_order >= 1 and numerator_order >= 0 are required")
+        raise ValueError(
+            "denominator_order >= 1 and numerator_order >= 0 are required"
+        )
 
     rows = []
     targets = []
@@ -468,12 +491,18 @@ def fit_inverse_iir(
     # Enforce the measured normalization H(z=1)=1.
     dc_numerator = float(np.sum(line_b))
     if abs(dc_numerator) < 1e-12:
-        raise ValueError("identified IIR has zero DC gain and cannot be inverted")
+        raise ValueError(
+            "identified IIR has zero DC gain and cannot be inverted"
+        )
     line_b *= float(np.sum(line_a)) / dc_numerator
 
     line_poles = np.roots(line_a)
     inverse_poles = np.roots(line_b)
-    if inverse_poles.size and np.max(np.abs(inverse_poles)) >= 1 and not allow_unstable:
+    if (
+        inverse_poles.size
+        and np.max(np.abs(inverse_poles)) >= 1
+        and not allow_unstable
+    ):
         raise ValueError(
             "the fitted line is not minimum phase, so its exact IIR inverse is unstable; "
             "use design_inverse_fir() or refit with different orders"
@@ -489,7 +518,9 @@ def fit_inverse_iir(
     )
 
 
-def apply_inverse_fir(target, design: InverseFIRDesign, *, keep_tail=True) -> np.ndarray:
+def apply_inverse_fir(
+    target, design: InverseFIRDesign, *, keep_tail=True
+) -> np.ndarray:
     """Apply a designed FIR inverse to an ideal normalized flux waveform.
 
     Parameters
@@ -528,7 +559,9 @@ def apply_inverse_iir(target, design: InverseIIRDesign) -> np.ndarray:
         Result of the operation.
     """
 
-    return lfilter(design.inverse_b, design.inverse_a, np.asarray(target, dtype=float))
+    return lfilter(
+        design.inverse_b, design.inverse_a, np.asarray(target, dtype=float)
+    )
 
 
 def scale_waveform(waveform, *, max_abs: float = 0.95):
@@ -565,7 +598,9 @@ def scale_waveform(waveform, *, max_abs: float = 0.95):
     return waveform * factor, factor
 
 
-def predict_corrected_output(predistorted_waveform, step_response) -> np.ndarray:
+def predict_corrected_output(
+    predistorted_waveform, step_response
+) -> np.ndarray:
     """Convolve a candidate waveform with the measured line impulse.
 
     Parameters

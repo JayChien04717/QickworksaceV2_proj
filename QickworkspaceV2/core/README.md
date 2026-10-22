@@ -15,6 +15,7 @@ class PowerRabi(BaseExperiment):
     PROGRAM = PowerRabiProgram
     X_AXIS = SweepAxis.pulse("qb_pulse", "gain")
 
+
 class Punchout(BaseExperiment):
     PROGRAM = PunchoutProgram
     X_AXIS = SweepAxis.pulse("res_pulse", "freq")

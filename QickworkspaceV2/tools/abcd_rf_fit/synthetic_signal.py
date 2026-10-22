@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import interp1d
+
 from .resonators import (
     ResonatorParams,
     hanger,
@@ -12,7 +13,6 @@ from .resonators import (
 
 
 def get_background(freq, non_uniform_background=False):
-
     """Return background.
 
     Parameters
@@ -51,7 +51,6 @@ def get_background(freq, non_uniform_background=False):
 
 
 def get_synthetic_resonance(freq, geometry="r"):
-
     """Return synthetic resonance.
 
     Parameters
@@ -69,10 +68,10 @@ def get_synthetic_resonance(freq, geometry="r"):
     freq_span = freq[-1] - freq[0]
     kappa_i = (0.001 + 0.29 * np.random.rand()) * freq_span
     kappa_c = (0.1 + 2 * np.random.rand()) * kappa_i
-    
+
     kappa = kappa_i + kappa_c
     kappa_c_real = kappa_c
-    
+
     f_0 = (0.25 + np.random.rand() * 0.5) * freq_span + freq[0]
     phi_0 = (np.random.rand() - 0.5) * np.pi / 2
 
@@ -93,7 +92,6 @@ def get_synthetic_resonance(freq, geometry="r"):
 
 
 def get_synthetic_signal(geometry="r"):
-
     """Return synthetic signal.
 
     Parameters
@@ -110,7 +108,9 @@ def get_synthetic_signal(geometry="r"):
     freq_span = np.random.rand() * 10e6 + 100e3
     n_freq = np.random.randint(201, 2001)
 
-    freq = np.linspace(freq_center - freq_span / 2, freq_center + freq_span / 2, n_freq)
+    freq = np.linspace(
+        freq_center - freq_span / 2, freq_center + freq_span / 2, n_freq
+    )
 
     background, edelay = get_background(freq)
     resonance, params = get_synthetic_resonance(freq, geometry)
@@ -118,9 +118,9 @@ def get_synthetic_signal(geometry="r"):
     params = ResonatorParams([*params, edelay], geometry)
 
     signal = background * resonance
-    white_noise = np.random.normal(0, 1, size=freq.size) + 1j * np.random.normal(
+    white_noise = np.random.normal(
         0, 1, size=freq.size
-    )
+    ) + 1j * np.random.normal(0, 1, size=freq.size)
     noise = 0.2 * np.mean(np.abs(signal)) * np.random.rand() * white_noise
 
     return freq, signal + noise, params

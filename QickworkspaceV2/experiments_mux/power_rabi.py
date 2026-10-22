@@ -241,7 +241,9 @@ class MuxPowerRabi(BaseExperiment):
         active_slots = list(cfg["active_slots"])
         trace_count = len(active_ro_chs)
         self.gain_axis = BaseExperiment._resolve_axis(
-            prog.get_pulse_param(f"{qubit_names[0]}_pulse", "gain", as_array=True),
+            prog.get_pulse_param(
+                f"{qubit_names[0]}_pulse", "gain", as_array=True
+            ),
             cfg["steps"],
         )
 
@@ -263,12 +265,20 @@ class MuxPowerRabi(BaseExperiment):
                 finite = np.isfinite(trace)
                 if not np.any(finite):
                     continue
-                fit = self._fit_power_rabi(self.gain_axis[finite], trace[finite])
+                fit = self._fit_power_rabi(
+                    self.gain_axis[finite], trace[finite]
+                )
                 if fit is None:
                     continue
                 pi_gain, pi2_gain, popt = fit
-                fit_result[f"{name}_pi_gain"] = (round(float(pi_gain), 6), None)
-                fit_result[f"{name}_pi2_gain"] = (round(float(pi2_gain), 6), None)
+                fit_result[f"{name}_pi_gain"] = (
+                    round(float(pi_gain), 6),
+                    None,
+                )
+                fit_result[f"{name}_pi2_gain"] = (
+                    round(float(pi2_gain), 6),
+                    None,
+                )
                 fit_method[name] = "sinusoid"
                 fit_params[name] = np.asarray(popt, dtype=float).tolist()
 
@@ -276,16 +286,23 @@ class MuxPowerRabi(BaseExperiment):
         if plot and self.iqdata is not None and np.isfinite(self.iqdata).any():
             plot_data = self._process_plot_data(self.iqdata, iq_process)
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             for ax, name, trace in zip(axes[:, 0], qubit_names, plot_data):
                 ax.plot(self.gain_axis, trace, "o-", markersize=3)
                 pi_gain = fit_result.get(f"{name}_pi_gain", (None,))[0]
                 pi2_gain = fit_result.get(f"{name}_pi2_gain", (None,))[0]
                 if pi_gain is not None:
-                    ax.axvline(pi_gain, c="r", ls="--", label=f"pi {pi_gain:.4f}")
+                    ax.axvline(
+                        pi_gain, c="r", ls="--", label=f"pi {pi_gain:.4f}"
+                    )
                 if pi2_gain is not None:
-                    ax.axvline(pi2_gain, c="g", ls="--", label=f"pi/2 {pi2_gain:.4f}")
+                    ax.axvline(
+                        pi2_gain, c="g", ls="--", label=f"pi/2 {pi2_gain:.4f}"
+                    )
                 if pi_gain is not None or pi2_gain is not None:
                     ax.legend()
                 ax.set_ylabel(name)

@@ -91,7 +91,9 @@ def pad_normalized_envelope(
 
     waveform = np.asarray(samples, dtype=float)
     if waveform.ndim != 1 or waveform.size == 0:
-        raise ValueError("flux waveform must be a non-empty one-dimensional array")
+        raise ValueError(
+            "flux waveform must be a non-empty one-dimensional array"
+        )
     if not np.all(np.isfinite(waveform)):
         raise ValueError("flux waveform contains NaN or infinite values")
     peak = float(np.max(np.abs(waveform)))

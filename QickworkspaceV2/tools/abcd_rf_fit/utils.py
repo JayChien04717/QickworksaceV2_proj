@@ -79,7 +79,6 @@ def complex_fit(f, xdata, ydata, p0=None, weights=None, **kwargs):
 
 
 def guess_edelay_from_gradient(freq, signal, n=-1):
-
     """Return the guess edelay from gradient result.
 
     Parameters
@@ -115,6 +114,7 @@ def smooth_gradient(signal):
     Any
         Result of the operation.
     """
+
     def dnormaldx(x, x_0, sigma):
         """Return the dnormaldx result.
 
@@ -157,7 +157,6 @@ eps = np.finfo(float).eps
 
 
 def zeros2eps(x):
-
     """args:
                 x: float, complex, or numpy array
 
@@ -184,7 +183,6 @@ def zeros2eps(x):
 
 
 def dB(x):
-
     """Return the dB result.
 
     Parameters
@@ -201,7 +199,6 @@ def dB(x):
 
 
 def deg(x):
-
     """Return the deg result.
 
     Parameters
@@ -218,7 +215,6 @@ def deg(x):
 
 
 def get_prefix(x):
-
     """Return prefix.
 
     Parameters
@@ -254,17 +250,14 @@ def get_prefix(x):
     max_x = np.abs(np.max(x))
 
     if max_x > 10 * eps:
-
         index = int(np.log10(max_x) / 3 + 8)
         return (x * 10 ** (-3 * (index - 8)), prefix[index])
 
     else:
-
         return (0, "")
 
 
 def get_prefix_str(x, precision=2):
-
     """Return prefix str.
 
     Parameters
@@ -280,4 +273,3 @@ def get_prefix_str(x, precision=2):
         Result of the operation.
     """
     return "%.{}f %s".format(precision) % get_prefix(x)
-

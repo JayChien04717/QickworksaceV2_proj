@@ -165,13 +165,23 @@ class QubitTemp(BaseExperiment):
 
         print("[Temp] Meas run: ef Rabi only...")
         self.cfg["temp_ref"] = False
-        super().run(py_avg, iq_process=iq_process, show_final_plot=show_final_plot, **kwargs)
+        super().run(
+            py_avg,
+            iq_process=iq_process,
+            show_final_plot=show_final_plot,
+            **kwargs,
+        )
         self._iq_meas = np.asarray(self.iqdata).copy()
         x_vals = np.asarray(self._sweep_vals_x, dtype=float)
 
         print("[Temp] Ref run: ge pi + ef Rabi...")
         self.cfg["temp_ref"] = True
-        super().run(py_avg, iq_process=iq_process, show_final_plot=show_final_plot, **kwargs)
+        super().run(
+            py_avg,
+            iq_process=iq_process,
+            show_final_plot=show_final_plot,
+            **kwargs,
+        )
         self._iq_ref = np.asarray(self.iqdata).copy()
         self.cfg["temp_ref"] = False
 
@@ -187,17 +197,22 @@ class QubitTemp(BaseExperiment):
         quality_message = "Temperature calculation failed."
         if temp is not None:
             scalar = float(temp * 1e3)
-            temp_err_mk = self._T_err_K * 1e3 if self._T_err_K is not None else None
+            temp_err_mk = (
+                self._T_err_K * 1e3 if self._T_err_K is not None else None
+            )
             fit_params = np.array([scalar])
             fit_result = {
                 "T_mK": (scalar, temp_err_mk),
                 "T_mK_err_meas_only": (
                     self._T_err_meas_only_K * 1e3
-                    if self._T_err_meas_only_K is not None else None,
+                    if self._T_err_meas_only_K is not None
+                    else None,
                     None,
                 ),
                 "T_floor_mK": (
-                    self._T_floor_K * 1e3 if self._T_floor_K is not None else None,
+                    self._T_floor_K * 1e3
+                    if self._T_floor_K is not None
+                    else None,
                     None,
                 ),
                 "A_meas": (self._A_meas, self._A_meas_err),
@@ -265,8 +280,14 @@ class QubitTemp(BaseExperiment):
         self._A_ref = self._fit_amplitude(x_vals, p_ref)
         self._A_meas_err = self._fit_amplitude_error(x_vals, p_meas, cov_meas)
         self._A_ref_err = self._fit_amplitude_error(x_vals, p_ref, cov_ref)
-        self._ratio = self._A_meas / self._A_ref if self._A_ref != 0 else np.nan
-        self._ratio_err_meas_only = self._A_meas_err / self._A_ref if self._A_ref != 0 and self._A_meas_err is not None else None
+        self._ratio = (
+            self._A_meas / self._A_ref if self._A_ref != 0 else np.nan
+        )
+        self._ratio_err_meas_only = (
+            self._A_meas_err / self._A_ref
+            if self._A_ref != 0 and self._A_meas_err is not None
+            else None
+        )
         self._ratio_err = self._ratio_error()
 
         print(
@@ -286,19 +307,31 @@ class QubitTemp(BaseExperiment):
         )
         if temp is not None:
             self._last_T_K = temp
-            self._T_err_K = self._temperature_error(self._ratio, self._ratio_err)
+            self._T_err_K = self._temperature_error(
+                self._ratio, self._ratio_err
+            )
             self._T_err_meas_only_K = self._temperature_error(
                 self._ratio, self._ratio_err_meas_only
             )
             self._T_floor_K = self._temperature_floor()
             print(f"[Temp] Estimated temperature: {temp * 1e3:.2f} mK")
             if self._T_err_K is not None:
-                print(f"[Temp] Temperature error: +/- {self._T_err_K * 1e3:.2f} mK")
+                print(
+                    f"[Temp] Temperature error: +/- {self._T_err_K * 1e3:.2f} mK"
+                )
             if self._T_floor_K is not None:
-                print(f"[Temp] 1-sigma temperature floor: {self._T_floor_K * 1e3:.2f} mK")
+                print(
+                    f"[Temp] 1-sigma temperature floor: {self._T_floor_K * 1e3:.2f} mK"
+                )
             self._plot_temperature(
-                x_vals, mag_meas, fit_meas, mag_ref, fit_ref,
-                self._A_meas, self._A_ref, temp,
+                x_vals,
+                mag_meas,
+                fit_meas,
+                mag_ref,
+                fit_ref,
+                self._A_meas,
+                self._A_ref,
+                temp,
             )
         else:
             print("[Temp] Temperature calculation failed.")
@@ -447,7 +480,9 @@ class QubitTemp(BaseExperiment):
         fef_hz = self.cfg["qb_freq_ef"] * 1e6
         if not self._full_model:
             return -(_H * fge_hz) / (_KB * np.log(measured_ratio))
-        return self._solve_temperature_from_ratio_full(measured_ratio, fge_hz, fef_hz)
+        return self._solve_temperature_from_ratio_full(
+            measured_ratio, fge_hz, fef_hz
+        )
 
     def _solve_temperature(self, A_meas, A_ref, fge_hz, fef_hz):
         """Return the solve temperature result.
@@ -475,9 +510,13 @@ class QubitTemp(BaseExperiment):
                 return None
             return -(_H * fge_hz) / (_KB * np.log(measured_ratio))
 
-        return self._solve_temperature_from_ratio_full(measured_ratio, fge_hz, fef_hz)
+        return self._solve_temperature_from_ratio_full(
+            measured_ratio, fge_hz, fef_hz
+        )
 
-    def _solve_temperature_from_ratio_full(self, measured_ratio, fge_hz, fef_hz):
+    def _solve_temperature_from_ratio_full(
+        self, measured_ratio, fge_hz, fef_hz
+    ):
         """Return the solve temperature from ratio full result.
 
         Parameters
@@ -526,8 +565,9 @@ class QubitTemp(BaseExperiment):
             print(f"[Temp] Solver failed: {exc}")
             return None
 
-    def _plot_temperature(self, x_vals, mag_meas, fit_meas, mag_ref, fit_ref,
-                          a_meas, a_ref, temp):
+    def _plot_temperature(
+        self, x_vals, mag_meas, fit_meas, mag_ref, fit_ref, a_meas, a_ref, temp
+    ):
         """Plot temperature.
 
         Parameters
@@ -550,10 +590,38 @@ class QubitTemp(BaseExperiment):
             Value for ``temp``.
         """
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(x_vals, mag_meas, "o-", color="C0", markersize=5, alpha=0.7, label="Meas data")
-        ax.plot(x_vals, fit_meas, color="C0", linewidth=2, label=f"Meas fit (A={a_meas:.4f})")
-        ax.plot(x_vals, mag_ref, "o-", color="C1", markersize=5, alpha=0.7, label="Ref data")
-        ax.plot(x_vals, fit_ref, color="C1", linewidth=2, label=f"Ref fit (A={a_ref:.4f})")
+        ax.plot(
+            x_vals,
+            mag_meas,
+            "o-",
+            color="C0",
+            markersize=5,
+            alpha=0.7,
+            label="Meas data",
+        )
+        ax.plot(
+            x_vals,
+            fit_meas,
+            color="C0",
+            linewidth=2,
+            label=f"Meas fit (A={a_meas:.4f})",
+        )
+        ax.plot(
+            x_vals,
+            mag_ref,
+            "o-",
+            color="C1",
+            markersize=5,
+            alpha=0.7,
+            label="Ref data",
+        )
+        ax.plot(
+            x_vals,
+            fit_ref,
+            color="C1",
+            linewidth=2,
+            label=f"Ref fit (A={a_ref:.4f})",
+        )
         ax.set_xlabel(self.X_LABEL)
         ax.set_ylabel("Magnitude (a.u.)")
         temp_text = f"T = {temp * 1e3:.2f} mK"
@@ -603,9 +671,13 @@ class QubitTemp(BaseExperiment):
         if temp is not None:
             lines = [f"Calculated Qubit Temperature: {temp * 1e3:.2f} mK"]
             if self._T_err_K is not None:
-                lines.append(f"Temperature Error: +/- {self._T_err_K * 1e3:.2f} mK")
+                lines.append(
+                    f"Temperature Error: +/- {self._T_err_K * 1e3:.2f} mK"
+                )
             if self._T_floor_K is not None:
-                lines.append(f"1-sigma Temperature Floor: {self._T_floor_K * 1e3:.2f} mK")
+                lines.append(
+                    f"1-sigma Temperature Floor: {self._T_floor_K * 1e3:.2f} mK"
+                )
             return "\n".join(lines) + f"\n\n{base_comment}"
         return base_comment
 
@@ -637,7 +709,11 @@ class QubitTemp(BaseExperiment):
         if self.iqdata is None:
             raise RuntimeError("Call run() first.")
 
-        expt_name = f"{self.EXPT_NAME}_{qb_idx}" if title is None else f"{self.EXPT_NAME}_{qb_idx}_{title}"
+        expt_name = (
+            f"{self.EXPT_NAME}_{qb_idx}"
+            if title is None
+            else f"{self.EXPT_NAME}_{qb_idx}_{title}"
+        )
         save_dir = BaseExperiment._require_data_path()
         file_path = get_next_filename_labber(save_dir, expt_name, yoko_value)
         dict_val = (
@@ -648,14 +724,33 @@ class QubitTemp(BaseExperiment):
 
         hdf5_generator(
             filepath=file_path,
-            x_info={"name": self.X_SAVE_NAME, "unit": self.X_SAVE_UNIT, "values": self._sweep_vals_x},
-            y_info={"name": "Meas_Type", "unit": "0:Meas, 1:Ref", "values": self._sweep_vals_y},
-            z_info={"name": "Signal", "unit": "ADC unit", "values": self.iqdata},
-            comment=self._save_comment(f"{dict_val}\nState 0: ef only\nState 1: ge pi + ef"),
+            x_info={
+                "name": self.X_SAVE_NAME,
+                "unit": self.X_SAVE_UNIT,
+                "values": self._sweep_vals_x,
+            },
+            y_info={
+                "name": "Meas_Type",
+                "unit": "0:Meas, 1:Ref",
+                "values": self._sweep_vals_y,
+            },
+            z_info={
+                "name": "Signal",
+                "unit": "ADC unit",
+                "values": self.iqdata,
+            },
+            comment=self._save_comment(
+                f"{dict_val}\nState 0: ef only\nState 1: ge pi + ef"
+            ),
             tag=self.TAG,
             result=self.result,
         )
         print(f"Data saved to {file_path}")
 
 
-__all__ = ["PowerRabiEfProgram", "PowerRabiEf", "QubitTempProgram", "QubitTemp"]
+__all__ = [
+    "PowerRabiEfProgram",
+    "PowerRabiEf",
+    "QubitTempProgram",
+    "QubitTemp",
+]

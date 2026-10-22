@@ -120,10 +120,8 @@ def hdf5_generator(
         Value for ``save_plots``.
     data_root : Any, default: None
         Value for ``data_root``.
-    filename_mode : {'random', 'sequential'}, default: 'random'
-        File-naming strategy. ``'random'`` replaces the temporary
-        three-digit suffix with the sortable experiment ID. ``'sequential'``
-        keeps the traditional ``_001``, ``_002``, ... suffix.
+    filename_mode : Any, default: 'random'
+        Value for ``filename_mode``.
     figures : Any, default: None
         Value for ``figures``.
 
@@ -140,11 +138,14 @@ def hdf5_generator(
     try:
         from ..tools.Labber_saver import LabberHDF5Saver
     except ImportError as exc:
-        raise ImportError("Labber_saver is required to save HDF5 files.") from exc
+        raise ImportError(
+            "Labber_saver is required to save HDF5 files."
+        ) from exc
 
     if data_root is None:
         try:
             from ..core.base_experiment import BaseExperiment
+
             data_root = BaseExperiment._data_path
         except Exception:
             data_root = None
@@ -258,7 +259,9 @@ class ExperimentConfig:
         Keys whose values are collapsed to a scalar when all qubits share the same value.
     """
 
-    def __init__(self, data: list | dict, keys_to_unify: list[str] | None = None):
+    def __init__(
+        self, data: list | dict, keys_to_unify: list[str] | None = None
+    ):
         """Initialize the ExperimentConfig instance.
 
         Parameters
@@ -313,7 +316,9 @@ class ExperimentConfig:
         str
             Result of the operation.
         """
-        names = [cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)]
+        names = [
+            cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)
+        ]
         return f"ExperimentConfig(qubits={names})"
 
     def qubit_names(self) -> list:
@@ -324,7 +329,9 @@ class ExperimentConfig:
         list
             Result of the operation.
         """
-        return [cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)]
+        return [
+            cfg.get("name", f"idx{i}") for i, cfg in enumerate(self._raw_list)
+        ]
 
     def get_qubit(self, q_id: int | str) -> AddictDict:
         """Return a flat configuration dict for a single qubit.
@@ -419,13 +426,15 @@ class ExperimentConfig:
         res_freqs = _pad(res_freqs, None)
         if LO_ext is not None:
             res_freqs = [
-                freq - LO_ext if freq is not None else None for freq in res_freqs
+                freq - LO_ext if freq is not None else None
+                for freq in res_freqs
             ]
         res_gains = _pad(res_gains, 0)
         res_phases = _pad(res_phases, 0)
         ro_phases = _pad(ro_phases, 0)
         res_gains = [
-            gain if slot in active_set else 0 for slot, gain in enumerate(res_gains)
+            gain if slot in active_set else 0
+            for slot, gain in enumerate(res_gains)
         ]
 
         selected["qubit_names"] = active_names
@@ -447,7 +456,9 @@ class ExperimentConfig:
         selected["mux_gen"] = mux_gen
         selected["mux_ro_phases"] = [ro_phases[i] for i in active_slots]
 
-        active_freqs = [res_freqs[i] for i in active_slots if res_freqs[i] is not None]
+        active_freqs = [
+            res_freqs[i] for i in active_slots if res_freqs[i] is not None
+        ]
         if active_freqs:
             selected["mixer_freq"] = int(round(np.mean(active_freqs)))
         return selected
@@ -499,7 +510,9 @@ class ExperimentConfig:
             if not vals:
                 return None
             if key in self.keys_to_unify:
-                unique = set(v for v in vals if not isinstance(v, (dict, list)))
+                unique = set(
+                    v for v in vals if not isinstance(v, (dict, list))
+                )
                 if len(unique) == 1:
                     return list(unique)[0]
             return vals
@@ -535,13 +548,17 @@ class ExperimentConfig:
         mux_ro_ch_start = kwargs.get("mux_ro_ch_start", 2)
 
         if "name" in mux_nested:
-            all_names = [self._raw_list[i].get("name", f"Q{i}") for i in indices]
+            all_names = [
+                self._raw_list[i].get("name", f"Q{i}") for i in indices
+            ]
             mux_nested["name"] = ", ".join(all_names)
         if "ch" in mux_nested:
             mux_nested["ch"].pop("res_ch", None)
             mux_nested["ch"].pop("ro_ch", None)
             mux_nested["ch"]["mux_res_ch"] = mux_gen
-            mux_nested["ch"]["mux_ro_ch"] = [i + mux_ro_ch_start for i in indices]
+            mux_nested["ch"]["mux_ro_ch"] = [
+                i + mux_ro_ch_start for i in indices
+            ]
 
         flat = self.muxconfig(qb_list, **kwargs)
         if "gen_mask" in flat:
@@ -585,7 +602,8 @@ class ExperimentConfig:
         target_indices = self._resolve_indices(q_index)
 
         if isinstance(param, (list, tuple)) and all(
-            isinstance(item, (list, tuple)) and len(item) == 2 for item in param
+            isinstance(item, (list, tuple)) and len(item) == 2
+            for item in param
         ):
             for k, v in param:
                 self.update(k, v, q_index=q_index)
@@ -606,7 +624,9 @@ class ExperimentConfig:
         elif isinstance(param, str) and "." not in param:
             leaf_key = param
             is_list_val = isinstance(value, (list, np.ndarray))
-            should_distribute = is_list_val and (len(value) == len(target_indices))
+            should_distribute = is_list_val and (
+                len(value) == len(target_indices)
+            )
             has_key = [
                 self._find_key_path(self._raw_list[j], leaf_key) is not None
                 for j in range(len(self._raw_list))
@@ -629,7 +649,9 @@ class ExperimentConfig:
             keys = key_path.split(".")
             leaf_key = keys[-1]
             is_list_val = isinstance(value, (list, np.ndarray))
-            should_distribute = is_list_val and (len(value) == len(target_indices))
+            should_distribute = is_list_val and (
+                len(value) == len(target_indices)
+            )
 
             def _key_exists_in(nested, path_keys):
                 """Return the key exists in result.
@@ -803,7 +825,9 @@ class ExperimentConfig:
             f.write("\n")
         print(f"Configuration saved to {filename}")
 
-    def save_qubit_config(self, q_id, filename=None, var_name="config") -> None:
+    def save_qubit_config(
+        self, q_id, filename=None, var_name="config"
+    ) -> None:
         """Save qubit config.
 
         Parameters
@@ -860,13 +884,17 @@ class ExperimentConfig:
             if isinstance(clean_data, list):
                 yaml_parts = []
                 for item in clean_data:
-                    part = self._dump_dict_with_spacing(item, is_list_item=True)
+                    part = self._dump_dict_with_spacing(
+                        item, is_list_item=True
+                    )
                     yaml_parts.append(part)
                 return "\n\n\n".join(yaml_parts) + "\n"
             else:
                 return self._dump_dict_with_spacing(clean_data)
 
-    def _dump_dict_with_spacing(self, data, is_list_item=False, indent=0) -> str:
+    def _dump_dict_with_spacing(
+        self, data, is_list_item=False, indent=0
+    ) -> str:
         """Return the dump dict with spacing result.
 
         Parameters
@@ -887,8 +915,12 @@ class ExperimentConfig:
             if isinstance(data, list) and all(
                 not isinstance(x, (dict, list)) for x in data
             ):
-                return yaml.dump(data, default_flow_style=True, sort_keys=False).strip()
-            return yaml.dump(data, default_flow_style=False, sort_keys=False).strip()
+                return yaml.dump(
+                    data, default_flow_style=True, sort_keys=False
+                ).strip()
+            return yaml.dump(
+                data, default_flow_style=False, sort_keys=False
+            ).strip()
 
         parts = []
         keys = list(data.keys())
@@ -906,7 +938,9 @@ class ExperimentConfig:
 
             if isinstance(val, dict):
                 parts.append(f"{line_pfx}{key}:")
-                parts.append(self._dump_dict_with_spacing(val, indent=eff_indent + 1))
+                parts.append(
+                    self._dump_dict_with_spacing(val, indent=eff_indent + 1)
+                )
             elif isinstance(val, list) and all(
                 not isinstance(x, (dict, list)) for x in val
             ):
@@ -925,7 +959,9 @@ class ExperimentConfig:
 
             if i < len(keys) - 1:
                 next_val = data[keys[i + 1]]
-                if isinstance(val, (dict, list)) or isinstance(next_val, (dict, list)):
+                if isinstance(val, (dict, list)) or isinstance(
+                    next_val, (dict, list)
+                ):
                     parts.append("")
 
         return "\n".join(parts)

@@ -71,7 +71,9 @@ class MuxTOFProgram(AveragerProgramV2):
         cfg : Any
             Experiment configuration mapping.
         """
-        trigger_chs = cfg.get("trigger_ro_chs", cfg.get("active_ro_chs", cfg["ro_chs"]))
+        trigger_chs = cfg.get(
+            "trigger_ro_chs", cfg.get("active_ro_chs", cfg["ro_chs"])
+        )
         self.trigger(ros=trigger_chs, pins=[0], t=0, ddr4=False)
         self.pulse(ch=cfg["res_ch"], name="mux_readout", t=0)
 
@@ -191,20 +193,27 @@ class MuxTOF(BaseExperiment):
         self._sweep_vals_x = self.t
 
         active_ro_chs = list(cfg.get("active_ro_chs", cfg["ro_chs"]))
-        qubit_names = list(cfg.get("qubit_names", [f"ro{ch}" for ch in active_ro_chs]))
+        qubit_names = list(
+            cfg.get("qubit_names", [f"ro{ch}" for ch in active_ro_chs])
+        )
         trace_count = len(active_ro_chs)
         iq_sum = None
         interrupted = False
 
         if plot:
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             axes = axes[:, 0]
             lines = []
             for ax, name in zip(axes, qubit_names):
                 (line,) = ax.plot(
-                    self.t, np.full_like(self.t, np.nan, dtype=float), alpha=0.85
+                    self.t,
+                    np.full_like(self.t, np.nan, dtype=float),
+                    alpha=0.85,
                 )
                 ax.set_ylabel(name)
                 ax.set_xlim(np.min(self.t), np.max(self.t))
@@ -224,7 +233,10 @@ class MuxTOF(BaseExperiment):
                     self.soc, rounds=1, progress=False
                 )
                 current = np.asarray(
-                    [trace.dot([1, 1j]) for trace in self.iq_list[:trace_count]]
+                    [
+                        trace.dot([1, 1j])
+                        for trace in self.iq_list[:trace_count]
+                    ]
                 )
                 iq_sum = current if iq_sum is None else iq_sum + current
                 self.iqdata = iq_sum / (i + 1)
@@ -253,7 +265,10 @@ class MuxTOF(BaseExperiment):
         trig_times = {}
         if self.iqdata is not None and plot:
             final_fig, final_axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             final_axes = final_axes[:, 0]
             for ax, name, trace in zip(final_axes, qubit_names, self.iqdata):
@@ -263,7 +278,9 @@ class MuxTOF(BaseExperiment):
                 cross_idx = np.argmax(mag > threshold * mean)
                 trig_time = float(self.t[cross_idx])
                 trig_times[name] = trig_time
-                ax.axvline(trig_time, c="r", ls="--", label=f"TOF: {trig_time:.2f} us")
+                ax.axvline(
+                    trig_time, c="r", ls="--", label=f"TOF: {trig_time:.2f} us"
+                )
                 ax.set_ylabel(name)
                 ax.set_xlim(np.min(self.t), np.max(self.t))
                 ax.legend()
@@ -288,7 +305,9 @@ class MuxTOF(BaseExperiment):
                 "LO_ext": cfg.get("LO_ext"),
             },
             figures=figures,
-            quality=QualityFlag.GOOD if self.iqdata is not None else QualityFlag.BAD,
+            quality=QualityFlag.GOOD
+            if self.iqdata is not None
+            else QualityFlag.BAD,
             quality_message="Mux TOF acquired."
             if self.iqdata is not None
             else "No data acquired.",

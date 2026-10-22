@@ -34,7 +34,9 @@ class MuxOneToneProgram(AveragerProgramV2):
         res_ch = cfg["res_ch"]
         ro_chs = list(cfg.get("active_ro_chs", cfg.get("ro_chs", [])))
         if not ro_chs:
-            raise ValueError("MuxOneTone requires 'active_ro_chs' or 'ro_chs'.")
+            raise ValueError(
+                "MuxOneTone requires 'active_ro_chs' or 'ro_chs'."
+            )
 
         self.declare_gen(
             ch=res_ch,
@@ -116,7 +118,9 @@ class MuxOneTone(BaseExperiment):
         """
         cfg = dict(self.cfg)
         cfg.setdefault("active_ro_chs", cfg.get("ro_chs", []))
-        cfg.setdefault("active_slots", list(range(len(cfg.get("active_ro_chs", [])))))
+        cfg.setdefault(
+            "active_slots", list(range(len(cfg.get("active_ro_chs", []))))
+        )
         cfg.setdefault("mask", list(range(len(cfg.get("res_freqs", [])))))
         cfg.setdefault("res_phases", [0] * len(cfg["mask"]))
         cfg.setdefault("ro_phases", [0] * len(cfg["mask"]))
@@ -124,8 +128,12 @@ class MuxOneTone(BaseExperiment):
 
         cfg["res_freqs"] = [float(f) + freq_offset for f in cfg["res_freqs"]]
         active_slots = list(cfg["active_slots"])
-        cfg["active_res_freqs"] = [cfg["res_freqs"][slot] for slot in active_slots]
-        cfg["active_ro_phases"] = [cfg["ro_phases"][slot] for slot in active_slots]
+        cfg["active_res_freqs"] = [
+            cfg["res_freqs"][slot] for slot in active_slots
+        ]
+        cfg["active_ro_phases"] = [
+            cfg["ro_phases"][slot] for slot in active_slots
+        ]
         return cfg
 
     def _create_program(self):
@@ -166,7 +174,9 @@ class MuxOneTone(BaseExperiment):
         Any
             Result of the operation.
         """
-        sweep = self.cfg.get("res_freq_ge") if hasattr(self.cfg, "get") else None
+        sweep = (
+            self.cfg.get("res_freq_ge") if hasattr(self.cfg, "get") else None
+        )
         if sweep is None:
             return None
 
@@ -208,7 +218,9 @@ class MuxOneTone(BaseExperiment):
                 vals.append(np.asarray(arr, dtype=complex).reshape(-1)[0])
         return np.asarray(vals, dtype=complex)
 
-    def run(self, py_avg=1, span=20.0, steps=101, iq_process="abs", plot=False):
+    def run(
+        self, py_avg=1, span=20.0, steps=101, iq_process="abs", plot=False
+    ):
         """Run the operation.
 
         Parameters
@@ -236,12 +248,19 @@ class MuxOneTone(BaseExperiment):
         else:
             half_span = abs(float(span)) / 2.0
             self.freq_offsets = np.linspace(-half_span, half_span, int(steps))
-        half_span = max(abs(float(np.min(self.freq_offsets))), abs(float(np.max(self.freq_offsets))))
+        half_span = max(
+            abs(float(np.min(self.freq_offsets))),
+            abs(float(np.max(self.freq_offsets))),
+        )
 
         active_slots = list(cfg0["active_slots"])
         active_ro_chs = list(cfg0["active_ro_chs"])
-        qubit_names = list(cfg0.get("qubit_names", [f"ro{ch}" for ch in active_ro_chs]))
-        centers_if = np.asarray([cfg0["res_freqs"][slot] for slot in active_slots])
+        qubit_names = list(
+            cfg0.get("qubit_names", [f"ro{ch}" for ch in active_ro_chs])
+        )
+        centers_if = np.asarray(
+            [cfg0["res_freqs"][slot] for slot in active_slots]
+        )
         lo_ext = cfg0.get("LO_ext") or 0
         centers_abs = centers_if + float(lo_ext)
         self.freq_axes = {
@@ -251,14 +270,19 @@ class MuxOneTone(BaseExperiment):
 
         trace_count = len(active_ro_chs)
         self.iqdata = np.full(
-            (trace_count, len(self.freq_offsets)), np.nan + 1j * np.nan, dtype=complex
+            (trace_count, len(self.freq_offsets)),
+            np.nan + 1j * np.nan,
+            dtype=complex,
         )
         point_done = 0
         interrupted = False
 
         if plot:
             fig, axes = plt.subplots(
-                trace_count, 1, figsize=(8, max(3, 2.5 * trace_count)), squeeze=False
+                trace_count,
+                1,
+                figsize=(8, max(3, 2.5 * trace_count)),
+                squeeze=False,
             )
             axes = axes[:, 0]
             lines = []
@@ -282,7 +306,9 @@ class MuxOneTone(BaseExperiment):
             fig = axes = lines = title = plot_id = None
 
         try:
-            for f_idx, offset in enumerate(tqdm(self.freq_offsets, desc="Frequency")):
+            for f_idx, offset in enumerate(
+                tqdm(self.freq_offsets, desc="Frequency")
+            ):
                 point_cfg = self._normalized_cfg(freq_offset=float(offset))
                 prog = MuxOneToneProgram(
                     self.soccfg,
@@ -296,7 +322,9 @@ class MuxOneTone(BaseExperiment):
                 point_done = f_idx + 1
 
                 if plot:
-                    plot_data = self._process_plot_data(self.iqdata, iq_process)
+                    plot_data = self._process_plot_data(
+                        self.iqdata, iq_process
+                    )
                     for ax, line, trace in zip(axes, lines, plot_data):
                         line.set_ydata(trace)
                         finite = trace[np.isfinite(trace)]
@@ -332,7 +360,10 @@ class MuxOneTone(BaseExperiment):
                 res_freq, method = MuxOneTone._fit_res_freq_mag_min(
                     freq_axis[finite], trace[finite]
                 )
-                fit_result[f"{name}_res_freq_mhz"] = (round(float(res_freq), 6), None)
+                fit_result[f"{name}_res_freq_mhz"] = (
+                    round(float(res_freq), 6),
+                    None,
+                )
                 fit_method[name] = method
 
             if plot:
@@ -349,13 +380,16 @@ class MuxOneTone(BaseExperiment):
                     x = center + self.freq_offsets
                     ax.plot(x, trace, "o-", markersize=3)
                     res_freq = fit_result[f"{name}_res_freq_mhz"][0]
-                    ax.axvline(res_freq, c="r", ls="--", label=f"{res_freq:.4f} MHz")
+                    ax.axvline(
+                        res_freq, c="r", ls="--", label=f"{res_freq:.4f} MHz"
+                    )
                     ax.set_ylabel(name)
                     ax.set_xlim(center - half_span, center + half_span)
                     ax.legend()
                 final_axes[-1].set_xlabel("Frequency (MHz)")
                 final_axes[0].set_title(
-                    self.TITLE_PREFIX + (" (Interrupted)" if interrupted else "")
+                    self.TITLE_PREFIX
+                    + (" (Interrupted)" if interrupted else "")
                 )
                 final_fig.tight_layout()
                 display(final_fig)
@@ -363,7 +397,9 @@ class MuxOneTone(BaseExperiment):
                 plt.close(final_fig)
 
         has_data = self.iqdata is not None and np.isfinite(self.iqdata).any()
-        model_fit_count = sum(method == "lorentzian" for method in fit_method.values())
+        model_fit_count = sum(
+            method == "lorentzian" for method in fit_method.values()
+        )
         quality, quality_message = fit_quality(
             has_data, model_fit_count, trace_count, "Mux one-tone"
         )
@@ -418,7 +454,10 @@ class MuxOneTone(BaseExperiment):
 
             popt, _, _ = fitlor(frequency, trace)
             f0 = float(popt[2])
-            if not np.isfinite(f0) or not frequency.min() <= f0 <= frequency.max():
+            if (
+                not np.isfinite(f0)
+                or not frequency.min() <= f0 <= frequency.max()
+            ):
                 raise RuntimeError("Lorentzian fit returned invalid f0")
             if fit_snr(trace, lorfunc(frequency, *popt)) < 3.0:
                 raise RuntimeError("Lorentzian fit has insufficient SNR")

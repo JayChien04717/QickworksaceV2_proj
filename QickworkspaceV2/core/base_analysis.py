@@ -153,11 +153,12 @@ class BaseAnalysis(ABC):
             return x, iq.reshape(-1), ""
         if iq.ndim > 1 and iq.shape[-1] == x.size:
             rows = iq.reshape(-1, x.size)
-            return x, np.nanmean(rows, axis=0), (
-                f"Raw IQ averaged over {rows.shape[0]} traces for display."
+            return (
+                x,
+                np.nanmean(rows, axis=0),
+                (f"Raw IQ averaged over {rows.shape[0]} traces for display."),
             )
         return None
-
 
     @staticmethod
     def _config_value(data: "ExperimentData", key: str, default=None):
@@ -216,11 +217,17 @@ class BaseAnalysis(ABC):
 
         if data.x_axis is None or data.raw_iq is None:
             return
-        quality = data.quality.value if data.quality is not None else "no_information"
+        quality = (
+            data.quality.value
+            if data.quality is not None
+            else "no_information"
+        )
         fit_channel = data.metadata.get("fit_channel", "abs")
         fit_snr = data.metadata.get("fit_channel_snr")
         channel_fit_curves = {}
-        for channel, payload in (data.analysis_data.get("fit_curves") or {}).items():
+        for channel, payload in (
+            data.analysis_data.get("fit_curves") or {}
+        ).items():
             if isinstance(payload, dict) and "values" in payload:
                 channel_fit_curves[channel] = payload["values"]
             else:
@@ -229,9 +236,16 @@ class BaseAnalysis(ABC):
             channel_text = f"channel = {fit_channel}"
             if fit_snr is not None:
                 channel_text += f"  SNR={fit_snr:.2f}"
-            result_text = f"{result_text}\n{channel_text}" if result_text else channel_text
+            result_text = (
+                f"{result_text}\n{channel_text}"
+                if result_text
+                else channel_text
+            )
         figure = plot_fit_result(
-            data.x_axis, data.raw_iq, simfunc, fit_params,
+            data.x_axis,
+            data.raw_iq,
+            simfunc,
+            fit_params,
             x_label=xlabel,
             title=title,
             result_text=result_text,
@@ -286,7 +300,9 @@ class BaseAnalysis(ABC):
             return np.unwrap(np.angle(iq))
         raise ValueError(f"Unknown fit_channel '{channel}'")
 
-    def _fit_channel(self, data, fitfunc, simfunc, *, fitparams=None, channels=None):
+    def _fit_channel(
+        self, data, fitfunc, simfunc, *, fitparams=None, channels=None
+    ):
         """Fit IQ channels, retain every successful curve, and return the primary fit.
 
         Auto mode selects the curve with the highest fitted-span/residual-noise
@@ -303,10 +319,16 @@ class BaseAnalysis(ABC):
             fit_channels = ("real",)
         else:
             requested_value = self._config_value(data, "fit_channel", "auto")
-            requested = requested_value.lower() if isinstance(requested_value, str) else "auto"
+            requested = (
+                requested_value.lower()
+                if isinstance(requested_value, str)
+                else "auto"
+            )
             requested = aliases.get(requested or "auto", requested or "auto")
             fit_channels = tuple(channels or ("abs", "real", "imag", "phase"))
-            fit_channels = tuple(dict.fromkeys(aliases.get(item, item) for item in fit_channels))
+            fit_channels = tuple(
+                dict.fromkeys(aliases.get(item, item) for item in fit_channels)
+            )
             if requested != "auto" and requested not in fit_channels:
                 fit_channels = (requested, *fit_channels)
 
@@ -315,8 +337,12 @@ class BaseAnalysis(ABC):
         errors = []
         for channel in fit_channels:
             try:
-                y = np.asarray(self._channel_data(data.raw_iq, channel), dtype=float)
-                local_fitparams = list(fitparams) if fitparams is not None else None
+                y = np.asarray(
+                    self._channel_data(data.raw_iq, channel), dtype=float
+                )
+                local_fitparams = (
+                    list(fitparams) if fitparams is not None else None
+                )
                 popt, pcov, _ = fitfunc(x, y, fitparams=local_fitparams)
                 popt = np.asarray(popt)
                 fit_y = np.asarray(simfunc(x, *popt), dtype=float)
@@ -324,39 +350,63 @@ class BaseAnalysis(ABC):
                 noise = float(np.nanstd(residual))
                 span = float(np.nanmax(fit_y) - np.nanmin(fit_y))
                 score = span / max(noise, 1e-12)
-                if not np.all(np.isfinite(popt)) or not np.all(np.isfinite(fit_y)) or not np.isfinite(score):
+                if (
+                    not np.all(np.isfinite(popt))
+                    or not np.all(np.isfinite(fit_y))
+                    or not np.isfinite(score)
+                ):
                     raise RuntimeError("non-finite fit result")
-                channel_results[channel] = (score, channel, y, popt, pcov, fit_y)
+                channel_results[channel] = (
+                    score,
+                    channel,
+                    y,
+                    popt,
+                    pcov,
+                    fit_y,
+                )
             except Exception as exc:
                 errors.append(f"{channel}: {exc}")
 
         if not channel_results:
-            raise RuntimeError("; ".join(errors) if errors else "no channels fit")
+            raise RuntimeError(
+                "; ".join(errors) if errors else "no channels fit"
+            )
 
         if requested != "auto" and requested in channel_results:
             best = channel_results[requested]
         else:
-            best = max(channel_results.values(), key=lambda candidate: candidate[0])
+            best = max(
+                channel_results.values(), key=lambda candidate: candidate[0]
+            )
         score, channel, y, popt, pcov, fit_y = best
         data.metadata["fit_channel"] = channel
         data.metadata["fit_channel_snr"] = float(score)
         data.metadata["fit_channel_scores"] = {
-            name: float(candidate[0]) for name, candidate in channel_results.items()
+            name: float(candidate[0])
+            for name, candidate in channel_results.items()
         }
         data.metadata["fit_channel_errors"] = errors
-        data.analysis_data.update({
-            "fit_input": {"values": np.asarray(y, dtype=float), "dims": ["x"]},
-            "fit_curve": {"values": fit_y, "dims": ["x"]},
-            "residual": {"values": np.asarray(y, dtype=float) - fit_y, "dims": ["x"]},
-            "fit_inputs": {
-                name: {"values": candidate[2], "dims": ["x"]}
-                for name, candidate in channel_results.items()
-            },
-            "fit_curves": {
-                name: {"values": candidate[5], "dims": ["x"]}
-                for name, candidate in channel_results.items()
-            },
-        })
+        data.analysis_data.update(
+            {
+                "fit_input": {
+                    "values": np.asarray(y, dtype=float),
+                    "dims": ["x"],
+                },
+                "fit_curve": {"values": fit_y, "dims": ["x"]},
+                "residual": {
+                    "values": np.asarray(y, dtype=float) - fit_y,
+                    "dims": ["x"],
+                },
+                "fit_inputs": {
+                    name: {"values": candidate[2], "dims": ["x"]}
+                    for name, candidate in channel_results.items()
+                },
+                "fit_curves": {
+                    name: {"values": candidate[5], "dims": ["x"]}
+                    for name, candidate in channel_results.items()
+                },
+            }
+        )
         return y, popt, pcov, channel, float(score)
 
     @abstractmethod
@@ -409,7 +459,9 @@ class BaseAnalysis(ABC):
                 return QualityFlag.BAD
 
         if not checked:
-            data.quality_message = "No threshold parameters found in fit_result"
+            data.quality_message = (
+                "No threshold parameters found in fit_result"
+            )
             return QualityFlag.NO_INFORMATION
 
         return QualityFlag.GOOD

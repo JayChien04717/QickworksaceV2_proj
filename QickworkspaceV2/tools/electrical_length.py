@@ -1,11 +1,12 @@
-"""This module provides setup-independent functions for evaluating electrical length vs flux bias."""
+"""Setup-independent functions for evaluating electrical length
+vs flux bias."""
 
-import numpy as np
-import xarray as xr
 from typing import Union
 
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+import xarray as xr
 
 
 def plot_IQ(
@@ -17,7 +18,9 @@ def plot_IQ(
     max_flux_coords=np.inf,
     ax=None,
 ):
-    """Plot complex s21 data in the IQ plane. Only plots points within the specified frequency range.
+    """Plot complex s21 data in the IQ plane.
+
+    Only plots points within the specified frequency range.
 
     Parameters
     ----------
@@ -59,7 +62,9 @@ def plot_IQ(
 
     flux_coords_to_plot = np.unique(s21[flux_key])
     while len(flux_coords_to_plot) > max_flux_coords:
-        flux_coords_to_plot = flux_coords_to_plot[::2]  # Skip every other curve
+        flux_coords_to_plot = flux_coords_to_plot[
+            ::2
+        ]  # Skip every other curve
 
     ax.plot([0.0], [0.0], "x", color="black", markersize=15)
 
@@ -101,7 +106,9 @@ def estimate_electrical_length(
     """
     m = f >= f_min
     m *= f <= f_max
-    assert all(np.diff(f[m])) >= 0, "The datapoints must be ordered in frequency."
+    assert all(np.diff(f[m])) >= 0, (
+        "The datapoints must be ordered in frequency."
+    )
 
     phase = np.unwrap(np.angle(s21[m]))
     gradient, offset = np.polyfit(f[m], phase, 1)
@@ -164,7 +171,8 @@ def plot_electrical_length(
 
     electrical_length /= 1e-9  # Convert to nanoseconds
     print(
-        f"Peak-to-peak electrical length modulation = {(electrical_length.max() - electrical_length.min()):.3f} ns"
+        f"Peak-to-peak electrical length modulation = "
+        f"{(electrical_length.max() - electrical_length.min()):.3f} ns"
     )
 
     ax.plot(

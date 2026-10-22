@@ -25,7 +25,9 @@ class QubitSpecEfProgram(BaseProgram):
         self.setup_qubit_gen(cfg, "ef")
         self.add_loop("freqloop", cfg["steps"])
         self.setup_qb_pulse(cfg, "ge", name="qb_ge_pi", gain_key="pi_gain_ge")
-        self.setup_qb_pulse(cfg, "ef", name="qb_ef_pulse", pulse_type="flat_top")
+        self.setup_qb_pulse(
+            cfg, "ef", name="qb_ef_pulse", pulse_type="flat_top"
+        )
 
     def _body(self, cfg):
         """Execute one iteration of the pulse sequence.

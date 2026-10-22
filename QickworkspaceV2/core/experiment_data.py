@@ -92,7 +92,9 @@ class ExperimentData:
 
     experiment_type: str = ""
     experiment_id: str = field(default_factory=_new_experiment_id)
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     raw_iq: Any = None
     x_axis: Optional[np.ndarray] = None
@@ -144,7 +146,6 @@ class ExperimentData:
 
     interrupted: bool = False
     avg_count: int = 0
-
 
     def __iter__(self):
         """Support ``fit_params, error = result``.
@@ -202,7 +203,9 @@ class ExperimentData:
             return float(self.scalar_result)
         if self.fit_params is not None and len(self.fit_params) > 0:
             return float(self.fit_params[0])
-        raise TypeError(f"ExperimentData '{self.experiment_type}' has no scalar result")
+        raise TypeError(
+            f"ExperimentData '{self.experiment_type}' has no scalar result"
+        )
 
     def __bool__(self):
         """True when data was acquired and fit succeeded.
@@ -213,7 +216,6 @@ class ExperimentData:
             Result of the operation.
         """
         return self.raw_iq is not None and self.fit_params is not None
-
 
     def is_good(self) -> bool:
         """Return whether is good.
@@ -279,7 +281,9 @@ class ExperimentData:
                 return self.raw_iq
             raise IndexError("This result contains only the primary readout")
 
-        values = payload.get("values") if isinstance(payload, dict) else payload
+        values = (
+            payload.get("values") if isinstance(payload, dict) else payload
+        )
         values = np.asarray(values)
         if isinstance(readout, str) and not readout.isdigit():
             labels_payload = self.axes.get("readout")
@@ -296,7 +300,6 @@ class ExperimentData:
                     f"Unknown readout {readout!r}; available labels: {labels}"
                 ) from exc
         return values[int(readout)]
-
 
     def to_dict(self) -> dict:
         """Return a JSON-serialisable dict (numpy arrays → lists).
@@ -363,15 +366,27 @@ class ExperimentData:
         obj = cls(
             experiment_type=d.get("experiment_type", ""),
             experiment_id=d.get("experiment_id") or _new_experiment_id(),
-            timestamp=datetime.fromisoformat(d["timestamp"]) if "timestamp" in d else datetime.now(timezone.utc),
-            raw_iq=np.asarray(d["raw_iq"]) if isinstance(d.get("raw_iq"), list) else d.get("raw_iq"),
-            x_axis=np.asarray(d["x_axis"]) if d.get("x_axis") is not None else None,
-            y_axis=np.asarray(d["y_axis"]) if d.get("y_axis") is not None else None,
+            timestamp=datetime.fromisoformat(d["timestamp"])
+            if "timestamp" in d
+            else datetime.now(timezone.utc),
+            raw_iq=np.asarray(d["raw_iq"])
+            if isinstance(d.get("raw_iq"), list)
+            else d.get("raw_iq"),
+            x_axis=np.asarray(d["x_axis"])
+            if d.get("x_axis") is not None
+            else None,
+            y_axis=np.asarray(d["y_axis"])
+            if d.get("y_axis") is not None
+            else None,
             axes=d.get("axes", {}),
             raw_data=d.get("raw_data", {}),
             analysis_data=d.get("analysis_data", {}),
-            fit_params=np.array(d["fit_params"]) if d.get("fit_params") is not None else None,
-            fit_errors=np.array(d["fit_errors"]) if d.get("fit_errors") is not None else None,
+            fit_params=np.array(d["fit_params"])
+            if d.get("fit_params") is not None
+            else None,
+            fit_errors=np.array(d["fit_errors"])
+            if d.get("fit_errors") is not None
+            else None,
             fit_result=d.get("fit_result", {}),
             scalar_result=d.get("scalar_result"),
             quality=QualityFlag(d.get("quality", "no_information")),
